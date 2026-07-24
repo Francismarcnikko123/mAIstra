@@ -70,6 +70,7 @@ async def extract_from_upload(file: UploadFile = File(...)):
 
     return {
         "raw_text": result["raw_text"],
+        "cleaned_text": result["cleaned_text"],
         "average_confidence": result["average_confidence"],
     }
 
@@ -91,6 +92,7 @@ def extract_from_url(request: ImageUrlRequest):
     return {
         "submission_id": request.submission_id,
         "raw_text": result["raw_text"],
+        "cleaned_text": result["cleaned_text"],
         "average_confidence": result["average_confidence"],
         "saved_to_db": False,
     }

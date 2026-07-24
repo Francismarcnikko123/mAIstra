@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SupabaseService } from '../../services/supabase';
 import { FormsModule } from '@angular/forms';
+import { CodeEditorComponent } from '../code-editor/code-editor';
 
 
 interface Submission {
@@ -17,7 +18,7 @@ interface Submission {
 @Component({
   selector: 'app-submissions-list',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CodeEditorComponent],
   templateUrl: './submissions-list.html',
 })
 export class SubmissionsListComponent implements OnInit, OnDestroy {

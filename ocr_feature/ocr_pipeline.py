@@ -5,6 +5,7 @@ import numpy as np
 from paddleocr import PaddleOCR
 
 from preprocess import preprocess_image
+from c_code_cleanup import clean_c_code
 
 
 ocr = PaddleOCR(
@@ -18,11 +19,7 @@ ocr = PaddleOCR(
 
 
 def warmup() -> None:
-    """
-    Run one throwaway prediction so PaddleOCR loads all of its models at
-    startup instead of during the first real request. This keeps the first
-    live extraction (e.g. during a demo) from stalling on model loading.
-    """
+   
     dummy = np.full((80, 240, 3), 255, dtype=np.uint8)
     cv2.putText(
         dummy, "int main", (5, 55),
@@ -65,12 +62,18 @@ def extract_text_from_image(image_path: str) -> dict:
 
     raw_text = "\n".join(extracted_lines)
 
+    # Light keyword-only tidy so the teacher has fewer edits. The raw text is
+    # kept separately; cleaning never touches string literals or arbitrary
+    # content. See c_code_cleanup.py.
+    cleaned_text = clean_c_code(raw_text)
+
     average_confidence = None
     if confidence_scores:
         average_confidence = sum(confidence_scores) / len(confidence_scores)
 
     return {
         "raw_text": raw_text,
+        "cleaned_text": cleaned_text,
         "average_confidence": average_confidence,
         "preprocessed_image": preprocessed_path
     }
