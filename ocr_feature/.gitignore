@@ -1,0 +1,31 @@
+# Python virtual environment
+.venv/
+venv/
+
+# Environment variables / secrets
+.env
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# PaddleOCR / model cache
+.paddleocr/
+*.onnx
+
+# Temporary upload files
+uploads/*
+!uploads/.gitkeep
+
+# Generated/preprocessed OCR output files
+outputs/*
+!outputs/.gitkeep
+
+# Sample images (may contain student handwriting)
+samples/*
+!samples/.gitkeep
+
+# macOS files
+.DS_Store

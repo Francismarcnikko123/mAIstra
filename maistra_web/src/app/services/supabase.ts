@@ -34,6 +34,22 @@ export class SupabaseService {
       .order('captured_at', { ascending: false });
   }
 
+  async updateSubmissionText(
+  submissionId: string,
+  extractedText: string,
+  verifiedText: string
+) {
+  return await this.supabase
+    .from('submissions')
+    .update({
+      extracted_text: extractedText,
+      verified_text: verifiedText,
+      status: 'verified',
+      verified_at: new Date().toISOString(),
+    })
+    .eq('id', submissionId);
+}
+
   subscribeToSubmissions(callback: (payload: any) => void) {
     return this.supabase
       .channel('submissions')
