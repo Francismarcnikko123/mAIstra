@@ -20,6 +20,7 @@ interface Submission {
   standalone: true,
   imports: [CommonModule, FormsModule, CodeEditorComponent],
   templateUrl: './submissions-list.html',
+  styleUrls: ['./submissions-list.css'],
 })
 export class SubmissionsListComponent implements OnInit, OnDestroy {
   submissions: Submission[] = [];

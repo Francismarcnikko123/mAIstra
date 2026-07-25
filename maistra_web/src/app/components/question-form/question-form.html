@@ -1,70 +1,73 @@
-<div>
+<div class="form-container">
   <h2>Create Question</h2>
 
-
-  <div>
-    <label>Question Name *</label><br>
-    <input [(ngModel)]="questionName" placeholder="e.g. Skill Test 1A" />
+  <!-- Question Name -->
+  <div class="form-group">
+    <label>Question Name *</label>
+    <input type="text" [(ngModel)]="questionName" placeholder="e.g. Skill Test 1A" />
   </div>
 
-  
-  <div>
-    <label>Question Type *</label><br>
-    <label>
-      <input type="radio" [(ngModel)]="questionType" value="program" (change)="onTypeChange()">
-      Write a Program
-    </label>
-    <label>
-      <input type="radio" [(ngModel)]="questionType" value="function" (change)="onTypeChange()">
-      Write a Function
-    </label>
-  </div>
-
-
-  <div>
-    <label>Question Text *</label><br>
-    <textarea [(ngModel)]="questionText" rows="3" placeholder="Describe the problem..."></textarea>
-  </div>
-
- 
-  <div>
-    <label>Model Answer *</label><br>
-    <textarea [(ngModel)]="modelAnswer" rows="6" placeholder="Enter correct C code..."></textarea>
-  </div>
-
-  
-  <div>
-    <label>Test Cases</label>
-    <button (click)="addTestCase()">+ Add</button>
-
-    <div *ngFor="let tc of testCases; let i = index"
-         style="margin-top: 12px; border: 1px solid #ccc; padding: 12px; border-radius: 6px;">
-
-      <p>Test Case {{ i + 1 }}
-        <button (click)="removeTestCase(i)">Remove</button>
-      </p>
-
-      
-      <label>Test Code</label><br>
-      <textarea [(ngModel)]="tc.test_code" rows="3" placeholder="Test code..."></textarea><br>
-
-      
-      <label>Expected Output</label><br>
-      <input [(ngModel)]="tc.expected_output" placeholder="e.g. Well ordered" /><br>
-
-      
-      <label>Mark</label><br>
-      <input type="number" [(ngModel)]="tc.mark" style="width: 80px;" />
-
+  <!-- Question Type -->
+  <div class="form-group">
+    <label>Question Type *</label>
+    <div class="radio-group">
+      <label>
+        <input type="radio" [(ngModel)]="questionType" value="program" (change)="onTypeChange()">
+        Write a Program
+      </label>
+      <label>
+        <input type="radio" [(ngModel)]="questionType" value="function" (change)="onTypeChange()">
+        Write a Function
+      </label>
     </div>
   </div>
 
- 
-  <div *ngIf="errorMessage" style="color: red;">{{ errorMessage }}</div>
-  <div *ngIf="successMessage" style="color: green;">{{ successMessage }}</div>
+  <!-- Question Text -->
+  <div class="form-group">
+    <label>Question Text *</label>
+    <textarea [(ngModel)]="questionText" rows="3" placeholder="Describe the problem..."></textarea>
+  </div>
 
-  
-  <button (click)="save()" [disabled]="isSaving">
+  <!-- Model Answer -->
+  <div class="form-group">
+    <label>Model Answer *</label>
+    <textarea [(ngModel)]="modelAnswer" rows="6" placeholder="Enter correct C code..."></textarea>
+  </div>
+
+  <!-- Test Cases -->
+  <div class="test-cases-header">
+    <span>Test Cases</span>
+    <button class="btn-add" (click)="addTestCase()">+ Add</button>
+  </div>
+
+  <div class="test-case-card" *ngFor="let tc of testCases; let i = index">
+    <div class="test-case-header">
+      <span>Test Case {{ i + 1 }}</span>
+      <button class="btn-remove" (click)="removeTestCase(i)">Remove</button>
+    </div>
+
+    <div class="form-group">
+      <label>Test Code</label>
+      <textarea [(ngModel)]="tc.test_code" rows="3" placeholder="Test code..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>Expected Output</label>
+      <input type="text" [(ngModel)]="tc.expected_output" placeholder="e.g. 8" />
+    </div>
+
+    <div class="form-group">
+      <label>Mark</label>
+      <input type="number" [(ngModel)]="tc.mark" style="width: 80px;" />
+    </div>
+  </div>
+
+  <!-- Messages -->
+  <div class="error-message" *ngIf="errorMessage">{{ errorMessage }}</div>
+  <div class="success-message" *ngIf="successMessage">{{ successMessage }}</div>
+
+  <!-- Save -->
+  <button class="btn-save" (click)="save()" [disabled]="isSaving">
     {{ isSaving ? 'Saving...' : 'Save Question' }}
   </button>
 

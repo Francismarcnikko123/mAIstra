@@ -14,6 +14,7 @@ interface TestCase {
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './question-form.html',
+  styleUrls: ['./question-form.css'],
 })
 export class QuestionFormComponent {
   questionName = '';

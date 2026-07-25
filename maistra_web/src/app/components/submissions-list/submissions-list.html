@@ -1,54 +1,60 @@
-<div>
-  <h2>Captured Papers <span style="color: green; font-size: 13px;">● LIVE</span></h2>
+<div class="submissions-container">
 
-  <div *ngIf="isLoading">Loading...</div>
+  <!-- Header -->
+  <div class="submissions-header">
+    <h2>Captured Papers</h2>
+    <span class="live-badge">● LIVE</span>
+  </div>
 
-  <div *ngIf="!isLoading && submissions.length === 0">
+  <!-- Loading -->
+  <div class="loading-state" *ngIf="isLoading">Loading submissions...</div>
+
+  <!-- Empty -->
+  <div class="empty-state" *ngIf="!isLoading && submissions.length === 0">
     No submissions yet. Capture a paper from the mobile app.
   </div>
 
-  <div
-    *ngFor="let s of submissions"
-    style="border: 1px solid #ccc; padding: 16px; margin-bottom: 20px; border-radius: 8px; background: white;"
-  >
+  <!-- Cards -->
+  <div class="submission-card" *ngFor="let s of submissions">
 
-    <img
-      [src]="s.image_url"
-      style="width: 100%; max-height: 250px; object-fit: cover; border-radius: 6px;"
-    />
+    <!-- Image -->
+    <img class="submission-image" [src]="s.image_url" alt="Submission" />
 
-    <p><strong>Student:</strong> {{ s.student_name || 'Unknown' }}</p>
-    <p><strong>Status:</strong> {{ s.status | uppercase }}</p>
-    <p><strong>Captured:</strong> {{ formatDate(s.captured_at) }}</p>
+    <!-- Info row -->
+    <div class="submission-info">
+      <span class="student-name">{{ s.student_name || 'Unknown' }}</span>
+      <span class="status-badge" [class.extracted]="s.status === 'extracted'">
+        {{ s.status | uppercase }}
+      </span>
+      <span class="submission-date">{{ formatDate(s.captured_at) }}</span>
+    </div>
 
-  
+    <!-- Extract button -->
     <button
+      class="btn-extract"
       type="button"
       (click)="extractText(s)"
       [disabled]="extractingId === s.id"
-      style="padding: 8px 12px; margin-bottom: 12px;"
     >
       {{ extractingId === s.id ? 'Extracting...' : 'Extract Text' }}
     </button>
 
- 
-    <div *ngIf="editableText[s.id] !== undefined">
-      <label><strong>Extracted Code / Verified Code</strong></label>
-
+    <!-- Code editor (shows after extraction) -->
+    <div class="code-section" *ngIf="editableText[s.id] !== undefined">
+      <label>Extracted Code / Verified Code</label>
       <app-code-editor
         [(value)]="editableText[s.id]"
-        style="display: block; margin-top: 8px;"
+        style="display: block;"
       ></app-code-editor>
-
-    
       <button
+        class="btn-save"
         type="button"
         (click)="saveVerifiedText(s)"
         [disabled]="savingId === s.id || !editableText[s.id]"
-        style="padding: 8px 12px; margin-top: 10px;"
       >
         {{ savingId === s.id ? 'Saving...' : 'Save Verified Text' }}
       </button>
     </div>
+
   </div>
 </div>

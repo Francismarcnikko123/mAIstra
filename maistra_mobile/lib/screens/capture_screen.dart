@@ -1,7 +1,68 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image/image.dart' as img;
+import 'dart:typed_data';
+
+// Result of the quality check
+class QualityResult {
+  final bool passed;
+  final List<String> issues;
+
+  QualityResult({required this.passed, required this.issues});
+}
+
+// This runs in a separate thread (isolate) so it doesn't freeze the UI
+// Heavy image processing should never run on the main thread
+QualityResult _analyzeInIsolate(List<int> bytes) {
+  final image = img.decodeImage(Uint8List.fromList(bytes));
+  if (image == null) return QualityResult(passed: false, issues: ['Could not read image']);
+
+  // Resize to 200x200 for speed — we don't need full resolution to check quality
+  final small = img.copyResize(image, width: 200, height: 200);
+  final grayscale = img.grayscale(small);
+
+  double totalBrightness = 0;
+  double laplacianSum = 0;
+  double laplacianSumSquares = 0;
+  int count = 0;
+
+  for (int y = 1; y < grayscale.height - 1; y++) {
+    for (int x = 1; x < grayscale.width - 1; x++) {
+      // Brightness: average pixel value across all pixels
+      final center = grayscale.getPixel(x, y).r.toDouble();
+      totalBrightness += center;
+
+      // Blur detection using Laplacian operator
+      // It measures how much edges exist — blurry images have weak edges
+      final top    = grayscale.getPixel(x, y - 1).r.toDouble();
+      final bottom = grayscale.getPixel(x, y + 1).r.toDouble();
+      final left   = grayscale.getPixel(x - 1, y).r.toDouble();
+      final right  = grayscale.getPixel(x + 1, y).r.toDouble();
+
+      final laplacian = 4 * center - top - bottom - left - right;
+      laplacianSum += laplacian;
+      laplacianSumSquares += laplacian * laplacian;
+      count++;
+    }
+  }
+
+  final totalPixels = grayscale.width * grayscale.height;
+  final avgBrightness = totalBrightness / totalPixels;
+
+  final mean = laplacianSum / count;
+  final blurScore = (laplacianSumSquares / count) - (mean * mean);
+  // Higher blurScore = sharper image. Low score = blurry.
+
+  final List<String> issues = [];
+  if (avgBrightness < 60)  issues.add('Too dark — find better lighting');
+  if (avgBrightness > 220) issues.add('Too bright / overexposed');
+  if (blurScore < 300)      issues.add('Image is blurry — hold camera steady');
+
+  return QualityResult(passed: issues.isEmpty, issues: issues);
+}
 
 class CaptureScreen extends StatefulWidget {
   const CaptureScreen({super.key});
@@ -13,32 +74,49 @@ class CaptureScreen extends StatefulWidget {
 class _CaptureScreenState extends State<CaptureScreen> {
   File? _capturedImage;
   bool _isUploading = false;
+  bool _isCheckingQuality = false;
+  QualityResult? _qualityResult;
+
   final ImagePicker _picker = ImagePicker();
   final supabase = Supabase.instance.client;
 
   Future<void> _captureImage() async {
-    final XFile? photo = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 90,
-    );
+  final XFile? photo = await _picker.pickImage(
+    source: ImageSource.camera,
+    imageQuality: 90,
+  );
 
-    if (photo != null) {
-      setState(() {
-        _capturedImage = File(photo.path);
-      });
-    }
+  if (photo == null) return;
+
+  setState(() {
+    _capturedImage = File(photo.path);
+    _isCheckingQuality = true;
+    _qualityResult = null;
+  });
+
+  try {
+    final bytes = await _capturedImage!.readAsBytes();
+    final result = _analyzeInIsolate(bytes); // run directly, no isolate
+    setState(() {
+      _qualityResult = result;
+      _isCheckingQuality = false;
+    });
+  } catch (e) {
+    // if analysis fails, just let the user proceed
+    setState(() {
+      _qualityResult = QualityResult(passed: true, issues: []);
+      _isCheckingQuality = false;
+    });
   }
+}
 
   Future<void> _saveToDatabase() async {
     if (_capturedImage == null) return;
 
-    setState(() {
-      _isUploading = true;
-    });
+    setState(() => _isUploading = true);
 
     try {
-      final fileName =
-          'submission_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final fileName = 'submission_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
       await supabase.storage
           .from('handwritten-submissions')
@@ -56,33 +134,30 @@ class _CaptureScreenState extends State<CaptureScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Image saved successfully!'),
+            content: Text('Saved successfully!'),
             backgroundColor: Colors.green,
           ),
         );
         setState(() {
           _capturedImage = null;
+          _qualityResult = null;
         });
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
-      setState(() {
-        _isUploading = false;
-      });
+      setState(() => _isUploading = false);
     }
   }
 
   void _discard() {
     setState(() {
       _capturedImage = null;
+      _qualityResult = null;
     });
   }
 
@@ -94,16 +169,11 @@ class _CaptureScreenState extends State<CaptureScreen> {
         backgroundColor: const Color(0xFFB71C1C),
         title: const Text(
           'mAIstra',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
       ),
-      body: _capturedImage == null
-          ? _buildCaptureView()
-          : _buildPreviewView(),
+      body: _capturedImage == null ? _buildCaptureView() : _buildPreviewView(),
     );
   }
 
@@ -112,44 +182,23 @@ class _CaptureScreenState extends State<CaptureScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.document_scanner,
-            size: 100,
-            color: Color(0xFFB71C1C),
-          ),
+          const Icon(Icons.document_scanner, size: 100, color: Color(0xFFB71C1C)),
           const SizedBox(height: 24),
-          const Text(
-            'Capture Handwritten C Code',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          const Text('Capture Handwritten C Code',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          const Text(
-            'Take a photo of the student\'s paper',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-            ),
-          ),
+          const Text('Take a photo of the student\'s paper',
+              style: TextStyle(fontSize: 14, color: Colors.grey)),
           const SizedBox(height: 40),
           ElevatedButton.icon(
             onPressed: _captureImage,
             icon: const Icon(Icons.camera_alt, color: Colors.white),
-            label: const Text(
-              'Open Camera',
-              style: TextStyle(color: Colors.white, fontSize: 16),
-            ),
+            label: const Text('Open Camera',
+                style: TextStyle(color: Colors.white, fontSize: 16)),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFB71C1C),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 40,
-                vertical: 16,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ],
@@ -160,6 +209,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
   Widget _buildPreviewView() {
     return Column(
       children: [
+        // Image preview
         Expanded(
           child: Container(
             width: double.infinity,
@@ -170,75 +220,119 @@ class _CaptureScreenState extends State<CaptureScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.file(
-                _capturedImage!,
-                fit: BoxFit.contain,
-              ),
+              child: Image.file(_capturedImage!, fit: BoxFit.contain),
             ),
           ),
         ),
+
+        // Quality check result banner
+        if (_isCheckingQuality)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                SizedBox(width: 16, height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(width: 8),
+                Text('Checking image quality...'),
+              ],
+            ),
+          ),
+
+        if (!_isCheckingQuality && _qualityResult != null)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              // Green if passed, red if failed
+              color: _qualityResult!.passed
+                  ? Colors.green.shade50
+                  : Colors.red.shade50,
+              border: Border.all(
+                color: _qualityResult!.passed ? Colors.green : Colors.red,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      _qualityResult!.passed ? Icons.check_circle : Icons.warning,
+                      color: _qualityResult!.passed ? Colors.green : Colors.red,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _qualityResult!.passed ? 'Image quality is good' : 'Quality issues detected',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: _qualityResult!.passed ? Colors.green : Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+                // List each issue found
+                ..._qualityResult!.issues.map((issue) => Padding(
+                  padding: const EdgeInsets.only(top: 4, left: 26),
+                  child: Text('• $issue', style: const TextStyle(fontSize: 13)),
+                )),
+                if (!_qualityResult!.passed)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6, left: 26),
+                    child: Text(
+                      'You can still accept, but retaking is recommended.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+        const SizedBox(height: 12),
+
+        // Accept / Discard buttons
         Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Row(
             children: [
-              const Text(
-                'Is the image clear and readable?',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isUploading || _isCheckingQuality ? null : _discard,
+                  icon: const Icon(Icons.close, color: Colors.red),
+                  label: const Text('Discard',
+                      style: TextStyle(color: Colors.red, fontSize: 16)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: const BorderSide(color: Colors.red),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _isUploading ? null : _discard,
-                      icon: const Icon(Icons.close, color: Colors.red),
-                      label: const Text(
-                        'Discard',
-                        style: TextStyle(color: Colors.red, fontSize: 16),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: Colors.red),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _isUploading || _isCheckingQuality ? null : _saveToDatabase,
+                  icon: _isUploading
+                      ? const SizedBox(
+                          width: 20, height: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.check, color: Colors.white),
+                  label: Text(
+                    _isUploading ? 'Saving...' : 'Accept',
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _isUploading ? null : _saveToDatabase,
-                      icon: _isUploading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Icon(Icons.check, color: Colors.white),
-                      label: Text(
-                        _isUploading ? 'Saving...' : 'Accept',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFB71C1C),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFB71C1C),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
-                ],
+                ),
               ),
             ],
           ),
