@@ -1,60 +1,100 @@
-<div class="submissions-container">
-
-  <!-- Header -->
-  <div class="submissions-header">
-    <h2>Captured Papers</h2>
-    <span class="live-badge">● LIVE</span>
+<div class="submissions-panel">
+  <div class="panel-header">
+    <h2>Submissions</h2>
+    <span class="total-count">{{ submissions.length }} total</span>
   </div>
 
-  <!-- Loading -->
-  <div class="loading-state" *ngIf="isLoading">Loading submissions...</div>
+  <div class="folders-container" *ngIf="groupedSubmissions.length > 0; else empty">
+    <div class="folder" *ngFor="let group of groupedSubmissions">
+      <div class="folder-header" (click)="toggleFolder(group.topic)">
+        <span class="folder-arrow" [class.collapsed]="collapsedFolders[group.topic]">▾</span>
+        <span class="folder-icon">📁</span>
+        <span class="folder-name">{{ group.topic }}</span>
+        <span class="folder-count">{{ group.submissions.length }}</span>
+      </div>
 
-  <!-- Empty -->
-  <div class="empty-state" *ngIf="!isLoading && submissions.length === 0">
-    No submissions yet. Capture a paper from the mobile app.
+      <div class="folder-content" [class.hidden]="collapsedFolders[group.topic]">
+        <div class="thumbnails-grid">
+          <div
+            class="thumbnail-card"
+            *ngFor="let s of group.submissions"
+            (click)="openModal(s)"
+          >
+            <img [src]="s.image_url" alt="Submission" />
+            <div class="thumb-badge" *ngIf="s.text_content">✓</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <!-- Cards -->
-  <div class="submission-card" *ngFor="let s of submissions">
+  <ng-template #empty>
+    <div class="empty-state">No submissions yet.</div>
+  </ng-template>
+</div>
 
-    <!-- Image -->
-    <img class="submission-image" [src]="s.image_url" alt="Submission" />
+<!-- Modal Overlay -->
+<div class="modal-overlay" *ngIf="selectedSubmission" (click)="closeModal()">
+  <div class="modal-box" (click)="$event.stopPropagation()">
+    <button class="modal-close" (click)="closeModal()">✕</button>
 
-    <!-- Info row -->
-    <div class="submission-info">
-      <span class="student-name">{{ s.student_name || 'Unknown' }}</span>
-      <span class="status-badge" [class.extracted]="s.status === 'extracted'">
-        {{ s.status | uppercase }}
-      </span>
-      <span class="submission-date">{{ formatDate(s.captured_at) }}</span>
+    <div class="modal-body">
+      <!-- Left: Image -->
+      <div class="modal-image-section">
+        <a [href]="selectedSubmission.image_url" target="_blank">
+          <img [src]="selectedSubmission.image_url" alt="Submission" class="modal-image" />
+        </a>
+        <p class="modal-date">{{ selectedSubmission.captured_at | date:'medium' }}</p>
+      </div>
+
+      <!-- Right: Controls -->
+      <div class="modal-controls">
+
+        <!-- Topic Assignment -->
+        <div class="control-group">
+          <label>Topic / Folder</label>
+          <div class="topic-row">
+            <input
+              class="topic-input"
+              [(ngModel)]="editableTopic"
+              placeholder="e.g. Algebra, Chapter 3"
+            />
+            <button class="btn-save-topic" (click)="saveTopic()" [disabled]="savingTopic">
+              {{ savingTopic ? 'Saving…' : 'Assign' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Extract Text -->
+        <div class="control-group">
+          <label>Extracted Text</label>
+          <button
+            class="btn-extract"
+            (click)="extractText()"
+            [disabled]="isExtracting(selectedSubmission.id)"
+          >
+            {{ isExtracting(selectedSubmission.id) ? 'Extracting…' : 'Extract Text' }}
+          </button>
+
+          <textarea
+            *ngIf="hasExtractedText(selectedSubmission.id)"
+            class="text-editor"
+            [(ngModel)]="editableText[selectedSubmission.id]"
+            rows="10"
+            placeholder="Extracted text will appear here…"
+          ></textarea>
+
+          <button
+            *ngIf="hasExtractedText(selectedSubmission.id)"
+            class="btn-save-text"
+            (click)="saveVerifiedText()"
+            [disabled]="isSaving(selectedSubmission.id)"
+          >
+            {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save Verified Text' }}
+          </button>
+        </div>
+
+      </div>
     </div>
-
-    <!-- Extract button -->
-    <button
-      class="btn-extract"
-      type="button"
-      (click)="extractText(s)"
-      [disabled]="extractingId === s.id"
-    >
-      {{ extractingId === s.id ? 'Extracting...' : 'Extract Text' }}
-    </button>
-
-    <!-- Code editor (shows after extraction) -->
-    <div class="code-section" *ngIf="editableText[s.id] !== undefined">
-      <label>Extracted Code / Verified Code</label>
-      <app-code-editor
-        [(value)]="editableText[s.id]"
-        style="display: block;"
-      ></app-code-editor>
-      <button
-        class="btn-save"
-        type="button"
-        (click)="saveVerifiedText(s)"
-        [disabled]="savingId === s.id || !editableText[s.id]"
-      >
-        {{ savingId === s.id ? 'Saving...' : 'Save Verified Text' }}
-      </button>
-    </div>
-
   </div>
 </div>

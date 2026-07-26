@@ -1,155 +1,179 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { SupabaseService } from '../../services/supabase';
 import { FormsModule } from '@angular/forms';
-import { CodeEditorComponent } from '../code-editor/code-editor';
-
+import { HttpClient } from '@angular/common/http';
+import { SupabaseService } from '../../services/supabase';
 
 interface Submission {
   id: string;
   image_url: string;
-  student_name: string;
+  student_name?: string;
   captured_at: string;
-  status: string;
-  extracted_text?: string;
-  verified_text?: string;
+  status?: string;
+  topic?: string;
+  text_content?: string;
+  
+}
+
+interface TopicGroup {
+  topic: string;
+  submissions: Submission[];
 }
 
 @Component({
   selector: 'app-submissions-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, CodeEditorComponent],
+  imports: [CommonModule, FormsModule],
   templateUrl: './submissions-list.html',
-  styleUrls: ['./submissions-list.css'],
+  styleUrl: './submissions-list.css'
 })
 export class SubmissionsListComponent implements OnInit, OnDestroy {
   submissions: Submission[] = [];
-  isLoading = true;
-  private subscription: any; 
+  groupedSubmissions: TopicGroup[] = [];
+  collapsedFolders: Record<string, boolean> = {};
 
+  // Modal state
+  selectedSubmission: Submission | null = null;
+  editableTopic: string = '';
+  savingTopic = false;
+
+  // OCR state
   extractingId: string | null = null;
   savingId: string | null = null;
+  extractedText: Record<string, string> = {};
+  editableText: Record<string, string> = {};
 
-  editableText: { [submissionId: string]: string } = {};
-  rawExtractedText: { [submissionId: string]: string } = {};
+  private subscription: any;
 
-  constructor(private supabase: SupabaseService, private cdr: ChangeDetectorRef) {}
+  constructor(
+    private supabase: SupabaseService,
+    private http: HttpClient,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   async ngOnInit() {
     await this.loadSubmissions();
-    this.subscribeToRealtime();
+
+    this.subscription = this.supabase.subscribeToSubmissions((payload: any) => {
+      this.loadSubmissions();
+    });
+  }
+
+  ngOnDestroy() {
+    if (this.subscription) {
+      this.subscription.unsubscribe();
+    }
   }
 
   async loadSubmissions() {
-    this.isLoading = true;
     const { data, error } = await this.supabase.getSubmissions();
-
-    if (error){
-      console.error(error);
-    }
-
-    if (data) {
-       this.submissions = data;
-
-       this.submissions.forEach((s) => {
-        this.editableText[s.id] = s.verified_text || s.extracted_text || '';
-        this.rawExtractedText[s.id] = s.extracted_text || '';
-      });
-    }
-
-    this.isLoading = false;
+    if (error) { console.error(error); return; }
+    this.submissions = (data ?? []) as Submission[];
+    this.groupSubmissions();
     this.cdr.detectChanges();
   }
 
-  subscribeToRealtime() {
-    this.subscription = this.supabase
-      .subscribeToSubmissions((payload: any) => {
-        this.submissions.unshift(payload.new);
+  groupSubmissions() {
+    const map = new Map<string, Submission[]>();
+    for (const s of this.submissions) {
+      const topic = s.topic?.trim() || 'Uncategorized';
+      if (!map.has(topic)) map.set(topic, []);
+      map.get(topic)!.push(s);
+    }
 
-       this.editableText[payload.new.id] =
-          payload.new.verified_text || payload.new.extracted_text || '';
-
-        this.rawExtractedText[payload.new.id] =
-          payload.new.extracted_text || '';
-
-        this.cdr.detectChanges();
-      });
+    this.groupedSubmissions = Array.from(map.entries())
+      .sort(([a], [b]) => {
+        if (a === 'Uncategorized') return 1;
+        if (b === 'Uncategorized') return -1;
+        return a.localeCompare(b);
+      })
+      .map(([topic, submissions]) => ({ topic, submissions }));
   }
 
-async extractText(submission: Submission) {
+  toggleFolder(topic: string) {
+    this.collapsedFolders[topic] = !this.collapsedFolders[topic];
+  }
+
+  openModal(submission: Submission) {
+    this.selectedSubmission = { ...submission };
+    this.editableTopic = submission.topic || 'Uncategorized';
+    if (submission.text_content && !this.editableText[submission.id]) {
+      this.editableText[submission.id] = submission.text_content;
+    }
+  }
+
+  closeModal() {
+    this.selectedSubmission = null;
+  }
+
+  async saveTopic() {
+    if (!this.selectedSubmission) return;
+    this.savingTopic = true;
     try {
-      this.extractingId = submission.id;
+      await this.supabase.updateSubmissionTopic(this.selectedSubmission.id, this.editableTopic);
+      const s = this.submissions.find(x => x.id === this.selectedSubmission!.id);
+      if (s) s.topic = this.editableTopic;
+      this.selectedSubmission.topic = this.editableTopic;
+      this.groupSubmissions();
       this.cdr.detectChanges();
+    } catch (err) {
+      console.error('Failed to save topic:', err);
+    } finally {
+      this.savingTopic = false;
+    }
+  }
 
-      const response = await fetch('http://localhost:8000/api/ocr/extract-from-url', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-       body: JSON.stringify({
-        submission_id: submission.id,
-        image_url: submission.image_url,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('OCR extraction failed.');
-      }
-
-      const result = await response.json();
-
-      this.rawExtractedText[submission.id] = result.raw_text || '';
-      this.editableText[submission.id] =
-        result.cleaned_text || result.raw_text || '';
-
-    } catch (error) {
-      console.error(error);
-      alert('Failed to extract text. Make sure the FastAPI OCR backend is running.');
+  async extractText() {
+    if (!this.selectedSubmission) return;
+    const id = this.selectedSubmission.id;
+    this.extractingId = id;
+    try {
+      const res: any = await this.http
+        .post('http://localhost:8000/api/ocr/extract-from-url', {
+          image_url: this.selectedSubmission.image_url,
+          submission_id: id
+        })
+        .toPromise();
+      const text = res?.extracted_text ?? '';
+      this.extractedText[id] = text;
+      this.editableText[id] = text;
+    } catch (err) {
+      console.error('OCR failed:', err);
+      this.extractedText[id] = 'Error extracting text.';
+      this.editableText[id] = 'Error extracting text.';
     } finally {
       this.extractingId = null;
       this.cdr.detectChanges();
     }
   }
 
-
-async saveVerifiedText(submission: Submission) {
+  async saveVerifiedText() {
+    if (!this.selectedSubmission) return;
+    const id = this.selectedSubmission.id;
+    this.savingId = id;
     try {
-      this.savingId = submission.id;
-      this.cdr.detectChanges();
-
-      const { error } = await this.supabase.updateSubmissionText(
-        submission.id,
-        this.rawExtractedText[submission.id],
-        this.editableText[submission.id]
-      );
-
-      if (error) {
-        throw error;
-      }
-
-      submission.status = 'verified';
-      submission.extracted_text = this.rawExtractedText[submission.id];
-      submission.verified_text = this.editableText[submission.id];
-
-      alert('Verified text saved successfully.');
-
-    } catch (error) {
-      console.error(error);
-      alert('Failed to save verified text.');
+      const text = this.editableText[id];
+      await this.supabase.updateSubmissionText(id, text, text);
+      const s = this.submissions.find(x => x.id === id);
+      if (s) s.text_content = text;
+      if (this.selectedSubmission) this.selectedSubmission.text_content = text;
+    } catch (err) {
+      console.error('Save failed:', err);
     } finally {
       this.savingId = null;
       this.cdr.detectChanges();
     }
   }
 
-  ngOnDestroy() {
-    if (this.subscription) this.subscription.unsubscribe();
+  hasExtractedText(id: string): boolean {
+    return !!this.editableText[id];
   }
 
-  formatDate(date: string) {
-    return new Date(date).toLocaleString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric',
-      hour: 'numeric', minute: '2-digit', hour12: true
-    });
+  isExtracting(id: string): boolean {
+    return this.extractingId === id;
+  }
+
+  isSaving(id: string): boolean {
+    return this.savingId === id;
   }
 }
