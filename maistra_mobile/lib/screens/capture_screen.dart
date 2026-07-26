@@ -57,9 +57,38 @@ QualityResult _analyzeInIsolate(List<int> bytes) {
   // Higher blurScore = sharper image. Low score = blurry.
 
   final List<String> issues = [];
+
+ // Check for uneven lighting by comparing brightest vs darkest quadrant
+  final regions = [
+    [0, 0, grayscale.width ~/ 2, grayscale.height ~/ 2],
+    [grayscale.width ~/ 2, 0, grayscale.width, grayscale.height ~/ 2],
+    [0, grayscale.height ~/ 2, grayscale.width ~/ 2, grayscale.height],
+    [grayscale.width ~/ 2, grayscale.height ~/ 2, grayscale.width, grayscale.height],
+  ];
+
+  double minRegion = 255;
+  double maxRegion = 0;
+
+  for (final r in regions) {
+    double regionBrightness = 0;
+    int regionCount = 0;
+    for (int y = r[1]; y < r[3]; y++) {
+      for (int x = r[0]; x < r[2]; x++) {
+        regionBrightness += grayscale.getPixel(x, y).r.toDouble();
+        regionCount++;
+      }
+    }
+    final avg = regionBrightness / regionCount;
+    if (avg < minRegion) minRegion = avg;
+    if (avg > maxRegion) maxRegion = avg;
+  }
+
+  if (maxRegion - minRegion > 50) {
+    issues.add('Uneven lighting or shadow detected — ensure even lighting');
+  }
   if (avgBrightness < 60)  issues.add('Too dark — find better lighting');
   if (avgBrightness > 220) issues.add('Too bright / overexposed');
-  if (blurScore < 300)      issues.add('Image is blurry — hold camera steady');
+  if (blurScore < 1300)    issues.add('Image is blurry — hold camera steady');
 
   return QualityResult(passed: issues.isEmpty, issues: issues);
 }
@@ -279,14 +308,6 @@ class _CaptureScreenState extends State<CaptureScreen> {
                   padding: const EdgeInsets.only(top: 4, left: 26),
                   child: Text('• $issue', style: const TextStyle(fontSize: 13)),
                 )),
-                if (!_qualityResult!.passed)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 6, left: 26),
-                    child: Text(
-                      'You can still accept, but retaking is recommended.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -315,7 +336,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
               const SizedBox(width: 16),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: _isUploading || _isCheckingQuality ? null : _saveToDatabase,
+                  onPressed: _isUploading || _isCheckingQuality || (_qualityResult != null && !_qualityResult!.passed) ? null : _saveToDatabase,
                   icon: _isUploading
                       ? const SizedBox(
                           width: 20, height: 20,
