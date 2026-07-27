@@ -75,17 +75,56 @@ async def extract_from_upload(file: UploadFile = File(...)):
     }
 
 
+# Mobile captures are large (3-5 MB), and a slow/unstable network plus TLS
+# negotiation can easily blow past a short timeout. Download defensively:
+#   - split timeout: short to connect, generous to read the whole file
+#   - stream in chunks so a large body doesn't have to arrive all at once
+#   - retry a couple of times to ride out transient network hiccups
+DOWNLOAD_CONNECT_TIMEOUT = 15   # seconds to establish the connection
+DOWNLOAD_READ_TIMEOUT = 120     # seconds to finish reading the body
+DOWNLOAD_RETRIES = 3
+
+
+def download_image(url: str, dest: Path) -> None:
+    """Download an image to `dest`, retrying on network errors. Raises
+    HTTPException(400) if all attempts fail."""
+    last_error = None
+    for attempt in range(1, DOWNLOAD_RETRIES + 1):
+        try:
+            with requests.get(
+                url,
+                timeout=(DOWNLOAD_CONNECT_TIMEOUT, DOWNLOAD_READ_TIMEOUT),
+                stream=True,
+            ) as response:
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Failed to download image URL (HTTP {response.status_code}).",
+                    )
+                with dest.open("wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+            return
+        except HTTPException:
+            # A non-200 status is not a transient error; don't retry it.
+            raise
+        except requests.RequestException as exc:
+            # Network/timeout error: worth retrying.
+            last_error = exc
+
+    raise HTTPException(
+        status_code=400,
+        detail=f"Failed to download image after {DOWNLOAD_RETRIES} attempts: {last_error}",
+    )
+
+
 @app.post("/api/ocr/extract-from-url")
 def extract_from_url(request: ImageUrlRequest):
-   
+
     image_path = UPLOAD_DIR / f"{request.submission_id}.jpg"
 
-    response = requests.get(request.image_url, timeout=30)
-
-    if response.status_code != 200:
-        raise HTTPException(status_code=400, detail="Failed to download image URL.")
-
-    image_path.write_bytes(response.content)
+    download_image(request.image_url, image_path)
 
     result = extract_text_from_image(str(image_path))
 
