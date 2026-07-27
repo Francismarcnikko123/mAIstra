@@ -43,6 +43,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   savingId: string | null = null;
   extractedText: Record<string, string> = {};
   editableText: Record<string, string> = {};
+  extractionError: Record<string, string> = {};
 
   private subscription: any;
 
@@ -142,13 +143,13 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
           submission_id: id
         })
         .toPromise();
-      const text = res?.cleaned_text ?? '';
+      const text = res?.cleaned_text ?? ''; 
       this.extractedText[id] = text;
       this.editableText[id] = text;
+      this.extractionError[id] = '';
     } catch (err) {
       console.error('OCR failed:', err);
-      this.extractedText[id] = 'Error extracting text.';
-      this.editableText[id] = 'Error extracting text.';
+      this.extractionError[id] = 'Failed to extract text. Please try again later.';
     } finally {
       this.extractingId = null;
       this.cdr.detectChanges();

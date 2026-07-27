@@ -76,6 +76,10 @@
             {{ isExtracting(selectedSubmission.id) ? 'Extracting…' : 'Extract Text' }}
           </button>
 
+          <div class="extract-error" *ngIf="extractionError[selectedSubmission.id]">
+            {{ extractionError[selectedSubmission.id] }}
+        </div>
+
           <app-code-editor
             *ngIf="hasExtractedText(selectedSubmission.id)"
             class="text-editor"

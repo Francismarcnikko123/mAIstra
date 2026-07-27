@@ -273,3 +273,9 @@
   resize: vertical;
   box-sizing: border-box;
 }
+
+.extract-error {
+  color: #c0392b;
+  font-size: 13px;
+  margin-top: 6px;
+}
