@@ -8,12 +8,24 @@ from preprocess import preprocess_image
 from c_code_cleanup import clean_c_code
 
 
+# Config tuned for speed AND accuracy on our handwritten C samples (measured
+# via A/B tests on the sample set):
+#   - PP-OCRv5_mobile_det instead of the default server detector, and dropping
+#     the doc-orientation / unwarping / textline-orientation passes, took
+#     extraction from ~81s to ~2.3s per image (~35x) on CPU.
+#   - Accuracy did NOT drop -- it slightly improved. The heavy server_det +
+#     unwarping passes were over-processing our already-flat, upright captures
+#     and degrading recognition (e.g. "printt"/"Hello work" -> "printf"/"Hello
+#     world"). The mobile detector leaves the handwriting cleaner.
+# Trade-off: the dropped passes helped with rotated/warped pages; our captures
+# are gated to be upright/flat, so this is safe. Revisit if that changes.
 ocr = PaddleOCR(
     lang="en",
     ocr_version="PP-OCRv5",
-    use_doc_orientation_classify=True,
-    use_doc_unwarping=True,
-    use_textline_orientation=True,
+    text_detection_model_name="PP-OCRv5_mobile_det",
+    use_doc_orientation_classify=False,
+    use_doc_unwarping=False,
+    use_textline_orientation=False,
     device="cpu"
 )
 

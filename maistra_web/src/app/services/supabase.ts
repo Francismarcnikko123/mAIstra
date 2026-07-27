@@ -30,25 +30,29 @@ export class SupabaseService {
   async getSubmissions() {
     return await this.supabase
       .from('submissions')
-      .select('*')
+      .select('id, image_url, captured_at, status, topic, student_name, extracted_text, verified_text')
       .order('captured_at', { ascending: false });
   }
 
-  async updateSubmissionText(
-  submissionId: string,
-  extractedText: string,
-  verifiedText: string
-) {
-  return await this.supabase
-    .from('submissions')
-    .update({
-      extracted_text: extractedText,
-      verified_text: verifiedText,
-      status: 'verified',
-      verified_at: new Date().toISOString(),
-    })
-    .eq('id', submissionId);
-}
+  async updateSubmissionTopic(id: string, topic: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('submissions')
+      .update({ topic })
+      .eq('id', id);
+    if (error) throw error;
+  }
+
+  async updateSubmissionText(submissionId: string, extractedText: string, verifiedText: string) {
+    return await this.supabase
+      .from('submissions')
+      .update({
+        extracted_text: extractedText,
+        verified_text: verifiedText,
+        status: 'verified',
+        verified_at: new Date().toISOString(),
+      })
+      .eq('id', submissionId);
+  }
 
   subscribeToSubmissions(callback: (payload: any) => void) {
     return this.supabase
