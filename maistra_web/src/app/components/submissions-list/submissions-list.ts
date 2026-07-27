@@ -10,9 +10,8 @@ interface Submission {
   student_name?: string;
   captured_at: string;
   status?: string;
-  topic?: string;
   text_content?: string;
-  
+  topic?: string;
 }
 
 interface TopicGroup {
@@ -134,7 +133,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
           submission_id: id
         })
         .toPromise();
-      const text = res?.extracted_text ?? '';
+      const text = res?.cleaned_text ?? '';
       this.extractedText[id] = text;
       this.editableText[id] = text;
     } catch (err) {
