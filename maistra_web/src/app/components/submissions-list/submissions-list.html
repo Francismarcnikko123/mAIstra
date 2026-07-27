@@ -21,7 +21,7 @@
             (click)="openModal(s)"
           >
             <img [src]="s.image_url" alt="Submission" />
-            <div class="thumb-badge" *ngIf="s.text_content">✓</div>
+            <div class="thumb-badge" *ngIf="s.verified_text || s.extracted_text">✓</div>
           </div>
         </div>
       </div>
@@ -76,13 +76,11 @@
             {{ isExtracting(selectedSubmission.id) ? 'Extracting…' : 'Extract Text' }}
           </button>
 
-          <textarea
+          <app-code-editor
             *ngIf="hasExtractedText(selectedSubmission.id)"
             class="text-editor"
-            [(ngModel)]="editableText[selectedSubmission.id]"
-            rows="10"
-            placeholder="Extracted text will appear here…"
-          ></textarea>
+            [(value)]="editableText[selectedSubmission.id]"
+          ></app-code-editor>
 
           <button
             *ngIf="hasExtractedText(selectedSubmission.id)"

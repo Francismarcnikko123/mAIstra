@@ -30,7 +30,7 @@ export class SupabaseService {
   async getSubmissions() {
     return await this.supabase
       .from('submissions')
-      .select('id, image_url, captured_at,  captured_at, status,  topic')
+      .select('id, image_url, captured_at, status, topic, student_name, extracted_text, verified_text')
       .order('captured_at', { ascending: false });
   }
 

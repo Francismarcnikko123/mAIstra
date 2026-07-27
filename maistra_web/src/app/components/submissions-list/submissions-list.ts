@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { SupabaseService } from '../../services/supabase';
+import { CodeEditorComponent } from '../code-editor/code-editor';
 
 interface Submission {
   id: string;
@@ -10,7 +11,8 @@ interface Submission {
   student_name?: string;
   captured_at: string;
   status?: string;
-  text_content?: string;
+  extracted_text?: string;
+  verified_text?: string;
   topic?: string;
 }
 
@@ -22,7 +24,7 @@ interface TopicGroup {
 @Component({
   selector: 'app-submissions-list',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CodeEditorComponent],
   templateUrl: './submissions-list.html',
   styleUrl: './submissions-list.css'
 })
@@ -68,6 +70,12 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     const { data, error } = await this.supabase.getSubmissions();
     if (error) { console.error(error); return; }
     this.submissions = (data ?? []) as Submission[];
+    // Seed the editor with previously saved text so verified/extracted work
+    // reappears when the page reloads or a submission is reopened.
+    for (const s of this.submissions) {
+      const saved = s.verified_text || s.extracted_text || '';
+      if (saved) this.editableText[s.id] = saved;
+    }
     this.groupSubmissions();
     this.cdr.detectChanges();
   }
@@ -96,8 +104,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   openModal(submission: Submission) {
     this.selectedSubmission = { ...submission };
     this.editableTopic = submission.topic || 'Uncategorized';
-    if (submission.text_content && !this.editableText[submission.id]) {
-      this.editableText[submission.id] = submission.text_content;
+    const saved = submission.verified_text || submission.extracted_text || '';
+    if (saved && !this.editableText[submission.id]) {
+      this.editableText[submission.id] = saved;
     }
   }
 
@@ -154,8 +163,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       const text = this.editableText[id];
       await this.supabase.updateSubmissionText(id, text, text);
       const s = this.submissions.find(x => x.id === id);
-      if (s) s.text_content = text;
-      if (this.selectedSubmission) this.selectedSubmission.text_content = text;
+      if (s) { s.extracted_text = text; s.verified_text = text; }
+      if (this.selectedSubmission) {
+        this.selectedSubmission.extracted_text = text;
+        this.selectedSubmission.verified_text = text;
+      }
     } catch (err) {
       console.error('Save failed:', err);
     } finally {
