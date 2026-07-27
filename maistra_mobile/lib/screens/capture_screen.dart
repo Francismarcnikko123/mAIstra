@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
+import 'dart:math';
 
 // Result of the quality check
 class QualityResult {
@@ -89,6 +90,33 @@ QualityResult _analyzeInIsolate(List<int> bytes) {
   if (avgBrightness < 60)  issues.add('Too dark — find better lighting');
   if (avgBrightness > 220) issues.add('Too bright / overexposed');
   if (blurScore < 1300)    issues.add('Image is blurry — hold camera steady');
+
+  // Slant detection using horizontal projection
+// Straight paper = text lines create clear peaks in horizontal projection
+// Tilted paper = projection is flat/uniform
+final List<double> hProj = [];
+for (int y = 0; y < grayscale.height; y++) {
+  int edgeCount = 0;
+  for (int x = 1; x < grayscale.width - 1; x++) {
+    final left = grayscale.getPixel(x - 1, y).r.toDouble();
+    final right = grayscale.getPixel(x + 1, y).r.toDouble();
+    if ((right - left).abs() > 15) edgeCount++;
+  }
+  hProj.add(edgeCount.toDouble());
+}
+
+final projMean = hProj.reduce((a, b) => a + b) / hProj.length;
+double projVariance = 0;
+for (final v in hProj) {
+  projVariance += (v - projMean) * (v - projMean);
+}
+projVariance /= hProj.length;
+final cv = projMean > 0 ? sqrt(projVariance) / projMean : 0;
+print('Slant cv: $cv');
+
+if (cv < 1.0) {
+  issues.add('Paper is slanted — hold the paper flat and straight');
+}
 
   return QualityResult(passed: issues.isEmpty, issues: issues);
 }
