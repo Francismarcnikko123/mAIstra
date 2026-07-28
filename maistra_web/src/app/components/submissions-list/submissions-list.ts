@@ -165,6 +165,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (!this.selectedSubmission) return;
     const id = this.selectedSubmission.id;
     this.extractingId = id;
+    this.extractionError[id] = '';
     try {
       const res: any = await this.http
         .post('http://localhost:8000/api/ocr/extract-from-url', {
