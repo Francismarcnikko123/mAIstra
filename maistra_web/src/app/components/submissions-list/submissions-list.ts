@@ -44,6 +44,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   extractedText: Record<string, string> = {};
   editableText: Record<string, string> = {};
   extractionError: Record<string, string> = {};
+  saveStatus: Record<string, string> = {};   // '' | 'saved' | 'error'
 
   private subscription: any;
 
@@ -160,6 +161,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (!this.selectedSubmission) return;
     const id = this.selectedSubmission.id;
     this.savingId = id;
+    this.saveStatus[id] = '';
     try {
       const text = this.editableText[id];
       await this.supabase.updateSubmissionText(id, text, text);
@@ -169,8 +171,15 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         this.selectedSubmission.extracted_text = text;
         this.selectedSubmission.verified_text = text;
       }
+      this.saveStatus[id] = 'saved';
+      // Auto-clear the confirmation after a few seconds.
+      setTimeout(() => {
+        this.saveStatus[id] = '';
+        this.cdr.detectChanges();
+      }, 3000);
     } catch (err) {
       console.error('Save failed:', err);
+      this.saveStatus[id] = 'error';
     } finally {
       this.savingId = null;
       this.cdr.detectChanges();

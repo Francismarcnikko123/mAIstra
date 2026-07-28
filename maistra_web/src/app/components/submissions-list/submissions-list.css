@@ -279,3 +279,11 @@
   font-size: 13px;
   margin-top: 6px;
 }
+.save-status {
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.save-status.saved { color: #1e8e3e; }
+.save-status.error { color: #c0392b; }

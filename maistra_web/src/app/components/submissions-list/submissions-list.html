@@ -94,6 +94,13 @@
           >
             {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save Verified Text' }}
           </button>
+
+          <span class="save-status saved" *ngIf="saveStatus[selectedSubmission.id] === 'saved'">
+            ✓ Saved successfully
+          </span>
+          <span class="save-status error" *ngIf="saveStatus[selectedSubmission.id] === 'error'">
+            ✕ Save failed — please try again
+          </span>
         </div>
 
       </div>
