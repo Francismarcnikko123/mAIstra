@@ -1,24 +1,16 @@
 """
-Character Error Rate (CER) evaluation for the OCR pipeline.
+Character Error Rate (CER) against samples/labels.csv -- edit distance
+between OCR output and the correct text, divided by the correct text's
+length. Lower is better, 0 = perfect.
 
-CER is the standard OCR accuracy metric: the edit distance (insertions +
-deletions + substitutions) between the OCR output and the correct text,
-divided by the length of the correct text. Lower is better; 0.0 = perfect,
-1.0 = as many errors as there are characters.
+Dev tool, not used by the live backend. Run it after any pipeline change,
+and before/after fine-tuning to measure the actual difference:
 
-This is a developer/research tool, not part of the live backend. Run it
-whenever you want a fresh accuracy number -- e.g. a baseline before
-fine-tuning, then again after, to measure the improvement.
-
-Usage (from the ocr_feature/ directory, with the venv active):
     python evaluate_cer.py
 
-It reads samples/labels.csv (filename,ground_truth_text), runs every image
-through the real pipeline, and reports:
-  - CER of raw_text     (before the keyword cleanup layer)
-  - CER of cleaned_text  (what the teacher actually sees)
-both strict and whitespace-normalized (whitespace differences aren't
-recognition errors -- the teacher reformats anyway).
+Reports raw vs. cleaned text, each strict and whitespace-normalized (the
+latter isolates recognition errors from formatting, since the teacher
+reformats anyway).
 """
 import csv
 from pathlib import Path

@@ -1,7 +1,7 @@
 import re
 
-# OCR misread and correct C token. Whole-token, case-sensitive matches only.
-# list of small and obvious so it is easy to explain and audit.
+# Known OCR misread -> correct C token. Whole-token, case-sensitive. Keep this
+# list small and obvious -- every entry should be defensible on its own.
 FIXES = {
 
     # types
@@ -36,15 +36,14 @@ FIXES = {
 # their contents from replacement.
 _LITERAL = re.compile(r'"(?:\\.|[^"\\])*"' r"|'(?:\\.|[^'\\])*'")
 
-# Standard library headers form a small, closed set, so an #include line can be
-# safely normalized even when OCR mangles the extension ('.h' -> '.n') or the
-# closing '>' (often read as '7'). This ONLY rewrites a line that clearly starts
-# as an #include directive with a known header -- a bare '7' or '>' anywhere
-# else in the code is never touched, because those are ambiguous/graded content.
+# Standard headers are a small closed set, so an #include line is safe to
+# normalize even when OCR mangles the extension ('.h' -> '.n') or the closing
+# '>' (often read as '7') -- only a line that already looks like an #include
+# with a known header gets touched. A stray '7' or '>' elsewhere is left
+# alone since it could be real content.
 _KNOWN_HEADERS = ("stdio", "stdlib", "stddef", "string", "math", "ctype", "time")
-# The leading '#' is optional: OCR sometimes drops it entirely, but
-# "include <stdio.h>" is still unambiguously a C include directive, so it is
-# safe to re-add the '#'.
+# '#' is optional in the pattern: OCR sometimes drops it, but "include
+# <stdio.h>" is still unambiguous, so it gets added back.
 _INCLUDE_LINE = re.compile(
     r"^\s*#?\s*[Ii]nclude\s*<\s*(" + "|".join(_KNOWN_HEADERS) + r")\b.*$"
 )
