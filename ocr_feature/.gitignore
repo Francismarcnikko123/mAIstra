@@ -27,5 +27,8 @@ outputs/*
 samples/*
 !samples/.gitkeep
 
+# Exported datasets (student handwriting + verified text)
+datasets/
+
 # macOS files
 .DS_Store

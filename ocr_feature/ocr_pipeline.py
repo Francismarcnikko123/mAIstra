@@ -1,3 +1,4 @@
+import json
 import math
 from pathlib import Path
 
@@ -5,7 +6,7 @@ import cv2
 import numpy as np
 from paddleocr import PaddleOCR
 
-from preprocess import preprocess_image
+from preprocess import preprocess_image, PreprocessConfig, DEFAULT_CONFIG
 from c_code_cleanup import clean_c_code
 
 
@@ -54,10 +55,12 @@ REC_SCORE_FLOOR = 0.3
 
 def _filter_low_confidence(rec_texts, rec_scores, rec_boxes):
     """Drop entries below REC_SCORE_FLOOR, keeping the three lists aligned.
-    A missing score passes through rather than getting dropped."""
+    A missing score passes through rather than getting dropped. Also returns
+    the dropped entries so the debug artifact can show what was discarded."""
     if not rec_scores or len(rec_scores) != len(rec_texts):
-        return rec_texts, rec_scores, rec_boxes
+        return rec_texts, rec_scores, rec_boxes, []
     keep_texts, keep_scores, keep_boxes = [], [], []
+    dropped = []
     for i, text in enumerate(rec_texts):
         score = rec_scores[i]
         try:
@@ -69,7 +72,13 @@ def _filter_low_confidence(rec_texts, rec_scores, rec_boxes):
             keep_scores.append(score)
             if i < len(rec_boxes):
                 keep_boxes.append(rec_boxes[i])
-    return keep_texts, keep_scores, keep_boxes
+        else:
+            dropped.append({
+                "text": text,
+                "score": score,
+                "box": rec_boxes[i] if i < len(rec_boxes) else None,
+            })
+    return keep_texts, keep_scores, keep_boxes, dropped
 
 
 def _expected_line_y(members, candidate_x):
@@ -191,18 +200,61 @@ def _group_into_reading_order(rec_texts, rec_scores, rec_boxes):
     return ordered_lines
 
 
-def extract_text_from_image(image_path: str) -> dict:
+def _jsonable(value):
+    """Best-effort conversion of PaddleOCR values (numpy scalars/arrays) into
+    plain Python types for the debug JSON. Unconvertible values become their
+    string form rather than failing the dump."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    tolist = getattr(value, "tolist", None)
+    if callable(tolist):
+        try:
+            return _jsonable(tolist())
+        except Exception:
+            pass
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _write_debug_artifact(preprocessed_path: str, debug: dict) -> None:
+    """Save the extraction's intermediate data as outputs/debug/<stem>.json,
+    matching the preprocessed image's stem so the pair is easy to correlate.
+    Diagnostic only -- a failure here must never break the extraction itself."""
+    try:
+        debug_dir = Path(preprocessed_path).parent / "debug"
+        debug_dir.mkdir(exist_ok=True)
+        out_path = debug_dir / (Path(preprocessed_path).stem + ".json")
+        with out_path.open("w", encoding="utf-8") as f:
+            json.dump(_jsonable(debug), f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def extract_text_from_image(
+    image_path: str,
+    preprocess_config: PreprocessConfig = DEFAULT_CONFIG,
+) -> dict:
     Path("outputs").mkdir(exist_ok=True)
 
     preprocessed_path = preprocess_image(
         image_path=image_path,
-        output_dir="outputs"
+        output_dir="outputs",
+        config=preprocess_config,
     )
 
     results = ocr.predict(preprocessed_path)
 
     extracted_lines = []
     confidence_scores = []
+    debug_detections = []
+    debug_dropped = []
+    debug_lines = []
 
     for page in results:
         data = page.json
@@ -212,14 +264,23 @@ def extract_text_from_image(image_path: str) -> dict:
         rec_scores = result_data.get("rec_scores", [])
         rec_boxes = result_data.get("rec_boxes", [])
 
-        rec_texts, rec_scores, rec_boxes = _filter_low_confidence(
+        rec_texts, rec_scores, rec_boxes, dropped = _filter_low_confidence(
             rec_texts, rec_scores, rec_boxes)
+        debug_dropped.extend(dropped)
+        for i, text in enumerate(rec_texts):
+            debug_detections.append({
+                "text": text,
+                "score": rec_scores[i] if i < len(rec_scores) else None,
+                "box": rec_boxes[i] if i < len(rec_boxes) else None,
+            })
         ordered_lines = _group_into_reading_order(rec_texts, rec_scores, rec_boxes)
 
         for line_members in ordered_lines:
             parts = [t.strip() for t, _ in line_members if t and t.strip()]
             if parts:
                 extracted_lines.append(" ".join(parts))
+                debug_lines.append(
+                    [{"text": t, "score": s} for t, s in line_members])
             for _, score in line_members:
                 try:
                     confidence_scores.append(float(score))
@@ -236,6 +297,18 @@ def extract_text_from_image(image_path: str) -> dict:
     average_confidence = None
     if confidence_scores:
         average_confidence = sum(confidence_scores) / len(confidence_scores)
+
+    _write_debug_artifact(preprocessed_path, {
+        "source_image": image_path,
+        "preprocessed_image": preprocessed_path,
+        "raw_text": raw_text,
+        "cleaned_text": cleaned_text,
+        "average_confidence": average_confidence,
+        "rec_score_floor": REC_SCORE_FLOOR,
+        "detections": debug_detections,
+        "dropped_low_confidence": debug_dropped,
+        "grouped_lines": debug_lines,
+    })
 
     return {
         "raw_text": raw_text,

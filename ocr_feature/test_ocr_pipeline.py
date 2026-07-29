@@ -22,8 +22,13 @@ def load_pipeline_without_models():
         def __init__(self, **_kwargs):
             pass
 
+    class StubPreprocessConfig:
+        pass
+
     paddleocr.PaddleOCR = StubPaddleOCR
     preprocess.preprocess_image = lambda **_kwargs: ""
+    preprocess.PreprocessConfig = StubPreprocessConfig
+    preprocess.DEFAULT_CONFIG = StubPreprocessConfig()
     c_code_cleanup.clean_c_code = lambda text: text
 
     module_name = "ocr_pipeline_grouping_test_module"
