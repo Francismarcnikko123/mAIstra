@@ -10,9 +10,6 @@ import 'dart:typed_data';
 // Step 1 — Background normalization: estimates the illumination map by
 //   downsampling + blurring, then divides each pixel by it. This flattens
 //   shadows and uneven lighting.
-// Step 2 — Levels stretch: maps the [30, 215] range to [0, 255] so the
-//   paper background becomes pure white and ink becomes darker.
-//   This is what CamScanner's "Enhance" mode does under the hood.
 img.Image _processDocument(img.Image source) {
   // Step 1: Estimate background illumination via tiny blurred copy
   final tiny = img.copyResize(source, width: 50, height: 50);
@@ -34,12 +31,6 @@ img.Image _processDocument(img.Image source) {
       double r = bg.r > 10 ? (pixel.r / bg.r * 255).clamp(0, 255) : pixel.r.toDouble();
       double g = bg.g > 10 ? (pixel.g / bg.g * 255).clamp(0, 255) : pixel.g.toDouble();
       double b = bg.b > 10 ? (pixel.b / bg.b * 255).clamp(0, 255) : pixel.b.toDouble();
-
-      // Step 2: Levels stretch — maps [30, 215] → [0, 255]
-      // Anything ≥215 becomes pure white; anything ≤30 becomes pure black
-      r = ((r - 30) / (215 - 30) * 255).clamp(0, 255);
-      g = ((g - 30) / (215 - 30) * 255).clamp(0, 255);
-      b = ((b - 30) / (215 - 30) * 255).clamp(0, 255);
 
       result.setPixelRgb(x, y, r.toInt(), g.toInt(), b.toInt());
     }
@@ -88,8 +79,8 @@ QualityResult _checkQuality(List<int> bytes) {
   final mean = laplacianSum / count;
   final blurScore = (laplacianSumSquares / count) - (mean * mean);
 
-  print('Blur score: $blurScore');
-  print('Avg brightness: $avgBrightness');
+  //print('Blur score: $blurScore');
+  //print('Avg brightness: $avgBrightness');
 
   final List<String> issues = [];
   if (blurScore < 800) issues.add('Blurry image — hold steady and wait for camera to focus');
