@@ -32,10 +32,12 @@ class PreprocessConfig:
     # from the measured glyph height instead (block = scale x glyph, rounded
     # to odd), so the pipeline copes with whatever size the student wrote.
     #
-    # Measured on 7 labelled samples (2 writers): fixed 31 -> 0.160 CER;
-    # scale 1.5 -> 0.128. Largest gain on the smallest handwriting
-    # (0.370 -> 0.229). None = keep the fixed size.
-    threshold_block_scale: float | None = None
+    # Measured on 13 labelled samples (2 writers, bond + greenbook paper):
+    # fixed 31 -> 0.223 CER; scale 1.5 -> 0.198. Best on every subgroup, and
+    # it removes the penalty from show-through when both sides of a sheet are
+    # written on (0.370 -> 0.229 with, 0.242 -> 0.226 without).
+    # Set to None to go back to the fixed threshold_block_size.
+    threshold_block_scale: float | None = 1.5
 
 
 DEFAULT_CONFIG = PreprocessConfig()
