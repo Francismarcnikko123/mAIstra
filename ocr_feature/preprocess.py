@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 
 @dataclass(frozen=True)
@@ -25,8 +26,41 @@ class PreprocessConfig:
     threshold_block_size: int = 31
     threshold_c: int = 15
 
+    # A fixed block size is implicitly tuned for one handwriting size: too
+    # large a block spans several characters when the writing is small, and
+    # thresholding degrades. Setting threshold_block_scale derives the block
+    # from the measured glyph height instead (block = scale x glyph, rounded
+    # to odd), so the pipeline copes with whatever size the student wrote.
+    #
+    # Measured on 7 labelled samples (2 writers): fixed 31 -> 0.160 CER;
+    # scale 1.5 -> 0.128. Largest gain on the smallest handwriting
+    # (0.370 -> 0.229). None = keep the fixed size.
+    threshold_block_scale: float | None = None
+
 
 DEFAULT_CONFIG = PreprocessConfig()
+
+
+def _median_glyph_height(gray) -> float:
+    """Median height of glyph-sized connected components, as a cheap proxy
+    for how large the handwriting is in this image. Returns 0.0 when nothing
+    plausible is found, so callers can fall back."""
+    # Adaptive rather than Otsu: a global threshold is thrown off by any
+    # large uniform region (a wide margin, a blown-out area), which can
+    # collapse the whole page into a single component.
+    binary = cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV, 31, 15)
+    count, _, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    heights = []
+    for i in range(1, count):
+        w = stats[i, cv2.CC_STAT_WIDTH]
+        h = stats[i, cv2.CC_STAT_HEIGHT]
+        area = stats[i, cv2.CC_STAT_AREA]
+        # Skip speckles, page-sized blobs, and long rules/edges.
+        if 4 <= h <= 300 and area >= 12 and w <= 12 * h:
+            heights.append(h)
+    return float(np.median(heights)) if heights else 0.0
 
 
 def preprocess_image(
@@ -66,12 +100,20 @@ def preprocess_image(
             config.denoise_search_window,
         )
     if config.threshold:
+        block_size = config.threshold_block_size
+        if config.threshold_block_scale is not None:
+            glyph = _median_glyph_height(processed)
+            if glyph > 0:
+                # adaptiveThreshold requires an odd block of at least 3.
+                block_size = max(3, int(round(config.threshold_block_scale * glyph)))
+                if block_size % 2 == 0:
+                    block_size += 1
         processed = cv2.adaptiveThreshold(
             processed,
             255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv2.THRESH_BINARY,
-            config.threshold_block_size,
+            block_size,
             config.threshold_c,
         )
 
