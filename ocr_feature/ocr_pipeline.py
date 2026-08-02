@@ -1,5 +1,6 @@
 import json
 import math
+import tempfile
 from pathlib import Path
 
 import cv2
@@ -8,6 +9,13 @@ from paddleocr import PaddleOCR
 
 from preprocess import preprocess_image, PreprocessConfig, DEFAULT_CONFIG
 from c_code_cleanup import clean_c_code
+from c_code_suggestions import suggest_c_code
+from recognition_consensus import (
+    RecognitionConfig,
+    DEFAULT_RECOGNITION_CONFIG,
+    create_candidate_views,
+    select_consensus_lines,
+)
 
 
 # Detection and recognition are pinned by name -- passing a model name makes
@@ -16,11 +24,10 @@ from c_code_cleanup import clean_c_code
 # mobile_det + no orientation/unwarp passes: ~81s -> a few seconds per image
 # on CPU, since our captures are already gated upright/flat at the mobile app.
 
-# en_PP-OCRv5_mobile_rec over the multilingual PP-OCRv6_medium_rec: the
-# multilingual model measured ~2pts better CER (0.075 vs 0.095) but
-# occasionally recognizes a CJK character instead of a C symbol (二 for '=').
-# English-only can't do that, and the accuracy gap is small enough to eat
-# given the teacher verifies everything anyway.
+# en_PP-OCRv5_mobile_rec remains pinned because the multilingual alternative
+# was observed substituting CJK characters for C symbols (for example, 二 for
+# '='). Earlier CER figures used unverified labels, so they are not valid
+# evidence for choosing between these recognition models.
 
 ocr = PaddleOCR(
     text_detection_model_name="PP-OCRv5_mobile_det",
@@ -113,23 +120,28 @@ def _expected_line_y(members, candidate_x):
         return None
 
 
-def _group_into_reading_order(rec_texts, rec_scores, rec_boxes):
-    """
-    Group detections into lines by position (top-to-bottom, then left-to-right
-    within a line) instead of trusting PaddleOCR's raw order, which can scatter
-    a single handwritten row into separate out-of-order pieces -- e.g.
-    "int result", "=", "add(3,4);" coming back as three disconnected lines.
+def _original_detection_records(rec_texts, rec_scores):
+    """Return one geometry-free record per detection in original order."""
+    return [[{
+        "text": text,
+        "score": rec_scores[i] if i < len(rec_scores) else 0.0,
+        "x": None,
+        "y": None,
+        "y_min": None,
+        "y_max": None,
+    }] for i, text in enumerate(rec_texts)]
 
-    Returns a list of lines, each a list of (text, score) tuples in reading
-    order; the caller joins a line's members with a space. rec_boxes entries
-    are [x_min, y_min, x_max, y_max]. Falls back to one line per detection if
-    box data is missing or malformed. Grouping may reorder whole recognized
-    fragments and the caller may insert whitespace when joining them, but this
-    helper never edits recognized characters.
+
+def _group_detection_records(rec_texts, rec_scores, rec_boxes):
+    """Group detections and retain the box geometry used for ordering.
+
+    The boolean return value indicates whether every detection had safe,
+    finite geometry. Unsafe geometry falls back to one detection per line in
+    original order so callers never infer coordinates that Paddle did not
+    provide reliably.
     """
     if not rec_boxes or len(rec_boxes) != len(rec_texts):
-        return [[(t, rec_scores[i] if i < len(rec_scores) else 0.0)]
-                for i, t in enumerate(rec_texts)]
+        return _original_detection_records(rec_texts, rec_scores), False
 
     items = []
     heights = []
@@ -139,24 +151,22 @@ def _group_into_reading_order(rec_texts, rec_scores, rec_boxes):
                                           float(box[2]), float(box[3]))
         except (TypeError, IndexError, ValueError, OverflowError):
             # Malformed box -> don't risk regrouping; keep original order.
-            return [[(t, rec_scores[i] if i < len(rec_scores) else 0.0)]
-                    for i, t in enumerate(rec_texts)]
+            return _original_detection_records(rec_texts, rec_scores), False
         width = x_max - x_min
         height = y_max - y_min
         if (not all(math.isfinite(value)
                     for value in (x_min, y_min, x_max, y_max, width, height))
                 or width <= 0 or height <= 0):
             # Invalid geometry -> don't risk regrouping; keep original order.
-            return [[(t, rec_scores[i] if i < len(rec_scores) else 0.0)]
-                    for i, t in enumerate(rec_texts)]
+            return _original_detection_records(rec_texts, rec_scores), False
         y_center = y_min + height / 2.0
         if not math.isfinite(y_center):
             # Invalid geometry -> don't risk regrouping; keep original order.
-            return [[(t, rec_scores[i] if i < len(rec_scores) else 0.0)]
-                    for i, t in enumerate(rec_texts)]
+            return _original_detection_records(rec_texts, rec_scores), False
         score = rec_scores[i] if i < len(rec_scores) else 0.0
         items.append({"text": rec_texts[i], "score": score,
-                      "x": x_min, "y": y_center})
+                      "x": x_min, "y": y_center,
+                      "y_min": y_min, "y_max": y_max})
         heights.append(height)
 
     # Two boxes belong to the same visual line if their vertical centers are
@@ -175,8 +185,7 @@ def _group_into_reading_order(rec_texts, rec_scores, rec_boxes):
             members = lines[-1]["members"]
             expected_y = _expected_line_y(members, it["x"])
             if expected_y is None:
-                return [[(t, rec_scores[i] if i < len(rec_scores) else 0.0)]
-                        for i, t in enumerate(rec_texts)]
+                return _original_detection_records(rec_texts, rec_scores), False
             mean_y = sum(member["y"] for member in members) / len(members)
             trend_delta = abs(it["y"] - expected_y)
             center_delta = abs(it["y"] - mean_y)
@@ -193,11 +202,154 @@ def _group_into_reading_order(rec_texts, rec_scores, rec_boxes):
 
         lines.append({"members": [it]})
 
-    ordered_lines = []
-    for line in lines:
-        members = sorted(line["members"], key=lambda m: m["x"])
-        ordered_lines.append([(m["text"], m["score"]) for m in members])
-    return ordered_lines
+    ordered_lines = [
+        sorted(line["members"], key=lambda member: member["x"])
+        for line in lines
+    ]
+    return ordered_lines, True
+
+
+def _group_into_reading_order(rec_texts, rec_scores, rec_boxes):
+    """
+    Group detections into lines by position (top-to-bottom, then left-to-right
+    within a line) instead of trusting PaddleOCR's raw order, which can scatter
+    a single handwritten row into separate out-of-order pieces -- e.g.
+    "int result", "=", "add(3,4);" coming back as three disconnected lines.
+
+    Returns a list of lines, each a list of (text, score) tuples in reading
+    order; the caller joins a line's members with a space. rec_boxes entries
+    are [x_min, y_min, x_max, y_max]. Falls back to one line per detection if
+    box data is missing or malformed. Grouping may reorder whole recognized
+    fragments and the caller may insert whitespace when joining them, but this
+    helper never edits recognized characters.
+    """
+    grouped, _geometry_safe = _group_detection_records(
+        rec_texts, rec_scores, rec_boxes
+    )
+    return [
+        [(member["text"], member["score"]) for member in members]
+        for members in grouped
+    ]
+
+
+def _group_structured_lines(rec_texts, rec_scores, rec_boxes, image_height):
+    """Return nonempty OCR lines with confidence and normalized geometry."""
+    grouped, geometry_safe = _group_detection_records(
+        rec_texts, rec_scores, rec_boxes
+    )
+    try:
+        normalized_height = float(image_height)
+    except (TypeError, ValueError, OverflowError):
+        normalized_height = 0.0
+    geometry_safe = (
+        geometry_safe
+        and math.isfinite(normalized_height)
+        and normalized_height > 0
+    )
+
+    structured = []
+    for members in grouped:
+        parts = [
+            member["text"].strip()
+            for member in members
+            if member["text"] and member["text"].strip()
+        ]
+        if not parts:
+            continue
+
+        scores = []
+        for member in members:
+            try:
+                score = float(member["score"])
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if math.isfinite(score):
+                scores.append(score)
+
+        mean_confidence = None
+        if scores:
+            try:
+                candidate_mean = math.fsum(
+                    score / len(scores) for score in scores
+                )
+            except OverflowError:
+                candidate_mean = None
+            if candidate_mean is not None and math.isfinite(candidate_mean):
+                mean_confidence = candidate_mean
+
+        y_min = None
+        y_max = None
+        if geometry_safe:
+            try:
+                y_min = min(member["y_min"] for member in members) / normalized_height
+                y_max = max(member["y_max"] for member in members) / normalized_height
+            except (TypeError, ValueError, OverflowError, ZeroDivisionError):
+                y_min = None
+                y_max = None
+            if (y_min is None or y_max is None
+                    or not all(math.isfinite(value) for value in (y_min, y_max))):
+                y_min = None
+                y_max = None
+
+        structured.append({
+            "text": " ".join(parts),
+            "members": [
+                (member["text"], member["score"]) for member in members
+            ],
+            "scores": scores,
+            "mean_confidence": mean_confidence,
+            "y_min": y_min,
+            "y_max": y_max,
+        })
+    return structured
+
+
+def _build_line_details(grouped_lines):
+    """Build additive per-line review data without judging correctness."""
+    details = []
+    for members in grouped_lines:
+        parts = [text.strip() for text, _ in members if text and text.strip()]
+        if not parts:
+            continue
+
+        scores = []
+        for _, score in members:
+            try:
+                numeric_score = float(score)
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if math.isfinite(numeric_score):
+                scores.append(numeric_score)
+
+        details.append({
+            "line": len(details) + 1,
+            "text": " ".join(parts),
+            "scores": scores,
+            "min_confidence": min(scores) if scores else None,
+            "mean_confidence": (
+                sum(scores) / len(scores) if scores else None
+            ),
+            "review_reasons": [],
+        })
+    return details
+
+
+def _attach_suggestion_reasons(line_details, suggestions) -> None:
+    """Attach rule identifiers to line details for teacher navigation."""
+    details_by_line = {detail["line"]: detail for detail in line_details}
+    for suggestion in suggestions:
+        if not isinstance(suggestion, dict):
+            continue
+        try:
+            line_number = int(suggestion.get("line"))
+        except (TypeError, ValueError, OverflowError):
+            continue
+        rule_id = suggestion.get("rule_id")
+        detail = details_by_line.get(line_number)
+        if not detail or not isinstance(rule_id, str) or not rule_id:
+            continue
+        if rule_id not in detail["review_reasons"]:
+            detail["review_reasons"].append(rule_id)
 
 
 def _jsonable(value):
@@ -236,25 +388,24 @@ def _write_debug_artifact(preprocessed_path: str, debug: dict) -> None:
         pass
 
 
-def extract_text_from_image(
-    image_path: str,
-    preprocess_config: PreprocessConfig = DEFAULT_CONFIG,
-) -> dict:
-    Path("outputs").mkdir(exist_ok=True)
-
-    preprocessed_path = preprocess_image(
-        image_path=image_path,
-        output_dir="outputs",
-        config=preprocess_config,
-    )
+def _recognize_preprocessed(preprocessed_path: str) -> dict:
+    """Recognize one preprocessed image and preserve per-line geometry."""
+    try:
+        image = cv2.imread(preprocessed_path, cv2.IMREAD_GRAYSCALE)
+        image_height = image.shape[0] if image is not None else None
+        numeric_height = float(image_height)
+    except (AttributeError, IndexError, TypeError, ValueError, OverflowError):
+        numeric_height = 0.0
+    if not math.isfinite(numeric_height) or numeric_height <= 0:
+        raise ValueError(
+            f"could not read preprocessed image: {preprocessed_path}"
+        )
 
     results = ocr.predict(preprocessed_path)
-
-    extracted_lines = []
+    structured_lines = []
     confidence_scores = []
     debug_detections = []
     debug_dropped = []
-    debug_lines = []
 
     for page in results:
         data = page.json
@@ -265,7 +416,8 @@ def extract_text_from_image(
         rec_boxes = result_data.get("rec_boxes", [])
 
         rec_texts, rec_scores, rec_boxes, dropped = _filter_low_confidence(
-            rec_texts, rec_scores, rec_boxes)
+            rec_texts, rec_scores, rec_boxes
+        )
         debug_dropped.extend(dropped)
         for i, text in enumerate(rec_texts):
             debug_detections.append({
@@ -273,46 +425,256 @@ def extract_text_from_image(
                 "score": rec_scores[i] if i < len(rec_scores) else None,
                 "box": rec_boxes[i] if i < len(rec_boxes) else None,
             })
-        ordered_lines = _group_into_reading_order(rec_texts, rec_scores, rec_boxes)
+            score = rec_scores[i] if i < len(rec_scores) else 0.0
+            try:
+                confidence_scores.append(float(score))
+            except Exception:
+                pass
 
-        for line_members in ordered_lines:
-            parts = [t.strip() for t, _ in line_members if t and t.strip()]
-            if parts:
-                extracted_lines.append(" ".join(parts))
-                debug_lines.append(
-                    [{"text": t, "score": s} for t, s in line_members])
-            for _, score in line_members:
-                try:
-                    confidence_scores.append(float(score))
-                except Exception:
-                    pass
-
-    raw_text = "\n".join(extracted_lines)
-
-    # Light keyword-only tidy so the teacher has fewer edits. The raw text is
-    # kept separately; cleaning never touches string literals or arbitrary
-    # content. See c_code_cleanup.py.
-    cleaned_text = clean_c_code(raw_text)
+        structured_lines.extend(_group_structured_lines(
+            rec_texts, rec_scores, rec_boxes, numeric_height
+        ))
 
     average_confidence = None
     if confidence_scores:
         average_confidence = sum(confidence_scores) / len(confidence_scores)
 
-    _write_debug_artifact(preprocessed_path, {
+    return {
+        "raw_text": "\n".join(line["text"] for line in structured_lines),
+        "lines": structured_lines,
+        "grouped_lines": [line["members"] for line in structured_lines],
+        "average_confidence": average_confidence,
+        "detections": debug_detections,
+        "dropped_low_confidence": debug_dropped,
+        "debug_lines": [
+            [
+                {"text": text, "score": score}
+                for text, score in line["members"]
+            ]
+            for line in structured_lines
+        ],
+    }
+
+
+def _attempt_from_selected_lines(selected_lines: list[dict]) -> dict:
+    """Build one recognition attempt from selected whole structured lines."""
+    if not isinstance(selected_lines, (list, tuple)):
+        raise TypeError("selected lines must be a list or tuple")
+
+    lines = []
+    grouped_lines = []
+    debug_lines = []
+    detections = []
+    confidence_scores = []
+
+    for line in selected_lines:
+        if not isinstance(line, dict):
+            raise TypeError("each selected line must be a dictionary")
+        text = line["text"]
+        members = line["members"]
+        if not isinstance(text, str):
+            raise TypeError("selected line text must be a string")
+        if not isinstance(members, (list, tuple)) or not members:
+            raise ValueError("selected line members must be nonempty")
+
+        normalized_members = []
+        debug_members = []
+        for member in members:
+            if not isinstance(member, (list, tuple)) or len(member) != 2:
+                raise ValueError("selected line members must be text-score pairs")
+            member_text, score = member
+            if not isinstance(member_text, str):
+                raise TypeError("selected member text must be a string")
+            normalized_members.append((member_text, score))
+            debug_members.append({"text": member_text, "score": score})
+            detections.append({
+                "text": member_text,
+                "score": score,
+                "box": None,
+            })
+            try:
+                numeric_score = float(score)
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if math.isfinite(numeric_score):
+                confidence_scores.append(numeric_score)
+
+        lines.append(line)
+        grouped_lines.append(normalized_members)
+        debug_lines.append(debug_members)
+
+    average_confidence = None
+    if confidence_scores:
+        try:
+            candidate_average = math.fsum(
+                score / len(confidence_scores)
+                for score in confidence_scores
+            )
+        except OverflowError:
+            candidate_average = None
+        if candidate_average is not None and math.isfinite(candidate_average):
+            average_confidence = candidate_average
+
+    return {
+        "raw_text": "\n".join(line["text"] for line in lines),
+        "lines": lines,
+        "grouped_lines": grouped_lines,
+        "average_confidence": average_confidence,
+        "detections": detections,
+        "dropped_low_confidence": [],
+        "debug_lines": debug_lines,
+    }
+
+
+def _attempt_summary(name: str, attempt: dict) -> dict:
+    """Return the JSON-safe public summary for one completed OCR attempt."""
+    lines = attempt.get("lines", [])
+    raw_text = attempt.get("raw_text", "")
+    if not isinstance(raw_text, str):
+        raw_text = ""
+
+    confidence = attempt.get("average_confidence")
+    numeric_confidence = None
+    if not isinstance(confidence, bool):
+        try:
+            candidate_confidence = float(confidence)
+        except (TypeError, ValueError, OverflowError):
+            candidate_confidence = None
+        if (
+            candidate_confidence is not None
+            and math.isfinite(candidate_confidence)
+        ):
+            numeric_confidence = candidate_confidence
+
+    return {
+        "name": name,
+        "raw_text": raw_text,
+        "line_count": len(lines) if isinstance(lines, (list, tuple)) else 0,
+        "average_confidence": numeric_confidence,
+    }
+
+
+def extract_text_from_image(
+    image_path: str,
+    preprocess_config: PreprocessConfig = DEFAULT_CONFIG,
+    output_dir: str = "outputs",
+    recognition_config: RecognitionConfig = DEFAULT_RECOGNITION_CONFIG,
+) -> dict:
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    preprocessed_path = preprocess_image(
+        image_path=image_path,
+        output_dir=str(output_path),
+        config=preprocess_config,
+    )
+
+    baseline_attempt = _recognize_preprocessed(preprocessed_path)
+    selected_attempt = baseline_attempt
+    recognition_attempts = []
+    consensus_decisions = []
+    recognition_diagnostics = []
+
+    if recognition_config.mode == "consensus":
+        try:
+            recognition_attempts.append(
+                _attempt_summary("baseline", baseline_attempt)
+            )
+            with tempfile.TemporaryDirectory(dir=output_path) as temp_dir:
+                candidate_paths = dict(create_candidate_views(
+                    Path(preprocessed_path),
+                    Path(temp_dir),
+                    recognition_config,
+                ))
+                negative_attempt = _recognize_preprocessed(
+                    str(candidate_paths["rotate_neg"])
+                )
+                recognition_attempts.append(
+                    _attempt_summary("rotate_neg", negative_attempt)
+                )
+                positive_attempt = _recognize_preprocessed(
+                    str(candidate_paths["rotate_pos"])
+                )
+                recognition_attempts.append(
+                    _attempt_summary("rotate_pos", positive_attempt)
+                )
+
+            selected_lines, consensus_decisions = select_consensus_lines(
+                baseline_attempt["lines"],
+                negative_attempt["lines"],
+                positive_attempt["lines"],
+            )
+            selected_attempt = _attempt_from_selected_lines(selected_lines)
+        except Exception as exc:
+            selected_attempt = baseline_attempt
+            consensus_decisions = []
+            recognition_diagnostics = [
+                f"consensus failed: {type(exc).__name__}"
+            ]
+
+    raw_text = selected_attempt["raw_text"]
+    grouped_lines = selected_attempt["grouped_lines"]
+
+    # Light keyword-only tidy so the teacher has fewer edits. The raw text is
+    # kept separately; cleaning never touches string literals or arbitrary
+    # content. See c_code_cleanup.py.
+    cleaned_text = clean_c_code(raw_text)
+    line_details = _build_line_details(grouped_lines)
+
+    # Suggestions are teacher-review hints only. They never modify either OCR
+    # text field, and a failure here must not turn a successful extraction into
+    # an API error.
+    try:
+        review_suggestions = suggest_c_code(raw_text, line_details)
+        review_diagnostics = []
+    except Exception as exc:
+        review_suggestions = []
+        review_diagnostics = [
+            f"suggestion engine failed: {type(exc).__name__}"
+        ]
+    _attach_suggestion_reasons(line_details, review_suggestions)
+
+    average_confidence = selected_attempt["average_confidence"]
+
+    debug = {
         "source_image": image_path,
         "preprocessed_image": preprocessed_path,
         "raw_text": raw_text,
         "cleaned_text": cleaned_text,
         "average_confidence": average_confidence,
         "rec_score_floor": REC_SCORE_FLOOR,
-        "detections": debug_detections,
-        "dropped_low_confidence": debug_dropped,
-        "grouped_lines": debug_lines,
-    })
+        "detections": selected_attempt["detections"],
+        "dropped_low_confidence": selected_attempt["dropped_low_confidence"],
+        "grouped_lines": selected_attempt["debug_lines"],
+        "line_details": line_details,
+        "review_suggestions": review_suggestions,
+        "review_diagnostics": review_diagnostics,
+    }
+    if recognition_config.mode == "consensus":
+        debug.update({
+            "baseline_raw_text": baseline_attempt["raw_text"],
+            "recognition_mode": "consensus",
+            "recognition_attempts": recognition_attempts,
+            "consensus_decisions": consensus_decisions,
+            "recognition_diagnostics": recognition_diagnostics,
+        })
+    _write_debug_artifact(preprocessed_path, debug)
 
-    return {
+    result = {
         "raw_text": raw_text,
         "cleaned_text": cleaned_text,
         "average_confidence": average_confidence,
-        "preprocessed_image": preprocessed_path
+        "preprocessed_image": preprocessed_path,
+        "line_details": line_details,
+        "review_suggestions": review_suggestions,
+        "review_diagnostics": review_diagnostics,
     }
+    if recognition_config.mode == "consensus":
+        result.update({
+            "baseline_raw_text": baseline_attempt["raw_text"],
+            "recognition_mode": "consensus",
+            "recognition_attempts": recognition_attempts,
+            "consensus_decisions": consensus_decisions,
+            "recognition_diagnostics": recognition_diagnostics,
+        })
+    return result

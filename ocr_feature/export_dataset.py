@@ -15,6 +15,8 @@ Writes to datasets/verified/:
 Re-running is safe: already-downloaded images are kept, the CSV is
 rewritten from the current database state. Rows whose image can't be
 downloaded are skipped with a warning rather than failing the export.
+Rows whose verified text matches the stored OCR text after whitespace
+normalization are quarantined and listed in a warning.
 """
 import csv
 import os
@@ -30,6 +32,24 @@ IMAGES_DIR = EXPORT_DIR / "images"
 LABELS_CSV = EXPORT_DIR / "labels.csv"
 
 PAGE_SIZE = 100
+
+
+def normalize_whitespace(text: str) -> str:
+    """Collapse all whitespace so formatting-only edits compare equally."""
+    return " ".join(text.split())
+
+
+def is_suspected_unedited(row: dict) -> bool:
+    """Return whether verified text appears to be saved OCR output."""
+    verified = normalize_whitespace(row.get("verified_text") or "")
+    extracted = normalize_whitespace(row.get("extracted_text") or "")
+    if not verified or not extracted:
+        return False
+
+    # This heuristic cannot catch every contamination case (for example, a
+    # wrong-program label). It only catches the "saved without editing" pattern,
+    # which accounted for the majority of the known contaminated rows.
+    return verified == extracted
 
 
 def fetch_verified_submissions(base_url: str, anon_key: str) -> list[dict]:
@@ -93,11 +113,16 @@ def main() -> None:
 
     exported = []
     skipped = 0
+    suspected_unedited_ids = []
     for row in rows:
         text = (row.get("verified_text") or "").strip()
         image_url = row.get("image_url") or ""
         if not text or not image_url:
             print(f"  skip {row.get('id')}: missing verified_text or image_url")
+            skipped += 1
+            continue
+        if is_suspected_unedited(row):
+            suspected_unedited_ids.append(str(row.get("id")))
             skipped += 1
             continue
         dest = IMAGES_DIR / f"{row['id']}.jpg"
@@ -127,11 +152,17 @@ def main() -> None:
     # Re-captures of the same page produce identical verified text; they must
     # not straddle a future train/test split, so flag them at export time.
     duplicates = Counter(
-        " ".join(row["verified_text"].split()) for row in exported)
+        normalize_whitespace(row["verified_text"]) for row in exported)
     duplicate_groups = {t: n for t, n in duplicates.items() if n > 1}
 
     print(f"Exported {len(exported)} pair(s) to {LABELS_CSV} "
           f"({skipped} skipped).")
+    if suspected_unedited_ids:
+        print(
+            "WARNING: skipped submission(s) whose verified_text matches "
+            "extracted_text after whitespace normalization: "
+            + ", ".join(suspected_unedited_ids)
+        )
     if duplicate_groups:
         print(f"WARNING: {len(duplicate_groups)} verified text(s) appear on "
               f"multiple submissions (likely re-captures of the same page). "

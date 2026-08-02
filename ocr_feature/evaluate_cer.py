@@ -15,105 +15,169 @@ reformats anyway).
 import csv
 from pathlib import Path
 
-from ocr_pipeline import extract_text_from_image
+from evaluation import (
+    METRIC_KEYS,
+    evaluate_text_pair,
+    literal_provenance_issues,
+    suggestion_improves_reference,
+    summarize_metrics,
+)
 
 SAMPLES_DIR = Path("samples")
 LABELS_CSV = SAMPLES_DIR / "labels.csv"
 
 
-def edit_distance(a: str, b: str) -> int:
-    """Levenshtein edit distance between two strings (pure Python)."""
-    if a == b:
-        return 0
-    if not a:
-        return len(b)
-    if not b:
-        return len(a)
-    prev = list(range(len(b) + 1))
-    for i, ca in enumerate(a, 1):
-        curr = [i]
-        for j, cb in enumerate(b, 1):
-            cost = 0 if ca == cb else 1
-            curr.append(min(
-                prev[j] + 1,       # deletion
-                curr[j - 1] + 1,   # insertion
-                prev[j - 1] + cost # substitution
-            ))
-        prev = curr
-    return prev[-1]
+def _load_extractor():
+    """Import the model-owning OCR pipeline only after label preflight."""
+    from ocr_pipeline import extract_text_from_image
+
+    return extract_text_from_image
 
 
-def cer(prediction: str, reference: str) -> float:
-    """Character Error Rate = edit_distance / len(reference)."""
-    if not reference:
-        return 0.0 if not prediction else 1.0
-    return edit_distance(prediction, reference) / len(reference)
+def _format_metric_row(label: str, metrics: dict[str, float]) -> str:
+    return (
+        f"{label[:26]:26s} "
+        f"{metrics['raw']:7.3f} {metrics['clean']:7.3f} "
+        f"{metrics['raw_ws']:7.3f} {metrics['clean_ws']:9.3f}"
+    )
 
 
-def normalize_ws(text: str) -> str:
-    """Collapse all whitespace runs to a single space and strip. Lets us
-    measure recognition errors without penalizing formatting differences."""
-    return " ".join(text.split())
+def _print_group_summary(
+    title: str,
+    evaluated: list[dict],
+    group_key: str,
+) -> None:
+    print(f"\n{title}")
+    print(f"{'group':26s} {'raw':>7s} {'clean':>7s} "
+          f"{'raw_ws':>7s} {'clean_ws':>9s}")
+    print("-" * 62)
+    for group, metrics in sorted(
+        summarize_metrics(evaluated, group_key).items()
+    ):
+        print(_format_metric_row(group, metrics))
 
 
-def main() -> None:
+def main() -> int:
     if not LABELS_CSV.exists():
         print(f"No labels file at {LABELS_CSV}. Add samples + labels first.")
-        return
+        return 1
 
-    with LABELS_CSV.open(newline="") as f:
+    with LABELS_CSV.open(newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
 
     if not rows:
         print("labels.csv has no rows yet.")
-        return
+        return 1
+
+    provenance_issues = literal_provenance_issues(rows)
+    if provenance_issues:
+        print("Ground-truth provenance is incomplete:")
+        for issue in provenance_issues:
+            print(f"  {issue}")
+        return 1
+
+    extract = _load_extractor()
 
     print(f"Evaluating {len(rows)} sample(s)...\n")
     print(f"{'file':26s} {'raw':>7s} {'clean':>7s} {'raw_ws':>7s} {'clean_ws':>9s}")
     print("-" * 62)
 
-    totals = {"raw": [], "clean": [], "raw_ws": [], "clean_ws": []}
+    evaluated = []
+    exact_matches = []
+    suggestion_results = []
+    samples_with_suggestions = 0
 
     for row in rows:
         fname = row["filename"].strip()
         truth = row["ground_truth_text"]
         img_path = SAMPLES_DIR / fname
+        if not truth:
+            print(f"{fname[:26]:26s}  (ground truth missing -- skipped)")
+            continue
         if not img_path.exists():
             print(f"{fname[:26]:26s}  (image file not found -- skipped)")
             continue
 
-        result = extract_text_from_image(str(img_path))
+        result = extract(str(img_path))
         raw = result["raw_text"]
         clean = result["cleaned_text"]
 
-        r_cer = cer(raw, truth)
-        c_cer = cer(clean, truth)
-        r_ws = cer(normalize_ws(raw), normalize_ws(truth))
-        c_ws = cer(normalize_ws(clean), normalize_ws(truth))
+        metrics = evaluate_text_pair(raw, clean, truth)
+        evaluated.append({
+            **row,
+            "metrics": metrics,
+        })
+        suggestions = result.get("review_suggestions") or []
+        if suggestions:
+            samples_with_suggestions += 1
+        for suggestion in suggestions:
+            suggestion_results.append({
+                "filename": fname,
+                "suggestion": suggestion,
+                "helpful": suggestion_improves_reference(
+                    raw,
+                    truth,
+                    suggestion,
+                ),
+            })
+        if raw == truth:
+            exact_matches.append(f"{fname} (raw)")
+        if clean == truth:
+            exact_matches.append(f"{fname} (cleaned)")
 
-        totals["raw"].append(r_cer)
-        totals["clean"].append(c_cer)
-        totals["raw_ws"].append(r_ws)
-        totals["clean_ws"].append(c_ws)
+        print(_format_metric_row(fname, metrics))
 
-        print(f"{fname[:26]:26s} {r_cer:7.3f} {c_cer:7.3f} {r_ws:7.3f} {c_ws:9.3f}")
-
-    if not totals["raw"]:
+    if not evaluated:
         print("\nNo images were evaluated.")
-        return
+        return 1
 
-    def avg(key):
-        return sum(totals[key]) / len(totals[key])
-
+    overall = {
+        key: sum(row["metrics"][key] for row in evaluated) / len(evaluated)
+        for key in METRIC_KEYS
+    }
     print("-" * 62)
-    print(f"{'AVERAGE CER':26s} {avg('raw'):7.3f} {avg('clean'):7.3f} "
-          f"{avg('raw_ws'):7.3f} {avg('clean_ws'):9.3f}")
+    print(_format_metric_row("AVERAGE CER", overall))
+    _print_group_summary("BY PAPER TYPE", evaluated, "paper_type")
+    _print_group_summary("BY WRITER", evaluated, "writer")
+
+    helpful_count = sum(item["helpful"] for item in suggestion_results)
+    suggestion_count = len(suggestion_results)
+    non_improving = [
+        item for item in suggestion_results if not item["helpful"]
+    ]
+    precision = (
+        helpful_count / suggestion_count if suggestion_count else None
+    )
+    print("\nREVIEW SUGGESTIONS")
+    precision_text = f"{precision:.3f}" if precision is not None else "n/a"
+    print(
+        f"total: {suggestion_count}  helpful: {helpful_count}  "
+        f"non-improving: {len(non_improving)}  precision: {precision_text}"
+    )
+    print(
+        f"sample coverage: {samples_with_suggestions}/{len(evaluated)}"
+    )
+    for item in non_improving:
+        suggestion = item["suggestion"]
+        print(
+            f"  {item['filename']}: {suggestion.get('original')!r} -> "
+            f"{suggestion.get('candidate')!r} "
+            f"({suggestion.get('rule_id')})"
+        )
+
+    if exact_matches:
+        print("\nWARNING: exact prediction/reference matches require "
+              "ground-truth revalidation:")
+        for match in exact_matches:
+            print(f"  {match}")
+
     print("\nLower is better. Columns:")
     print("  raw       = raw OCR output vs ground truth (strict)")
     print("  clean     = after keyword cleanup vs ground truth (strict)")
     print("  raw_ws    = raw, whitespace-normalized (recognition errors only)")
     print("  clean_ws  = cleaned, whitespace-normalized")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
