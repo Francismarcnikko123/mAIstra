@@ -39,6 +39,25 @@ class PreprocessConfig:
     # Set to None to go back to the fixed threshold_block_size.
     threshold_block_scale: float | None = 1.5
 
+    # Paper type changes what denoising should do. Recycled stock (greenbook)
+    # carries speckle that survives the default strength and gets thresholded
+    # as ink; smooth bond paper is damaged by stronger denoising, which erodes
+    # thin strokes. Measured on 13 samples:
+    #
+    #                        greenbook   bond
+    #   denoise 10 (default)     0.354  0.151
+    #   denoise 20               0.290  0.209
+    #
+    # No single strength serves both, so pick per page from the paper's own
+    # background texture. Measured separation was clean: bond 0.47-1.89,
+    # greenbook 2.53-2.62, threshold set at the midpoint.
+    #
+    # Off by default -- calibrated on two paper types only. Yellow pad is
+    # unmeasured and may need its own profile.
+    adaptive_denoise: bool = False
+    textured_paper_threshold: float = 2.2
+    textured_denoise_strength: int = 20
+
 
 DEFAULT_CONFIG = PreprocessConfig()
 
@@ -63,6 +82,17 @@ def _median_glyph_height(gray) -> float:
         if 4 <= h <= 300 and area >= 12 and w <= 12 * h:
             heights.append(h)
     return float(np.median(heights)) if heights else 0.0
+
+
+def _background_noise(gray) -> float:
+    """Mean absolute residual against a median blur, over background pixels
+    only, as a proxy for how textured the paper is. Ink is excluded by the
+    brightness mask so the measure reflects the page, not the writing."""
+    residual = cv2.absdiff(gray, cv2.medianBlur(gray, 5)).astype(np.float32)
+    background = gray > np.percentile(gray, 60)
+    if not background.any():
+        return 0.0
+    return float(residual[background].mean())
 
 
 def preprocess_image(
@@ -94,10 +124,14 @@ def preprocess_image(
 
     processed = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     if config.denoise:
+        strength = config.denoise_strength
+        if config.adaptive_denoise:
+            if _background_noise(processed) >= config.textured_paper_threshold:
+                strength = config.textured_denoise_strength
         processed = cv2.fastNlMeansDenoising(
             processed,
             None,
-            config.denoise_strength,
+            strength,
             config.denoise_template_window,
             config.denoise_search_window,
         )
