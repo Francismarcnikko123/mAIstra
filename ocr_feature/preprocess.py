@@ -52,9 +52,13 @@ class PreprocessConfig:
     # background texture. Measured separation was clean: bond 0.47-1.89,
     # greenbook 2.53-2.62, threshold set at the midpoint.
     #
-    # Off by default -- calibrated on two paper types only. Yellow pad is
-    # unmeasured and may need its own profile.
-    adaptive_denoise: bool = False
+    # Enabled by default 2026-08-02: safe on bond paper (every bond sample
+    # measures below the threshold, so behavior there is unchanged) and
+    # measurably better on greenbook. Yellow pad is still unmeasured -- if
+    # it lands above the threshold and the stronger denoise doesn't suit it,
+    # re-check against a labelled batch and adjust textured_paper_threshold
+    # or add a third profile rather than assuming this setting is final.
+    adaptive_denoise: bool = True
     textured_paper_threshold: float = 2.2
     textured_denoise_strength: int = 20
 
