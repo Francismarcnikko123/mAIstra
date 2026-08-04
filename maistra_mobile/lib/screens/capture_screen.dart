@@ -3,91 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:image/image.dart' as img;
-import 'dart:typed_data';
-
-// Document enhancement: background normalization + contrast stretching.
-// Step 1 — Background normalization: estimates the illumination map by
-//   downsampling + blurring, then divides each pixel by it. This flattens
-//   shadows and uneven lighting.
-img.Image _processDocument(img.Image source) {
-  // Step 1: Estimate background illumination via tiny blurred copy
-  final tiny = img.copyResize(source, width: 50, height: 50);
-  final tinyBlurred = img.gaussianBlur(tiny, radius: 10);
-  final bgMap = img.copyResize(
-    tinyBlurred,
-    width: source.width,
-    height: source.height,
-    interpolation: img.Interpolation.linear,
-  );
-
-  final result = source.clone();
-  for (int y = 0; y < source.height; y++) {
-    for (int x = 0; x < source.width; x++) {
-      final pixel = source.getPixel(x, y);
-      final bg = bgMap.getPixel(x, y);
-
-      // Normalize by background
-      double r = bg.r > 10 ? (pixel.r / bg.r * 255).clamp(0, 255) : pixel.r.toDouble();
-      double g = bg.g > 10 ? (pixel.g / bg.g * 255).clamp(0, 255) : pixel.g.toDouble();
-      double b = bg.b > 10 ? (pixel.b / bg.b * 255).clamp(0, 255) : pixel.b.toDouble();
-
-      result.setPixelRgb(x, y, r.toInt(), g.toInt(), b.toInt());
-    }
-  }
-  return result;
-}
-
-// Quality check runs on the RAW scan (before thresholding) for accurate detection
-class QualityResult {
-  final bool passed;
-  final List<String> issues;
-  QualityResult({required this.passed, required this.issues});
-}
-
-QualityResult _checkQuality(List<int> bytes) {
-  final image = img.decodeImage(Uint8List.fromList(bytes));
-  if (image == null) return QualityResult(passed: false, issues: ['Could not read image']);
-
-  final small = img.copyResize(image, width: 200, height: 200);
-  final grayscale = img.grayscale(small);
-
-  double totalBrightness = 0;
-  double laplacianSum = 0;
-  double laplacianSumSquares = 0;
-  int count = 0;
-
-  for (int y = 1; y < grayscale.height - 1; y++) {
-    for (int x = 1; x < grayscale.width - 1; x++) {
-      final center = grayscale.getPixel(x, y).r.toDouble();
-      totalBrightness += center;
-
-      final top    = grayscale.getPixel(x, y - 1).r.toDouble();
-      final bottom = grayscale.getPixel(x, y + 1).r.toDouble();
-      final left   = grayscale.getPixel(x - 1, y).r.toDouble();
-      final right  = grayscale.getPixel(x + 1, y).r.toDouble();
-
-      final laplacian = 4 * center - top - bottom - left - right;
-      laplacianSum += laplacian;
-      laplacianSumSquares += laplacian * laplacian;
-      count++;
-    }
-  }
-
-  final totalPixels = grayscale.width * grayscale.height;
-  final avgBrightness = totalBrightness / totalPixels;
-  final mean = laplacianSum / count;
-  final blurScore = (laplacianSumSquares / count) - (mean * mean);
-
-  //print('Blur score: $blurScore');
-  //print('Avg brightness: $avgBrightness');
-
-  final List<String> issues = [];
-  if (blurScore < 800) issues.add('Blurry image — hold steady and wait for camera to focus');
-  if (avgBrightness < 60) issues.add('Too dark — move to a brighter area');
-
-  return QualityResult(passed: issues.isEmpty, issues: issues);
-}
+import '../utils/quality_check.dart';
 
 class CaptureScreen extends StatefulWidget {
   const CaptureScreen({super.key});
@@ -118,24 +34,25 @@ class _CaptureScreenState extends State<CaptureScreen> {
       final rawFile = File(pictures.first);
       final rawBytes = await rawFile.readAsBytes();
 
-      // Run quality check + image processing in background isolate
-      // (prevents blocking the UI thread / ANR crash)
-      final result = await compute(_checkQuality, rawBytes);
+      // Quality check on raw scan (blur, darkness, overexposure)
+      final rawResult = await compute(checkQuality, rawBytes);
 
-      final rawImage = img.decodeImage(Uint8List.fromList(rawBytes));
-      File processedFile;
-      if (rawImage != null) {
-        final cleaned = await compute(_processDocument, rawImage);
-        final cleanedBytes = img.encodeJpg(cleaned, quality: 95);
-        final tempPath = '${rawFile.parent.path}/cleaned_${rawFile.uri.pathSegments.last}';
-        processedFile = await File(tempPath).writeAsBytes(cleanedBytes);
-      } else {
-        processedFile = rawFile;
-      }
+      // Background normalization in background isolate
+      final processedBytes = await compute(processDocument, rawBytes.toList());
+      final processedPath =
+          '${rawFile.parent.path}/processed_${rawFile.uri.pathSegments.last}';
+      final processedFile = File(processedPath);
+      await processedFile.writeAsBytes(processedBytes);
+
+      // Re-check the processed image too — this is what OCR actually
+      // receives, so defects introduced by normalization must not slip
+      // through just because the raw scan looked fine.
+      final processedResult = await compute(checkQuality, processedBytes);
+      final combinedResult = combineQualityResults(rawResult, processedResult);
 
       setState(() {
-        _scannedImage = processedFile;
-        _qualityResult = result;
+        _scannedImage = processedFile; // normalized image shown and uploaded
+        _qualityResult = combinedResult;
         _isCheckingQuality = false;
       });
     } catch (e) {
@@ -267,7 +184,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
               SizedBox(width: 16, height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2)),
               SizedBox(width: 8),
-              Text('Processing scan...'),
+              Text('Checking image quality...'),
             ]),
           ),
 
