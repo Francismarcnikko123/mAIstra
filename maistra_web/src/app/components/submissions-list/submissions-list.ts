@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { SupabaseService } from '../../services/supabase';
 import { CodeEditorComponent } from '../code-editor/code-editor';
-
+import { Judge0 } from '../judge0/judge0';
 interface Submission {
   id: string;
   image_url: string;
@@ -24,7 +24,7 @@ interface TopicGroup {
 @Component({
   selector: 'app-submissions-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, CodeEditorComponent],
+  imports: [CommonModule, FormsModule, CodeEditorComponent, Judge0,],
   templateUrl: './submissions-list.html',
   styleUrl: './submissions-list.css'
 })
@@ -45,6 +45,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   editableText: Record<string, string> = {};
   extractionError: Record<string, string> = {};
   saveStatus: Record<string, string> = {};   // '' | 'saved' | 'error'
+  showCodeExecutionEditor: Record<string, boolean> = {};
 
   private subscription: any;
   private saveStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -205,6 +206,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         this.selectedSubmission.verified_text = text;
       }
       this.saveStatus[id] = 'saved';
+      this.showCodeExecutionEditor[id] = true;
       // Auto-clear the confirmation after a few seconds.
       const timer = setTimeout(() => {
         if (!this.isCurrentSave(id, generation)) return;

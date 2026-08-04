@@ -106,6 +106,15 @@
           </span>
         </div>
 
+        
+              <!--after save click the save button it will show the code execution -->
+        <div  *ngIf="showCodeExecutionEditor[selectedSubmission.id]">
+              <!-- Code Execution -->
+                 <app-judge0
+                   [initialCode]="editableText[selectedSubmission.id]">
+                   </app-judge0> 
+
+        </div>
       </div>
     </div>
   </div>

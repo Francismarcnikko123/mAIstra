@@ -1,0 +1,150 @@
+.execute-button {
+  margin-top: 10px;
+  padding: 8px 16px;
+  min-width: 104px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 500;
+  background-color: cornflowerblue;
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.execute-button:hover:not(:disabled) {
+  background-color: #4f7edc;
+}
+
+.execute-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.execute-button.running {
+  background-color: #334155;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.gdb-console {
+  margin-top: 14px;
+  border: 1px solid #2d3748;
+  background: #111827;
+  border-radius: 4px;
+  overflow: hidden;
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.gdb-console-header {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  background: #1f2937;
+  border-bottom: 1px solid #374151;
+}
+
+.gdb-tab {
+  height: 100%;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  color: #cbd5e1;
+  font-size: 13px;
+  border-right: 1px solid #374151;
+}
+
+.gdb-tab.active {
+  background: #111827;
+  color: #ffffff;
+  border-top: 2px solid #2563eb;
+}
+
+.gdb-status {
+  margin-left: auto;
+  margin-right: 12px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  background: #374151;
+  color: #d1d5db;
+  font-size: 12px;
+  font-family: system-ui, sans-serif;
+}
+
+.gdb-status.success {
+  background: #064e3b;
+  color: #a7f3d0;
+}
+
+.gdb-status.error {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.gdb-status.running {
+  background: #1e3a8a;
+  color: #bfdbfe;
+}
+
+.gdb-console-body {
+  min-height: 120px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 12px 14px;
+  background: #0f172a;
+}
+
+.gdb-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.gdb-text.output {
+  color: #e5e7eb;
+}
+
+.gdb-text.error {
+  color: #fca5a5;
+}
+
+.gdb-text.running {
+  color: #93c5fd;
+}
+
+.gdb-text.muted {
+  color: #9ca3af;
+}
+
+.typing-dots::after {
+  content: "";
+  animation: dots 1.2s steps(4, end) infinite;
+}
+
+@keyframes dots {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75%,
+  100% {
+    content: "...";
+  }
+}
