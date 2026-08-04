@@ -44,8 +44,12 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   extractedText: Record<string, string> = {};
   editableText: Record<string, string> = {};
   extractionError: Record<string, string> = {};
+  saveStatus: Record<string, string> = {};   // '' | 'saved' | 'error'
 
   private subscription: any;
+  private saveStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private saveGenerations = new Map<string, number>();
+  private destroyed = false;
 
   constructor(
     private supabase: SupabaseService,
@@ -62,9 +66,34 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.destroyed = true;
+
+    for (const timer of this.saveStatusTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.saveStatusTimers.clear();
+
     if (this.subscription) {
       this.subscription.unsubscribe();
     }
+  }
+
+  private clearSaveStatusTimer(id: string) {
+    const timer = this.saveStatusTimers.get(id);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      this.saveStatusTimers.delete(id);
+    }
+  }
+
+  private startSaveGeneration(id: string): number {
+    const generation = (this.saveGenerations.get(id) ?? 0) + 1;
+    this.saveGenerations.set(id, generation);
+    return generation;
+  }
+
+  private isCurrentSave(id: string, generation: number): boolean {
+    return !this.destroyed && this.saveGenerations.get(id) === generation;
   }
 
   async loadSubmissions() {
@@ -136,6 +165,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (!this.selectedSubmission) return;
     const id = this.selectedSubmission.id;
     this.extractingId = id;
+    this.extractionError[id] = '';
     try {
       const res: any = await this.http
         .post('http://localhost:8000/api/ocr/extract-from-url', {
@@ -157,21 +187,40 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   }
 
   async saveVerifiedText() {
-    if (!this.selectedSubmission) return;
+    if (!this.selectedSubmission || this.destroyed) return;
     const id = this.selectedSubmission.id;
+    const generation = this.startSaveGeneration(id);
     this.savingId = id;
+    this.clearSaveStatusTimer(id);
+    this.saveStatus[id] = '';
     try {
       const text = this.editableText[id];
       await this.supabase.updateSubmissionText(id, text, text);
+      if (!this.isCurrentSave(id, generation)) return;
+
       const s = this.submissions.find(x => x.id === id);
       if (s) { s.extracted_text = text; s.verified_text = text; }
-      if (this.selectedSubmission) {
+      if (this.selectedSubmission?.id === id) {
         this.selectedSubmission.extracted_text = text;
         this.selectedSubmission.verified_text = text;
       }
+      this.saveStatus[id] = 'saved';
+      // Auto-clear the confirmation after a few seconds.
+      const timer = setTimeout(() => {
+        if (!this.isCurrentSave(id, generation)) return;
+        this.saveStatusTimers.delete(id);
+        this.saveStatus[id] = '';
+        this.cdr.detectChanges();
+      }, 3000);
+      this.saveStatusTimers.set(id, timer);
     } catch (err) {
+      if (!this.isCurrentSave(id, generation)) return;
+
       console.error('Save failed:', err);
+      this.saveStatus[id] = 'error';
     } finally {
+      if (!this.isCurrentSave(id, generation)) return;
+
       this.savingId = null;
       this.cdr.detectChanges();
     }

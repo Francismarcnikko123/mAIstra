@@ -42,8 +42,12 @@ export class SupabaseService {
     if (error) throw error;
   }
 
-  async updateSubmissionText(submissionId: string, extractedText: string, verifiedText: string) {
-    return await this.supabase
+  async updateSubmissionText(
+    submissionId: string,
+    extractedText: string,
+    verifiedText: string
+  ): Promise<void> {
+    const { error } = await this.supabase
       .from('submissions')
       .update({
         extracted_text: extractedText,
@@ -52,6 +56,7 @@ export class SupabaseService {
         verified_at: new Date().toISOString(),
       })
       .eq('id', submissionId);
+    if (error) throw error;
   }
 
   subscribeToSubmissions(callback: (payload: any) => void) {

@@ -64,11 +64,9 @@ async def extract_from_upload(file: UploadFile = File(...)):
     }
 
 
-# Mobile captures are large (3-5 MB), and a slow/unstable network plus TLS
-# negotiation can easily blow past a short timeout. Download defensively:
-#   - split timeout: short to connect, generous to read the whole file
-#   - stream in chunks so a large body doesn't have to arrive all at once
-#   - retry a couple of times to ride out transient network hiccups
+# Mobile captures run 3-5MB; a slow connection plus TLS handshake can blow
+# past a short timeout, so give the read phase real room and retry transient
+# failures instead of failing the whole extraction on one bad attempt.
 DOWNLOAD_CONNECT_TIMEOUT = 15   # seconds to establish the connection
 DOWNLOAD_READ_TIMEOUT = 120     # seconds to finish reading the body
 DOWNLOAD_RETRIES = 3
