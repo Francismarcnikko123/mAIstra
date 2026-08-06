@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cunning_document_scanner/cunning_document_scanner.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../utils/quality_check.dart';
 
@@ -13,7 +14,7 @@ class CaptureScreen extends StatefulWidget {
 }
 
 class _CaptureScreenState extends State<CaptureScreen> {
-  File? _scannedImage;
+  File? _rawImage;
   bool _isUploading = false;
   bool _isCheckingQuality = false;
   QualityResult? _qualityResult;
@@ -24,37 +25,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
     try {
       final pictures = await CunningDocumentScanner.getPictures(noOfPages: 1);
       if (pictures == null || pictures.isEmpty) return;
-
-      setState(() {
-        _isCheckingQuality = true;
-        _qualityResult = null;
-        _scannedImage = null;
-      });
-
-      final rawFile = File(pictures.first);
-      final rawBytes = await rawFile.readAsBytes();
-
-      // Quality check on raw scan (blur, darkness, overexposure)
-      final rawResult = await compute(checkQuality, rawBytes);
-
-      // Background normalization in background isolate
-      final processedBytes = await compute(processDocument, rawBytes.toList());
-      final processedPath =
-          '${rawFile.parent.path}/processed_${rawFile.uri.pathSegments.last}';
-      final processedFile = File(processedPath);
-      await processedFile.writeAsBytes(processedBytes);
-
-      // Re-check the processed image too — this is what OCR actually
-      // receives, so defects introduced by normalization must not slip
-      // through just because the raw scan looked fine.
-      final processedResult = await compute(checkQuality, processedBytes);
-      final combinedResult = combineQualityResults(rawResult, processedResult);
-
-      setState(() {
-        _scannedImage = processedFile; // normalized image shown and uploaded
-        _qualityResult = combinedResult;
-        _isCheckingQuality = false;
-      });
+      await _processPickedFile(File(pictures.first));
     } catch (e) {
       setState(() => _isCheckingQuality = false);
       if (mounted) {
@@ -65,16 +36,54 @@ class _CaptureScreenState extends State<CaptureScreen> {
     }
   }
 
+  Future<void> _pickFromGallery() async {
+    try {
+      final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (picked == null) return;
+      await _processPickedFile(File(picked.path));
+    } catch (e) {
+      setState(() => _isCheckingQuality = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // Shared by camera scans and gallery uploads — same quality gate either
+  // way, since a bad photo is a bad photo regardless of where it came from.
+  Future<void> _processPickedFile(File rawFile) async {
+    setState(() {
+      _isCheckingQuality = true;
+      _qualityResult = null;
+      _rawImage = null;
+    });
+
+    final rawBytes = await rawFile.readAsBytes();
+    final rawResult = await compute(checkQuality, rawBytes);
+
+    setState(() {
+      _rawImage = rawFile;
+      _qualityResult = rawResult;
+      _isCheckingQuality = false;
+    });
+  }
+
   Future<void> _saveToDatabase() async {
-    if (_scannedImage == null) return;
+    if (_rawImage == null) return;
     setState(() => _isUploading = true);
 
     try {
-      final fileName = 'submission_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'submission_$timestamp.jpg';
 
+      // Raw only — JC's OCR pipeline does its own preprocessing, so
+      // mAIstra doesn't upload a normalized version anymore. The quality
+      // gate still validates this raw image before Accept is enabled.
       await supabase.storage
           .from('handwritten-submissions')
-          .upload(fileName, _scannedImage!);
+          .upload(fileName, _rawImage!);
 
       final imageUrl = supabase.storage
           .from('handwritten-submissions')
@@ -90,7 +99,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
           const SnackBar(content: Text('Saved successfully!'), backgroundColor: Colors.green),
         );
         setState(() {
-          _scannedImage = null;
+          _rawImage = null;
           _qualityResult = null;
         });
       }
@@ -107,7 +116,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   void _discard() {
     setState(() {
-      _scannedImage = null;
+      _rawImage = null;
       _qualityResult = null;
     });
   }
@@ -122,7 +131,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
-      body: _scannedImage == null && !_isCheckingQuality
+      body: _rawImage == null && !_isCheckingQuality
           ? _buildScanView()
           : _buildPreviewView(),
     );
@@ -152,6 +161,18 @@ class _CaptureScreenState extends State<CaptureScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: _pickFromGallery,
+            icon: const Icon(Icons.photo_library, color: Color(0xFFB71C1C)),
+            label: const Text('Upload from Gallery',
+                style: TextStyle(color: Color(0xFFB71C1C), fontSize: 16)),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+              side: const BorderSide(color: Color(0xFFB71C1C)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
         ],
       ),
     );
@@ -170,8 +191,8 @@ class _CaptureScreenState extends State<CaptureScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: _scannedImage != null
-                  ? Image.file(_scannedImage!, fit: BoxFit.contain)
+              child: _rawImage != null
+                  ? Image.file(_rawImage!, fit: BoxFit.contain)
                   : const SizedBox(),
             ),
           ),
