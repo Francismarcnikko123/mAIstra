@@ -1,3 +1,5 @@
+# Run only this file (from the ocr_feature/ directory):
+#     .venv/bin/python -m tests.test_export_dataset
 import csv
 import io
 import tempfile

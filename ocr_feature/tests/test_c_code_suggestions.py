@@ -1,3 +1,5 @@
+# Run only this file (from the ocr_feature/ directory):
+#     .venv/bin/python -m tests.test_c_code_suggestions
 import unittest
 
 from core.c_code_suggestions import suggest_c_code
@@ -31,23 +33,12 @@ class CCodeSuggestionTests(unittest.TestCase):
         self.assertEqual(suggestion["end"], 8)
         self.assertEqual(text.splitlines()[1][2:8], "printe")
 
-    def test_suggests_a_canonical_known_header(self):
-        suggestions = suggest_c_code(" include <std1o.n>")
-
-        self.assertEqual(len(suggestions), 1)
-        self.assertEqual(suggestions[0]["candidate"], "#include <stdio.h>")
-        self.assertEqual(suggestions[0]["rule_id"], "known-header")
-
-    def test_suggests_narrow_known_c_token_confusions(self):
-        suggestions = suggest_c_code("1nt ma1n() { retvrn 0; }")
-
-        pairs = [
-            (item["original"], item["candidate"]) for item in suggestions
-        ]
-        self.assertEqual(
-            pairs,
-            [("1nt", "int"), ("ma1n", "main"), ("retvrn", "return")],
-        )
+    def test_does_not_suggest_keywords_or_headers_owned_by_cleanup(self):
+        # Keyword and #include fixes are the safe, auto-applied vocabulary of
+        # c_code_cleanup.py. This module must not also propose them, or the
+        # same fix would surface twice.
+        self.assertEqual(suggest_c_code("1nt ma1n() { retvrn 0; }"), [])
+        self.assertEqual(suggest_c_code(" include <std1o.n>"), [])
 
     def test_does_not_modify_input_or_guess_at_ordinary_identifiers(self):
         text = "int printf_count = 0; int printe = 1;"

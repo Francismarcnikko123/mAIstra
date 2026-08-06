@@ -13,7 +13,7 @@ import sys
 from core.preprocess import PreprocessConfig
 from core.ocr_pipeline import extract_text_from_image
 
-IMAGE = "samples/nombrado_s06_struct_green_raw.jpeg"
+IMAGE = "samples/nombrado_s06_struct_green_gate.jpeg"
 
 config = PreprocessConfig(
     adaptive_denoise="--adaptive-denoise" in sys.argv,

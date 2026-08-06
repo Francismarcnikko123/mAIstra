@@ -1,40 +1,41 @@
-"""Conservative, non-mutating review suggestions for recognized C code."""
+"""Non-mutating review suggestions for recognized C code.
 
-import math
+This module is the *uncertain* half of OCR correction; c_code_cleanup.py is
+the *safe* half. The split is by confidence, not by token, so the two never
+overlap:
+
+  - c_code_cleanup.py silently rewrites a small closed vocabulary that is
+    safe to auto-correct (C keywords, standard headers). The teacher sees the
+    result already applied in `cleaned_text`.
+  - This module proposes fixes that are plausible but NOT safe to apply
+    automatically, and never edits the text. Each is returned as a suggestion
+    the teacher accepts or rejects, with its position and OCR confidence.
+
+The only class of fix that currently belongs here is a function-call
+misspelling (e.g. `printe(` -> `printf`): the trailing `(` makes it clearly a
+call, but the identifier itself is student-authored and could legitimately be
+a custom name, so it must stay a suggestion rather than an auto-edit.
+"""
+
 import re
 
+from core.c_literals import C_LITERAL  # masks string/char literals to shield them
+from core.numeric import finite_float
 
-_LITERAL = re.compile(r'"(?:\\.|[^"\\])*"' r"|'(?:\\.|[^'\\])*'")
-_INCLUDE_CANDIDATE = re.compile(
-    r"^\s*#?\s*(?:include|1nclude)\s*<\s*"
-    r"(stdio|std1o|stdlo|stdlib|string|math|ctype|time)\b.*$",
-    re.IGNORECASE,
-)
-_HEADER_FIXES = {"std1o": "stdio", "stdlo": "stdio"}
+# Only tokens immediately followed by '(' are candidates -- a bare "printe"
+# elsewhere isn't necessarily a mistyped call, but "printe(" is unambiguous.
 _CALL_TOKEN = re.compile(r"\b([A-Za-z_]\w*)\s*(?=\()")
 _CALL_FIXES = {
     "printe": "printf",
     "printt": "printf",
     "scant": "scanf",
 }
-_WORD_TOKEN = re.compile(r"(?<!\w)([A-Za-z0-9_]+)(?!\w)")
-_TOKEN_FIXES = {
-    "1nt": "int",
-    "ma1n": "main",
-    "retvrn": "return",
-    "wh1le": "while",
-    "f0r": "for",
-}
 
 
 def _line_confidence(detail) -> float | None:
     if not isinstance(detail, dict):
         return None
-    try:
-        confidence = float(detail.get("mean_confidence"))
-    except (TypeError, ValueError):
-        return None
-    return confidence if math.isfinite(confidence) else None
+    return finite_float(detail.get("mean_confidence"))
 
 
 def _suggestion(
@@ -60,6 +61,8 @@ def _suggestion(
 
 
 def _overlaps_literal(match, literal_spans: list[tuple[int, int]]) -> bool:
+    """True if match falls inside a string/char literal on this line --
+    student content there must never be treated as a code typo."""
     return any(
         match.start() < end and match.end() > start
         for start, end in literal_spans
@@ -82,26 +85,8 @@ def suggest_c_code(
     suggestions = []
 
     for line_number, line in enumerate(text.splitlines(), 1):
-        literal_spans = [match.span() for match in _LITERAL.finditer(line)]
+        literal_spans = [match.span() for match in C_LITERAL.finditer(line)]
         confidence = _line_confidence(details_by_line.get(line_number))
-
-        include_match = _INCLUDE_CANDIDATE.match(line)
-        if include_match:
-            recognized_header = include_match.group(1).lower()
-            header = _HEADER_FIXES.get(recognized_header, recognized_header)
-            candidate = f"#include <{header}.h>"
-            if line.strip() != candidate:
-                suggestions.append(_suggestion(
-                    line_number,
-                    0,
-                    len(line),
-                    line,
-                    candidate,
-                    "Recognizable standard header with OCR damage.",
-                    "known-header",
-                    confidence,
-                ))
-            continue
 
         for match in _CALL_TOKEN.finditer(line):
             if _overlaps_literal(match, literal_spans):
@@ -117,23 +102,6 @@ def suggest_c_code(
                     candidate,
                     f"Looks like an OCR variant of {candidate} used as a call.",
                     f"function-call-{candidate}",
-                    confidence,
-                ))
-
-        for match in _WORD_TOKEN.finditer(line):
-            if _overlaps_literal(match, literal_spans):
-                continue
-            original = match.group(1)
-            candidate = _TOKEN_FIXES.get(original)
-            if candidate:
-                suggestions.append(_suggestion(
-                    line_number,
-                    match.start(1),
-                    match.end(1),
-                    original,
-                    candidate,
-                    f"Looks like an OCR variant of the C token {candidate}.",
-                    f"c-token-{candidate}",
                     confidence,
                 ))
 
