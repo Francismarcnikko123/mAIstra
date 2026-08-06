@@ -1,6 +1,6 @@
 import unittest
 
-from c_code_cleanup import clean_c_code
+from core.c_code_cleanup import clean_c_code
 
 
 class CCodeCleanupTests(unittest.TestCase):

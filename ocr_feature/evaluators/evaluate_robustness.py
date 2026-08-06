@@ -10,9 +10,9 @@ from pathlib import Path
 
 import cv2
 
-from evaluation import METRIC_KEYS, evaluate_text_pair, summarize_metrics
-from ocr_pipeline import extract_text_from_image
-from robustness import TRANSFORMS, apply_transform
+from evaluators.evaluation import METRIC_KEYS, evaluate_text_pair, summarize_metrics
+from core.ocr_pipeline import extract_text_from_image
+from evaluators.robustness import TRANSFORMS, apply_transform
 
 
 SAMPLES_DIR = Path("samples")

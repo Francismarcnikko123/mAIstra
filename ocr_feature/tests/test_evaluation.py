@@ -1,6 +1,6 @@
 import unittest
 
-from evaluation import (
+from evaluators.evaluation import (
     cer,
     edit_distance,
     edit_operations,

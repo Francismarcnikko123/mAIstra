@@ -6,7 +6,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-import export_dataset
+from evaluators import export_dataset
 
 
 def submission(submission_id, verified_text, extracted_text):

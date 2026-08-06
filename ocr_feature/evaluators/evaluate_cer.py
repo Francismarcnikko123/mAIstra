@@ -15,7 +15,7 @@ reformats anyway).
 import csv
 from pathlib import Path
 
-from evaluation import (
+from evaluators.evaluation import (
     METRIC_KEYS,
     evaluate_text_pair,
     literal_provenance_issues,
@@ -29,7 +29,7 @@ LABELS_CSV = SAMPLES_DIR / "labels.csv"
 
 def _load_extractor():
     """Import the model-owning OCR pipeline only after label preflight."""
-    from ocr_pipeline import extract_text_from_image
+    from core.ocr_pipeline import extract_text_from_image
 
     return extract_text_from_image
 

@@ -22,7 +22,34 @@ class PreprocessConfig:
     denoise_search_window: int = 21
 
     # Adaptive Gaussian threshold to a black/white image.
-    threshold: bool = True
+    #
+    # DEFAULT FLIPPED TO False 2026-08-06, by measurement. PaddleOCR's
+    # recognizer is trained on natural grayscale images and uses the
+    # anti-aliased gradients on stroke edges; hard-binarizing before
+    # recognition throws that information away. A/B on the full 13-sample
+    # cohort (bond + greenbook + yellow_pad, raw + gate-framed, 3 writers):
+    #
+    #                clean_ws   binary (old)   grayscale (new)   delta
+    #   bond (6)                   0.142          0.125          -0.017
+    #   greenbook (5)              0.196          0.168          -0.028
+    #   yellow_pad (2)             0.161          0.171          +0.010 (n=2, noise-level)
+    #   overall (13)               0.166          0.149          -0.017
+    #
+    # 9 of 13 pages improved, several strongly. This is NOT the same as the
+    # misleading 2026-07-30 "grayscale-only best" result (5 clean bond pages,
+    # single writer, which inverted once greenbook arrived) -- this run spans
+    # every paper type and both capture paths, and the win holds on 2 of 3
+    # subgroups. Caveats, honestly: pad is n=2 and slightly negative (revisit
+    # when more pad samples land -- if pad genuinely prefers binary, the fix is
+    # a conditional like adaptive_denoise, not a global revert); and
+    # REC_SCORE_FLOOR was rechecked under grayscale input the same day --
+    # clean gap (dropped junk <=0.25, real text >=0.36, p5 0.82), floor
+    # behavior unchanged.
+    #
+    # The threshold code below stays fully functional -- pass threshold=True
+    # to reproduce the old pipeline (evaluators, future paper types, or a
+    # conditional branch if pad diverges). Denoise still runs either way.
+    threshold: bool = False
     threshold_block_size: int = 31
     threshold_c: int = 15
 
@@ -58,9 +85,78 @@ class PreprocessConfig:
     # it lands above the threshold and the stronger denoise doesn't suit it,
     # re-check against a labelled batch and adjust textured_paper_threshold
     # or add a third profile rather than assuming this setting is final.
+    #
+    # BROKEN under gate-processed images as of 2026-08-05 -- the clean
+    # bond/greenbook separation above was measured on RAW captures only. Once
+    # gate-processed samples were measured, the separation collapsed:
+    #
+    #                          texture score
+    #   raw bond                0.49-0.94
+    #   gate bond (1 sample)     1.50
+    #   gate greenbook           1.75-2.00   <- WRONG SIDE of 2.2, should be high
+    #   gate yellow_pad          1.94-1.97
+    #   raw greenbook            2.53-2.62
+    #
+    # Something about the gate path drags gate-greenbook's score below the
+    # threshold -- it gets treated as smooth paper and receives weak denoise,
+    # letting its ruling lines survive into the binary image, which can crowd a
+    # row enough that the detector skips a whole line (see the removed-feature
+    # note near DEFAULT_CONFIG for the line-removal experiments this prompted).
+    # NOTE (2026-08-06, verified against scanner branch tip d57a1bc): the gate
+    # no longer does ANY photometric processing -- Nikko shipped raw-only upload
+    # (processDocument removed) and removed the Enhance filter (scanner in
+    # SCANNER_MODE_BASE). The only pixel ops on a DB image are edge-detect +
+    # perspective de-warp + JPEG. So the texture drop, IF caused by the gate, can
+    # only be de-warp resampling smoothing the paper speckle -- not photometric
+    # hardening (that hypothesis is dead). Still confounded with the raw cohort
+    # being a different writer/paper/capture; the same-page s06/s07/s08 retake
+    # isolates de-warp+JPEG.
+    # Tried lowering textured_paper_threshold to 1.7 to force gate-greenbook
+    # into strong denoise: A/B result was NOT a fix -- recovered the dropped
+    # line on 1 of 2 gate-greenbook samples (-0.022 better) but regressed the
+    # other gate-greenbook sample (+0.049) and badly regressed BOTH
+    # yellow_pad samples (+0.058, +0.104), because gate-greenbook and
+    # yellow_pad now occupy the same 1.7-2.0 texture band -- no single
+    # threshold can move one without sweeping in the other. Left at 2.2;
+    # lowering it is a net loss, not a fix.
+    #
+    # IMPORTANT CAVEAT (2026-08-06): whether this is actually caused by the
+    # gate, or by an uncontrolled difference between the raw-cohort writer's
+    # paper/pen/lighting and the gate-cohort writer's, is UNCONFIRMED -- every
+    # comparison so far changes gate-status AND writer AND physical paper AND
+    # capture conditions simultaneously (classic confound). The gate-processed
+    # greenbook and pad samples are also few (2 each) and were NOT measured
+    # to be individually inconsistent from each other's readability -- one of
+    # the two gate-greenbook pages scored well (0.123) even at the default
+    # threshold, the other did not (0.167), which points at per-page condition
+    # (line darkness, row spacing, capture shadow) rather than paper type or
+    # gate-vs-raw as the operative variable. The one experiment that can
+    # actually isolate the gate's effect is a same-page raw-vs-gate pair
+    # (planned: retaking nombrado's raw greenbook s06/s07/s08 through the
+    # gate) -- do not treat "the gate causes this" as established until that
+    # runs. See `quality-gate-should-not-binarize` memory and
+    # `docs/ocr/QUALITY_GATE_REVIEW.md` §7-8.
     adaptive_denoise: bool = True
     textured_paper_threshold: float = 2.2
     textured_denoise_strength: int = 20
+
+    # NOTE: horizontal ruled-line removal was prototyped here and REMOVED
+    # 2026-08-06 after measurement. Ruled/pad stock (mtcc pad, gate-framed
+    # greenbook) can leave printed rules in the binary that crowd a row and make
+    # the detector skip a whole line. Two preprocessing removers were built and
+    # measured against the 5 gate-framed samples -- a blunt "erase any long
+    # horizontal run" (regressed clean_ws 0.128->0.144) and a sharper
+    # "near-full-width runs only" (0.128->0.135). Neither was a net win at any
+    # setting: a width-fraction sweep found no value that recovers a dropped line
+    # without regressing a page that has a genuinely full-width handwriting
+    # element, and the crowded rows that most need removal are where the rule is
+    # least detectable (its middle is occluded by the writing). Conclusion: width
+    # alone cannot separate printed rules from handwriting, and preprocessing
+    # line-removal is the wrong tool -- the robust fix for lined paper is
+    # fine-tuning on real ruled-paper samples, not editing pixels before OCR. If
+    # revisited, a straightness/periodic-spacing detector (Hough-based), not
+    # morphological width, is the direction. Full measurement history:
+    # `quality-gate-should-not-binarize` memory and `docs/ocr/EVALUATION.md`.
 
 
 DEFAULT_CONFIG = PreprocessConfig()

@@ -3,7 +3,7 @@ import unittest
 import cv2
 import numpy as np
 
-from robustness import TRANSFORMS, apply_transform
+from evaluators.robustness import TRANSFORMS, apply_transform
 
 
 def make_test_page(channels=3):

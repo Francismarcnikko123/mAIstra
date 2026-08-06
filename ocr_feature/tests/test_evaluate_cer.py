@@ -21,9 +21,9 @@ def _reject_ocr_import(name, *args, **kwargs):
 class EvaluateCerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        sys.modules.pop("evaluate_cer", None)
+        sys.modules.pop("evaluators.evaluate_cer", None)
         with patch("builtins.__import__", side_effect=_reject_ocr_import):
-            cls.evaluator = importlib.import_module("evaluate_cer")
+            cls.evaluator = importlib.import_module("evaluators.evaluate_cer")
 
     def _row(self):
         return {

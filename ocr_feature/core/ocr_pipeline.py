@@ -1,37 +1,47 @@
 import json
 import math
-import tempfile
 from pathlib import Path
 
 import cv2
 import numpy as np
 from paddleocr import PaddleOCR
 
-from preprocess import preprocess_image, PreprocessConfig, DEFAULT_CONFIG
-from c_code_cleanup import clean_c_code
-from c_code_suggestions import suggest_c_code
-from recognition_consensus import (
-    RecognitionConfig,
-    DEFAULT_RECOGNITION_CONFIG,
-    create_candidate_views,
-    select_consensus_lines,
-)
+from core.preprocess import preprocess_image, PreprocessConfig, DEFAULT_CONFIG
+from core.c_code_cleanup import clean_c_code
+from core.c_code_suggestions import suggest_c_code
 
 
 # Detection and recognition are pinned by name -- passing a model name makes
 # PaddleOCR silently ignore lang/ocr_version, so setting those too would be misleading.
 
-# mobile_det + no orientation/unwarp passes: ~81s -> a few seconds per image
-# on CPU, since our captures are already gated upright/flat at the mobile app.
+# no orientation/unwarp passes: ~81s -> a few seconds per image on CPU, since
+# our captures are already gated upright/flat at the mobile app.
 
-# en_PP-OCRv5_mobile_rec remains pinned because the multilingual alternative
-# was observed substituting CJK characters for C symbols (for example, 二 for
-# '='). Earlier CER figures used unverified labels, so they are not valid
-# evidence for choosing between these recognition models.
+# Model pairing chosen by sweep over the 13 human-verified pages (2026-08-03),
+# clean_ws CER, all four pairings scored on the same cohort:
+#
+#   v6_medium_det + v6_medium_rec      0.148   <- selected
+#   v5_mobile_det + en_v5_mobile_rec   0.181   (previous default)
+#   v5_server_det + en_v5_mobile_rec   0.187   at ~9x the runtime
+#   v5_mobile_det + v5_server_rec      0.279
+#
+# v6 wins on 11 of 13 pages and improves every paper/writer subgroup. Bigger is
+# not better here: v5_server_rec is multilingual and substitutes CJK for C
+# symbols (二 for '='), which is why the older en_ recognizer was pinned -- that
+# instinct is now confirmed numerically. Detection is not the bottleneck;
+# v5_server_det cost 9x the time for a worse score, so detection stays small.
+#
+# Cost of this change: ~3s -> ~9s per page on CPU.
+#
+# v6_medium_rec also emits occasional CJK, but stripping non-ASCII moves CER by
+# ~0.0001, so it is cosmetic rather than an accuracy problem.
+#
+# REC_SCORE_FLOOR below was calibrated against v5-mobile's confidence
+# distribution and has NOT been recalibrated for v6.
 
 ocr = PaddleOCR(
-    text_detection_model_name="PP-OCRv5_mobile_det",
-    text_recognition_model_name="en_PP-OCRv5_mobile_rec",
+    text_detection_model_name="PP-OCRv6_medium_det",
+    text_recognition_model_name="PP-OCRv6_medium_rec",
     use_doc_orientation_classify=False,
     use_doc_unwarping=False,
     use_textline_orientation=False,
@@ -456,109 +466,10 @@ def _recognize_preprocessed(preprocessed_path: str) -> dict:
     }
 
 
-def _attempt_from_selected_lines(selected_lines: list[dict]) -> dict:
-    """Build one recognition attempt from selected whole structured lines."""
-    if not isinstance(selected_lines, (list, tuple)):
-        raise TypeError("selected lines must be a list or tuple")
-
-    lines = []
-    grouped_lines = []
-    debug_lines = []
-    detections = []
-    confidence_scores = []
-
-    for line in selected_lines:
-        if not isinstance(line, dict):
-            raise TypeError("each selected line must be a dictionary")
-        text = line["text"]
-        members = line["members"]
-        if not isinstance(text, str):
-            raise TypeError("selected line text must be a string")
-        if not isinstance(members, (list, tuple)) or not members:
-            raise ValueError("selected line members must be nonempty")
-
-        normalized_members = []
-        debug_members = []
-        for member in members:
-            if not isinstance(member, (list, tuple)) or len(member) != 2:
-                raise ValueError("selected line members must be text-score pairs")
-            member_text, score = member
-            if not isinstance(member_text, str):
-                raise TypeError("selected member text must be a string")
-            normalized_members.append((member_text, score))
-            debug_members.append({"text": member_text, "score": score})
-            detections.append({
-                "text": member_text,
-                "score": score,
-                "box": None,
-            })
-            try:
-                numeric_score = float(score)
-            except (TypeError, ValueError, OverflowError):
-                continue
-            if math.isfinite(numeric_score):
-                confidence_scores.append(numeric_score)
-
-        lines.append(line)
-        grouped_lines.append(normalized_members)
-        debug_lines.append(debug_members)
-
-    average_confidence = None
-    if confidence_scores:
-        try:
-            candidate_average = math.fsum(
-                score / len(confidence_scores)
-                for score in confidence_scores
-            )
-        except OverflowError:
-            candidate_average = None
-        if candidate_average is not None and math.isfinite(candidate_average):
-            average_confidence = candidate_average
-
-    return {
-        "raw_text": "\n".join(line["text"] for line in lines),
-        "lines": lines,
-        "grouped_lines": grouped_lines,
-        "average_confidence": average_confidence,
-        "detections": detections,
-        "dropped_low_confidence": [],
-        "debug_lines": debug_lines,
-    }
-
-
-def _attempt_summary(name: str, attempt: dict) -> dict:
-    """Return the JSON-safe public summary for one completed OCR attempt."""
-    lines = attempt.get("lines", [])
-    raw_text = attempt.get("raw_text", "")
-    if not isinstance(raw_text, str):
-        raw_text = ""
-
-    confidence = attempt.get("average_confidence")
-    numeric_confidence = None
-    if not isinstance(confidence, bool):
-        try:
-            candidate_confidence = float(confidence)
-        except (TypeError, ValueError, OverflowError):
-            candidate_confidence = None
-        if (
-            candidate_confidence is not None
-            and math.isfinite(candidate_confidence)
-        ):
-            numeric_confidence = candidate_confidence
-
-    return {
-        "name": name,
-        "raw_text": raw_text,
-        "line_count": len(lines) if isinstance(lines, (list, tuple)) else 0,
-        "average_confidence": numeric_confidence,
-    }
-
-
 def extract_text_from_image(
     image_path: str,
     preprocess_config: PreprocessConfig = DEFAULT_CONFIG,
     output_dir: str = "outputs",
-    recognition_config: RecognitionConfig = DEFAULT_RECOGNITION_CONFIG,
 ) -> dict:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -569,48 +480,7 @@ def extract_text_from_image(
         config=preprocess_config,
     )
 
-    baseline_attempt = _recognize_preprocessed(preprocessed_path)
-    selected_attempt = baseline_attempt
-    recognition_attempts = []
-    consensus_decisions = []
-    recognition_diagnostics = []
-
-    if recognition_config.mode == "consensus":
-        try:
-            recognition_attempts.append(
-                _attempt_summary("baseline", baseline_attempt)
-            )
-            with tempfile.TemporaryDirectory(dir=output_path) as temp_dir:
-                candidate_paths = dict(create_candidate_views(
-                    Path(preprocessed_path),
-                    Path(temp_dir),
-                    recognition_config,
-                ))
-                negative_attempt = _recognize_preprocessed(
-                    str(candidate_paths["rotate_neg"])
-                )
-                recognition_attempts.append(
-                    _attempt_summary("rotate_neg", negative_attempt)
-                )
-                positive_attempt = _recognize_preprocessed(
-                    str(candidate_paths["rotate_pos"])
-                )
-                recognition_attempts.append(
-                    _attempt_summary("rotate_pos", positive_attempt)
-                )
-
-            selected_lines, consensus_decisions = select_consensus_lines(
-                baseline_attempt["lines"],
-                negative_attempt["lines"],
-                positive_attempt["lines"],
-            )
-            selected_attempt = _attempt_from_selected_lines(selected_lines)
-        except Exception as exc:
-            selected_attempt = baseline_attempt
-            consensus_decisions = []
-            recognition_diagnostics = [
-                f"consensus failed: {type(exc).__name__}"
-            ]
+    selected_attempt = _recognize_preprocessed(preprocessed_path)
 
     raw_text = selected_attempt["raw_text"]
     grouped_lines = selected_attempt["grouped_lines"]
@@ -650,14 +520,6 @@ def extract_text_from_image(
         "review_suggestions": review_suggestions,
         "review_diagnostics": review_diagnostics,
     }
-    if recognition_config.mode == "consensus":
-        debug.update({
-            "baseline_raw_text": baseline_attempt["raw_text"],
-            "recognition_mode": "consensus",
-            "recognition_attempts": recognition_attempts,
-            "consensus_decisions": consensus_decisions,
-            "recognition_diagnostics": recognition_diagnostics,
-        })
     _write_debug_artifact(preprocessed_path, debug)
 
     result = {
@@ -669,12 +531,4 @@ def extract_text_from_image(
         "review_suggestions": review_suggestions,
         "review_diagnostics": review_diagnostics,
     }
-    if recognition_config.mode == "consensus":
-        result.update({
-            "baseline_raw_text": baseline_attempt["raw_text"],
-            "recognition_mode": "consensus",
-            "recognition_attempts": recognition_attempts,
-            "consensus_decisions": consensus_decisions,
-            "recognition_diagnostics": recognition_diagnostics,
-        })
     return result

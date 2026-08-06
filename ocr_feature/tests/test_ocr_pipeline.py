@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-PIPELINE_PATH = Path(__file__).with_name("ocr_pipeline.py")
+PIPELINE_PATH = Path(__file__).resolve().parent.parent / "core" / "ocr_pipeline.py"
 
 
 def load_pipeline_without_models():
@@ -17,10 +17,10 @@ def load_pipeline_without_models():
     cv2 = types.ModuleType("cv2")
     numpy = types.ModuleType("numpy")
     paddleocr = types.ModuleType("paddleocr")
-    preprocess = types.ModuleType("preprocess")
-    c_code_cleanup = types.ModuleType("c_code_cleanup")
-    c_code_suggestions = types.ModuleType("c_code_suggestions")
-    recognition_consensus = types.ModuleType("recognition_consensus")
+    core_pkg = types.ModuleType("core")
+    preprocess = types.ModuleType("core.preprocess")
+    c_code_cleanup = types.ModuleType("core.c_code_cleanup")
+    c_code_suggestions = types.ModuleType("core.c_code_suggestions")
 
     class StubPaddleOCR:
         def __init__(self, **_kwargs):
@@ -28,11 +28,6 @@ def load_pipeline_without_models():
 
     class StubPreprocessConfig:
         pass
-
-    class StubRecognitionConfig:
-        def __init__(self, mode="baseline", angles=(-.5, .5)):
-            self.mode = mode
-            self.angles = angles
 
     class StubImage:
         shape = (100, 200)
@@ -45,13 +40,9 @@ def load_pipeline_without_models():
     preprocess.DEFAULT_CONFIG = StubPreprocessConfig()
     c_code_cleanup.clean_c_code = lambda text: text
     c_code_suggestions.suggest_c_code = lambda _text, _details=None: []
-    recognition_consensus.RecognitionConfig = StubRecognitionConfig
-    recognition_consensus.DEFAULT_RECOGNITION_CONFIG = StubRecognitionConfig()
-    recognition_consensus.create_candidate_views = lambda *_args: []
-    recognition_consensus.select_consensus_lines = lambda baseline, *_args: (
-        baseline,
-        [],
-    )
+    core_pkg.preprocess = preprocess
+    core_pkg.c_code_cleanup = c_code_cleanup
+    core_pkg.c_code_suggestions = c_code_suggestions
 
     module_name = "ocr_pipeline_grouping_test_module"
     spec = importlib.util.spec_from_file_location(module_name, PIPELINE_PATH)
@@ -60,10 +51,10 @@ def load_pipeline_without_models():
         "cv2": cv2,
         "numpy": numpy,
         "paddleocr": paddleocr,
-        "preprocess": preprocess,
-        "c_code_cleanup": c_code_cleanup,
-        "c_code_suggestions": c_code_suggestions,
-        "recognition_consensus": recognition_consensus,
+        "core": core_pkg,
+        "core.preprocess": preprocess,
+        "core.c_code_cleanup": c_code_cleanup,
+        "core.c_code_suggestions": c_code_suggestions,
         module_name: module,
     }
     with patch.dict(sys.modules, stubs):
@@ -426,9 +417,6 @@ class RecognitionConsensusPipelineTests(unittest.TestCase):
                 result = pipeline.extract_text_from_image(
                     "source.jpg",
                     output_dir=output_dir,
-                    recognition_config=pipeline.RecognitionConfig(
-                        mode="baseline"
-                    ),
                 )
 
         recognize.assert_called_once()
@@ -448,360 +436,6 @@ class RecognitionConsensusPipelineTests(unittest.TestCase):
             "review_suggestions": [],
             "review_diagnostics": [],
         })
-        self.assertNotIn("baseline_raw_text", result)
-        self.assertNotIn("recognition_mode", result)
-        self.assertNotIn("recognition_attempts", result)
-        self.assertNotIn("consensus_decisions", result)
-        self.assertNotIn("recognition_diagnostics", result)
-
-    def test_consensus_selects_variant_and_uses_selected_review_data(self):
-        pipeline = self.configured_pipeline()
-        baseline = recognition_attempt("return o;", score=0.6)
-        negative = recognition_attempt("return 0;", score=0.8)
-        positive = recognition_attempt("return 0;", score=0.9)
-        decision = {
-            "action": "replace",
-            "baseline": "return o;",
-            "selected": "return 0;",
-            "reason": "two-variant-support",
-            "y_min": 0.1,
-            "y_max": 0.2,
-        }
-        temporary_paths = {}
-        debug_payload = {}
-
-        def create_views(preprocessed_path, output_dir, config):
-            temporary_paths["directory"] = Path(output_dir)
-            temporary_paths["preprocessed"] = preprocessed_path
-            temporary_paths["config"] = config
-            negative_path = Path(output_dir) / "negative.png"
-            positive_path = Path(output_dir) / "positive.png"
-            negative_path.touch()
-            positive_path.touch()
-            temporary_paths["files"] = [negative_path, positive_path]
-            return [
-                ("rotate_neg", negative_path),
-                ("rotate_pos", positive_path),
-            ]
-
-        def capture_debug(_path, payload):
-            debug_payload.update(payload)
-
-        pipeline.create_candidate_views = create_views
-        pipeline.select_consensus_lines = lambda *_args: (
-            positive["lines"],
-            [decision],
-        )
-        pipeline.clean_c_code = lambda text: text.replace("return", "RETURN")
-
-        with patch.object(
-            pipeline,
-            "_recognize_preprocessed",
-            side_effect=[baseline, negative, positive],
-        ) as recognize, patch.object(
-            pipeline,
-            "suggest_c_code",
-            return_value=[{"line": 1, "rule_id": "selected-rule"}],
-        ) as suggest, patch.object(
-            pipeline,
-            "_write_debug_artifact",
-            side_effect=capture_debug,
-        ):
-            with tempfile.TemporaryDirectory() as output_dir:
-                result = pipeline.extract_text_from_image(
-                    "source.jpg",
-                    output_dir=output_dir,
-                    recognition_config=pipeline.RecognitionConfig(
-                        mode="consensus"
-                    ),
-                )
-                self.assertFalse(temporary_paths["directory"].exists())
-                self.assertTrue(all(
-                    not path.exists() for path in temporary_paths["files"]
-                ))
-
-        self.assertEqual(recognize.call_count, 3)
-        self.assertEqual(
-            [entry.args[0] for entry in recognize.call_args_list],
-            [
-                str(temporary_paths["preprocessed"]),
-                str(temporary_paths["files"][0]),
-                str(temporary_paths["files"][1]),
-            ],
-        )
-        self.assertIsInstance(temporary_paths["preprocessed"], Path)
-        self.assertEqual(result["raw_text"], "return 0;")
-        self.assertEqual(result["cleaned_text"], "RETURN 0;")
-        self.assertEqual(result["baseline_raw_text"], "return o;")
-        self.assertEqual(result["recognition_mode"], "consensus")
-        self.assertEqual(result["consensus_decisions"], [decision])
-        self.assertEqual(result["recognition_diagnostics"], [])
-        self.assertEqual(result["recognition_attempts"], [
-            {
-                "name": "baseline",
-                "raw_text": "return o;",
-                "line_count": 1,
-                "average_confidence": 0.6,
-            },
-            {
-                "name": "rotate_neg",
-                "raw_text": "return 0;",
-                "line_count": 1,
-                "average_confidence": 0.8,
-            },
-            {
-                "name": "rotate_pos",
-                "raw_text": "return 0;",
-                "line_count": 1,
-                "average_confidence": 0.9,
-            },
-        ])
-        self.assertEqual(result["average_confidence"], 0.9)
-        self.assertEqual(result["line_details"][0]["text"], "return 0;")
-        self.assertEqual(
-            result["line_details"][0]["review_reasons"],
-            ["selected-rule"],
-        )
-        suggest.assert_called_once()
-        self.assertEqual(suggest.call_args.args[0], "return 0;")
-        self.assertEqual(suggest.call_args.args[1][0]["text"], "return 0;")
-        self.assertEqual(debug_payload["raw_text"], "return 0;")
-        self.assertEqual(debug_payload["detections"], [{
-            "text": "return 0;",
-            "score": 0.9,
-            "box": None,
-        }])
-        self.assertEqual(debug_payload["baseline_raw_text"], "return o;")
-        self.assertEqual(debug_payload["recognition_mode"], "consensus")
-        self.assertEqual(debug_payload["consensus_decisions"], [decision])
-
-    def test_candidate_creation_failure_returns_complete_baseline(self):
-        pipeline = self.configured_pipeline()
-        baseline = recognition_attempt("return o;", score=0.6)
-        debug_payload = {}
-        pipeline.clean_c_code = lambda text: f"clean:{text}"
-
-        def fail_candidate_creation(*_args):
-            raise RuntimeError("rotation failed")
-
-        pipeline.create_candidate_views = fail_candidate_creation
-
-        with patch.object(
-            pipeline,
-            "_recognize_preprocessed",
-            return_value=baseline,
-        ) as recognize, patch.object(
-            pipeline,
-            "_write_debug_artifact",
-            side_effect=lambda _path, payload: debug_payload.update(payload),
-        ):
-            with tempfile.TemporaryDirectory() as output_dir:
-                result = pipeline.extract_text_from_image(
-                    "source.jpg",
-                    output_dir=output_dir,
-                    recognition_config=pipeline.RecognitionConfig(
-                        mode="consensus"
-                    ),
-                )
-
-        recognize.assert_called_once()
-        self.assertEqual(result["raw_text"], "return o;")
-        self.assertEqual(result["cleaned_text"], "clean:return o;")
-        self.assertEqual(result["average_confidence"], 0.6)
-        self.assertEqual(result["consensus_decisions"], [])
-        self.assertEqual(
-            result["recognition_diagnostics"],
-            ["consensus failed: RuntimeError"],
-        )
-        self.assertEqual(
-            [attempt["name"] for attempt in result["recognition_attempts"]],
-            ["baseline"],
-        )
-        self.assertEqual(
-            debug_payload["recognition_diagnostics"],
-            ["consensus failed: RuntimeError"],
-        )
-
-    def test_baseline_summary_failure_returns_complete_baseline(self):
-        pipeline = self.configured_pipeline()
-        baseline = recognition_attempt("return o;", score=0.6)
-        pipeline.clean_c_code = lambda text: f"clean:{text}"
-
-        with patch.object(
-            pipeline,
-            "_recognize_preprocessed",
-            return_value=baseline,
-        ) as recognize, patch.object(
-            pipeline,
-            "_attempt_summary",
-            side_effect=RuntimeError("summary failed"),
-        ):
-            with tempfile.TemporaryDirectory() as output_dir:
-                result = pipeline.extract_text_from_image(
-                    "source.jpg",
-                    output_dir=output_dir,
-                    recognition_config=pipeline.RecognitionConfig(
-                        mode="consensus"
-                    ),
-                )
-
-        recognize.assert_called_once()
-        self.assertEqual(result["raw_text"], "return o;")
-        self.assertEqual(result["cleaned_text"], "clean:return o;")
-        self.assertEqual(result["average_confidence"], 0.6)
-        self.assertEqual(result["recognition_attempts"], [])
-        self.assertEqual(result["consensus_decisions"], [])
-        self.assertEqual(
-            result["recognition_diagnostics"],
-            ["consensus failed: RuntimeError"],
-        )
-
-    def test_attempt_summary_is_strict_json_safe(self):
-        pipeline = self.configured_pipeline()
-
-        for case, confidence in (
-            ("nan", math.nan),
-            ("positive-infinity", math.inf),
-            ("negative-infinity", -math.inf),
-            ("overflow", 10 ** 10000),
-            ("unconvertible", object()),
-        ):
-            with self.subTest(case=case):
-                attempt = recognition_attempt("return 0;")
-                attempt["average_confidence"] = confidence
-
-                summary = pipeline._attempt_summary("baseline", attempt)
-
-                self.assertEqual(summary["raw_text"], "return 0;")
-                self.assertEqual(summary["line_count"], 1)
-                self.assertIsNone(summary["average_confidence"])
-                json.dumps(summary, allow_nan=False)
-
-        finite_summary = pipeline._attempt_summary(
-            "baseline",
-            recognition_attempt("return 0;", score=0.75),
-        )
-        self.assertEqual(finite_summary["average_confidence"], 0.75)
-        json.dumps(finite_summary, allow_nan=False)
-
-    def test_selection_failure_returns_complete_baseline(self):
-        pipeline = self.configured_pipeline()
-        attempts = [
-            recognition_attempt("return o;", score=0.6),
-            recognition_attempt("return 0;", score=0.8),
-            recognition_attempt("return 0;", score=0.9),
-        ]
-        pipeline.create_candidate_views = lambda _path, output_dir, _config: [
-            ("rotate_neg", Path(output_dir) / "negative.png"),
-            ("rotate_pos", Path(output_dir) / "positive.png"),
-        ]
-
-        def fail_selection(*_args):
-            raise ValueError("bad selection")
-
-        pipeline.select_consensus_lines = fail_selection
-
-        with patch.object(
-            pipeline,
-            "_recognize_preprocessed",
-            side_effect=attempts,
-        ):
-            with tempfile.TemporaryDirectory() as output_dir:
-                result = pipeline.extract_text_from_image(
-                    "source.jpg",
-                    output_dir=output_dir,
-                    recognition_config=pipeline.RecognitionConfig(
-                        mode="consensus"
-                    ),
-                )
-
-        self.assertEqual(result["raw_text"], "return o;")
-        self.assertEqual(result["consensus_decisions"], [])
-        self.assertEqual(
-            result["recognition_diagnostics"],
-            ["consensus failed: ValueError"],
-        )
-        self.assertEqual(
-            [attempt["name"] for attempt in result["recognition_attempts"]],
-            ["baseline", "rotate_neg", "rotate_pos"],
-        )
-
-    def test_variant_failure_keeps_completed_attempt_summaries(self):
-        pipeline = self.configured_pipeline()
-        baseline = recognition_attempt("return o;", score=0.6)
-        negative = recognition_attempt("return 0;", score=0.8)
-        candidate_directory = {}
-
-        def create_views(_path, output_dir, _config):
-            candidate_directory["path"] = Path(output_dir)
-            return [
-                ("rotate_neg", Path(output_dir) / "negative.png"),
-                ("rotate_pos", Path(output_dir) / "positive.png"),
-            ]
-
-        pipeline.create_candidate_views = create_views
-
-        with patch.object(
-            pipeline,
-            "_recognize_preprocessed",
-            side_effect=[baseline, negative, OSError("positive failed")],
-        ):
-            with tempfile.TemporaryDirectory() as output_dir:
-                result = pipeline.extract_text_from_image(
-                    "source.jpg",
-                    output_dir=output_dir,
-                    recognition_config=pipeline.RecognitionConfig(
-                        mode="consensus"
-                    ),
-                )
-                self.assertFalse(candidate_directory["path"].exists())
-
-        self.assertEqual(result["raw_text"], "return o;")
-        self.assertEqual(
-            result["recognition_diagnostics"],
-            ["consensus failed: OSError"],
-        )
-        self.assertEqual(
-            [attempt["name"] for attempt in result["recognition_attempts"]],
-            ["baseline", "rotate_neg"],
-        )
-
-    def test_malformed_selected_attempt_returns_complete_baseline(self):
-        pipeline = self.configured_pipeline()
-        attempts = [
-            recognition_attempt("return o;", score=0.6),
-            recognition_attempt("return 0;", score=0.8),
-            recognition_attempt("return 0;", score=0.9),
-        ]
-        pipeline.create_candidate_views = lambda _path, output_dir, _config: [
-            ("rotate_neg", Path(output_dir) / "negative.png"),
-            ("rotate_pos", Path(output_dir) / "positive.png"),
-        ]
-        pipeline.select_consensus_lines = lambda *_args: (
-            [{"text": "return 0;"}],
-            [{"action": "replace"}],
-        )
-
-        with patch.object(
-            pipeline,
-            "_recognize_preprocessed",
-            side_effect=attempts,
-        ):
-            with tempfile.TemporaryDirectory() as output_dir:
-                result = pipeline.extract_text_from_image(
-                    "source.jpg",
-                    output_dir=output_dir,
-                    recognition_config=pipeline.RecognitionConfig(
-                        mode="consensus"
-                    ),
-                )
-
-        self.assertEqual(result["raw_text"], "return o;")
-        self.assertEqual(result["consensus_decisions"], [])
-        self.assertEqual(
-            result["recognition_diagnostics"],
-            ["consensus failed: KeyError"],
-        )
 
 
 class LineDetailsTests(unittest.TestCase):

@@ -8,7 +8,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
-from ocr_pipeline import extract_text_from_image, warmup
+from core.ocr_pipeline import extract_text_from_image, warmup
 
 
 load_dotenv()

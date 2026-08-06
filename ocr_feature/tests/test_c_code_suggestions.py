@@ -1,6 +1,6 @@
 import unittest
 
-from c_code_suggestions import suggest_c_code
+from core.c_code_suggestions import suggest_c_code
 
 
 class CCodeSuggestionTests(unittest.TestCase):
