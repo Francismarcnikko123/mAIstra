@@ -23,9 +23,7 @@ uploads/*
 outputs/*
 !outputs/.gitkeep
 
-# Sample images (may contain student handwriting)
-samples/*
-!samples/.gitkeep
+# samples/ and datasets/ are tracked — shared ground-truth/training data for the team
 
 # macOS files
 .DS_Store
