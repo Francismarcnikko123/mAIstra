@@ -1,3 +1,5 @@
+# Run only this file (from the ocr_feature/ directory):
+#     .venv/bin/python -m tests.test_c_code_cleanup
 import unittest
 
 from core.c_code_cleanup import clean_c_code

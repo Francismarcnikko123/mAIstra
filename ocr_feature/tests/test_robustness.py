@@ -1,3 +1,5 @@
+# Run only this file (from the ocr_feature/ directory):
+#     .venv/bin/python -m tests.test_robustness
 import unittest
 
 import cv2

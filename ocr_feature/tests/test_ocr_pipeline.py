@@ -1,3 +1,5 @@
+# Run only this file (from the ocr_feature/ directory):
+#     .venv/bin/python -m tests.test_ocr_pipeline
 import importlib.util
 import json
 import math
@@ -44,6 +46,17 @@ def load_pipeline_without_models():
     core_pkg.c_code_cleanup = c_code_cleanup
     core_pkg.c_code_suggestions = c_code_suggestions
 
+    # core.numeric is pure-stdlib (math only) and ocr_pipeline imports
+    # finite_float from it, so load the REAL module rather than stub it —
+    # otherwise this file only passes when another test happens to import
+    # core.numeric first (i.e. it can't run in isolation).
+    numeric_spec = importlib.util.spec_from_file_location(
+        "core.numeric", PIPELINE_PATH.parent / "numeric.py"
+    )
+    numeric = importlib.util.module_from_spec(numeric_spec)
+    numeric_spec.loader.exec_module(numeric)
+    core_pkg.numeric = numeric
+
     module_name = "ocr_pipeline_grouping_test_module"
     spec = importlib.util.spec_from_file_location(module_name, PIPELINE_PATH)
     module = importlib.util.module_from_spec(spec)
@@ -53,6 +66,7 @@ def load_pipeline_without_models():
         "paddleocr": paddleocr,
         "core": core_pkg,
         "core.preprocess": preprocess,
+        "core.numeric": numeric,
         "core.c_code_cleanup": c_code_cleanup,
         "core.c_code_suggestions": c_code_suggestions,
         module_name: module,
@@ -89,7 +103,7 @@ def recognition_attempt(text, score=0.8, y_min=0.1, y_max=0.2):
     }
 
 
-class GroupIntoReadingOrderTests(unittest.TestCase):
+class GroupDetectionRecordsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.pipeline = load_pipeline_without_models()
@@ -97,7 +111,13 @@ class GroupIntoReadingOrderTests(unittest.TestCase):
     def group_lines(self, texts, boxes, scores=None):
         if scores is None:
             scores = [0.9] * len(texts)
-        return self.pipeline._group_into_reading_order(texts, scores, boxes)
+        grouped, _geometry_safe = self.pipeline._group_detection_records(
+            texts, scores, boxes
+        )
+        return [
+            [(member["text"], member["score"]) for member in members]
+            for members in grouped
+        ]
 
     def group_texts(self, texts, boxes, scores=None):
         lines = self.group_lines(texts, boxes, scores)
@@ -486,7 +506,7 @@ class LineDetailsTests(unittest.TestCase):
         suggestions = [
             {"line": 1, "rule_id": "function-call-printf"},
             {"line": 1, "rule_id": "function-call-printf"},
-            {"line": 2, "rule_id": "c-token-return"},
+            {"line": 2, "rule_id": "function-call-scanf"},
             {"line": "bad", "rule_id": "ignored"},
         ]
 
@@ -495,7 +515,7 @@ class LineDetailsTests(unittest.TestCase):
         self.assertEqual(
             details[0]["review_reasons"], ["function-call-printf"]
         )
-        self.assertEqual(details[1]["review_reasons"], ["c-token-return"])
+        self.assertEqual(details[1]["review_reasons"], ["function-call-scanf"])
 
 
 if __name__ == "__main__":

@@ -27,16 +27,16 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
+# The contamination guard compares texts with whitespace collapsed, which is
+# exactly the normalization the CER evaluator uses. Import the one canonical
+# implementation from evaluation.py rather than keeping a second copy here.
+from evaluators.evaluation import normalize_ws as normalize_whitespace
+
 EXPORT_DIR = Path("datasets/verified")
 IMAGES_DIR = EXPORT_DIR / "images"
 LABELS_CSV = EXPORT_DIR / "labels.csv"
 
 PAGE_SIZE = 100
-
-
-def normalize_whitespace(text: str) -> str:
-    """Collapse all whitespace so formatting-only edits compare equally."""
-    return " ".join(text.split())
 
 
 def is_suspected_unedited(row: dict) -> bool:

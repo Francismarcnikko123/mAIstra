@@ -7,37 +7,26 @@ import numpy as np
 from paddleocr import PaddleOCR
 
 from core.preprocess import preprocess_image, PreprocessConfig, DEFAULT_CONFIG
+from core.numeric import finite_float
 from core.c_code_cleanup import clean_c_code
 from core.c_code_suggestions import suggest_c_code
 
 
 # Detection and recognition are pinned by name -- passing a model name makes
-# PaddleOCR silently ignore lang/ocr_version, so setting those too would be misleading.
-
-# no orientation/unwarp passes: ~81s -> a few seconds per image on CPU, since
-# our captures are already gated upright/flat at the mobile app.
-
-# Model pairing chosen by sweep over the 13 human-verified pages (2026-08-03),
-# clean_ws CER, all four pairings scored on the same cohort:
+# PaddleOCR silently ignore lang/ocr_version, so setting those too would be
+# misleading.
 #
-#   v6_medium_det + v6_medium_rec      0.148   <- selected
-#   v5_mobile_det + en_v5_mobile_rec   0.181   (previous default)
-#   v5_server_det + en_v5_mobile_rec   0.187   at ~9x the runtime
-#   v5_mobile_det + v5_server_rec      0.279
+# No orientation/unwarp passes: captures are already gated upright/flat by
+# the mobile app, so these passes only add cost (~80s -> a few seconds/image
+# on CPU) with nothing to correct.
 #
-# v6 wins on 11 of 13 pages and improves every paper/writer subgroup. Bigger is
-# not better here: v5_server_rec is multilingual and substitutes CJK for C
-# symbols (二 for '='), which is why the older en_ recognizer was pinned -- that
-# instinct is now confirmed numerically. Detection is not the bottleneck;
-# v5_server_det cost 9x the time for a worse score, so detection stays small.
-#
-# Cost of this change: ~3s -> ~9s per page on CPU.
-#
-# v6_medium_rec also emits occasional CJK, but stripping non-ASCII moves CER by
-# ~0.0001, so it is cosmetic rather than an accuracy problem.
-#
-# REC_SCORE_FLOOR below was calibrated against v5-mobile's confidence
-# distribution and has NOT been recalibrated for v6.
+# v6_medium (det+rec) is the selected pairing over the v5 alternatives: it
+# won on CER across every paper/writer subgroup tested, and bigger isn't
+# better here -- the v5 server recognizer is multilingual and substitutes
+# CJK characters for C symbols (e.g. '二' for '='), which is why an English-
+# only recognizer is pinned rather than the largest available one. v6_medium
+# still emits occasional CJK, but rare enough to be cosmetic, not an accuracy
+# problem. Full sweep numbers: docs/ocr/EVALUATION.md.
 
 ocr = PaddleOCR(
     text_detection_model_name="PP-OCRv6_medium_det",
@@ -64,9 +53,13 @@ def warmup() -> None:
 
 
 # Below this score a detection is almost always the detector firing on a
-# smudge or stray mark rather than real writing -- a phantom "2" once scored
-# 0.127 while every real character on the same page scored 0.7+. Kept low
-# enough to only catch that kind of noise, not genuine hard-to-read characters.
+# smudge or stray mark rather than real writing, not a genuine hard-to-read
+# character. Re-verified against the current v6 recognizer on the gate-framed
+# test set: everything dropped is either an empty-text phantom (score 0.0) or
+# obvious junk (highest dropped 0.291: 's', '>', 'a', '2222'), while the
+# lowest real kept detection is 0.334 and the median kept score is 0.936.
+# 0.3 sits cleanly in the 0.291 -> 0.334 gap, so it removes noise without
+# touching real text.
 REC_SCORE_FLOOR = 0.3
 
 
@@ -219,41 +212,15 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
     return ordered_lines, True
 
 
-def _group_into_reading_order(rec_texts, rec_scores, rec_boxes):
-    """
-    Group detections into lines by position (top-to-bottom, then left-to-right
-    within a line) instead of trusting PaddleOCR's raw order, which can scatter
-    a single handwritten row into separate out-of-order pieces -- e.g.
-    "int result", "=", "add(3,4);" coming back as three disconnected lines.
-
-    Returns a list of lines, each a list of (text, score) tuples in reading
-    order; the caller joins a line's members with a space. rec_boxes entries
-    are [x_min, y_min, x_max, y_max]. Falls back to one line per detection if
-    box data is missing or malformed. Grouping may reorder whole recognized
-    fragments and the caller may insert whitespace when joining them, but this
-    helper never edits recognized characters.
-    """
-    grouped, _geometry_safe = _group_detection_records(
-        rec_texts, rec_scores, rec_boxes
-    )
-    return [
-        [(member["text"], member["score"]) for member in members]
-        for members in grouped
-    ]
-
-
 def _group_structured_lines(rec_texts, rec_scores, rec_boxes, image_height):
     """Return nonempty OCR lines with confidence and normalized geometry."""
     grouped, geometry_safe = _group_detection_records(
         rec_texts, rec_scores, rec_boxes
     )
-    try:
-        normalized_height = float(image_height)
-    except (TypeError, ValueError, OverflowError):
-        normalized_height = 0.0
+    normalized_height = finite_float(image_height)
     geometry_safe = (
         geometry_safe
-        and math.isfinite(normalized_height)
+        and normalized_height is not None
         and normalized_height > 0
     )
 
@@ -269,11 +236,8 @@ def _group_structured_lines(rec_texts, rec_scores, rec_boxes, image_height):
 
         scores = []
         for member in members:
-            try:
-                score = float(member["score"])
-            except (TypeError, ValueError, OverflowError):
-                continue
-            if math.isfinite(score):
+            score = finite_float(member["score"])
+            if score is not None:
                 scores.append(score)
 
         mean_confidence = None
@@ -324,11 +288,8 @@ def _build_line_details(grouped_lines):
 
         scores = []
         for _, score in members:
-            try:
-                numeric_score = float(score)
-            except (TypeError, ValueError, OverflowError):
-                continue
-            if math.isfinite(numeric_score):
+            numeric_score = finite_float(score)
+            if numeric_score is not None:
                 scores.append(numeric_score)
 
         details.append({
