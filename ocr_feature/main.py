@@ -8,7 +8,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
-from ocr_pipeline import extract_text_from_image, warmup
+from core.ocr_pipeline import extract_text_from_image, warmup
 
 
 load_dotenv()
@@ -61,6 +61,9 @@ async def extract_from_upload(file: UploadFile = File(...)):
         "raw_text": result["raw_text"],
         "cleaned_text": result["cleaned_text"],
         "average_confidence": result["average_confidence"],
+        "line_details": result["line_details"],
+        "review_suggestions": result["review_suggestions"],
+        "review_diagnostics": result["review_diagnostics"],
     }
 
 
@@ -120,5 +123,8 @@ def extract_from_url(request: ImageUrlRequest):
         "raw_text": result["raw_text"],
         "cleaned_text": result["cleaned_text"],
         "average_confidence": result["average_confidence"],
+        "line_details": result["line_details"],
+        "review_suggestions": result["review_suggestions"],
+        "review_diagnostics": result["review_diagnostics"],
         "saved_to_db": False,
     }

@@ -196,14 +196,20 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.saveStatus[id] = '';
     try {
       const text = this.editableText[id];
-      await this.supabase.updateSubmissionText(id, text, text);
+      // The OCR's own output (if extraction ran this session) is saved as
+      // extracted_text; the teacher's edits only ever become verified_text.
+      const ocrText = this.extractedText[id];
+      await this.supabase.updateSubmissionText(id, text, ocrText);
       if (!this.isCurrentSave(id, generation)) return;
 
       const s = this.submissions.find(x => x.id === id);
-      if (s) { s.extracted_text = text; s.verified_text = text; }
+      if (s) {
+        s.verified_text = text;
+        if (ocrText !== undefined) s.extracted_text = ocrText;
+      }
       if (this.selectedSubmission?.id === id) {
-        this.selectedSubmission.extracted_text = text;
         this.selectedSubmission.verified_text = text;
+        if (ocrText !== undefined) this.selectedSubmission.extracted_text = ocrText;
       }
       this.saveStatus[id] = 'saved';
       this.showCodeExecutionEditor[id] = true;

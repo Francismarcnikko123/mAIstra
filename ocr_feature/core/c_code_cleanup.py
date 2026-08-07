@@ -1,5 +1,7 @@
 import re
 
+from core.c_literals import C_LITERAL
+
 # Known OCR misread -> correct C token. Whole-token, case-sensitive. Keep this
 # list small and obvious -- every entry should be defensible on its own.
 FIXES = {
@@ -31,10 +33,6 @@ FIXES = {
     "stdlo": "stdio",
     "std1ib": "stdlib",
 }
-
-# Matches a full string literal "..." or char literal '...' so we can shield
-# their contents from replacement.
-_LITERAL = re.compile(r'"(?:\\.|[^"\\])*"' r"|'(?:\\.|[^'\\])*'")
 
 # Standard headers are a small closed set, so an #include line is safe to
 # normalize even when OCR mangles the extension ('.h' -> '.n') or the closing
@@ -78,7 +76,7 @@ def clean_c_code(text: str) -> str:
     # 1) Keyword pass, shielding string/char literals from replacement.
     out = []
     last = 0
-    for match in _LITERAL.finditer(text):
+    for match in C_LITERAL.finditer(text):
         # Fix the code between literals, then re-attach the literal untouched.
         out.append(_fix_segment(text[last:match.start()]))
         out.append(match.group(0))

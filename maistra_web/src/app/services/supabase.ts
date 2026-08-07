@@ -44,17 +44,23 @@ export class SupabaseService {
 
   async updateSubmissionText(
     submissionId: string,
-    extractedText: string,
-    verifiedText: string
+    verifiedText: string,
+    extractedText?: string
   ): Promise<void> {
+    // extracted_text must keep the OCR's own output (it is the baseline the
+    // verified text is compared against), so it is only written when a fresh
+    // extraction produced it — never overwritten with the teacher's edits.
+    const update: Record<string, unknown> = {
+      verified_text: verifiedText,
+      status: 'verified',
+      verified_at: new Date().toISOString(),
+    };
+    if (extractedText !== undefined) {
+      update['extracted_text'] = extractedText;
+    }
     const { error } = await this.supabase
       .from('submissions')
-      .update({
-        extracted_text: extractedText,
-        verified_text: verifiedText,
-        status: 'verified',
-        verified_at: new Date().toISOString(),
-      })
+      .update(update)
       .eq('id', submissionId);
     if (error) throw error;
   }
