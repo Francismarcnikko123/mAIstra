@@ -46,16 +46,21 @@ def load_pipeline_without_models():
     core_pkg.c_code_cleanup = c_code_cleanup
     core_pkg.c_code_suggestions = c_code_suggestions
 
-    # core.numeric is pure-stdlib (math only) and ocr_pipeline imports
-    # finite_float from it, so load the REAL module rather than stub it —
-    # otherwise this file only passes when another test happens to import
-    # core.numeric first (i.e. it can't run in isolation).
-    numeric_spec = importlib.util.spec_from_file_location(
-        "core.numeric", PIPELINE_PATH.parent / "numeric.py"
-    )
-    numeric = importlib.util.module_from_spec(numeric_spec)
-    numeric_spec.loader.exec_module(numeric)
-    core_pkg.numeric = numeric
+    # core.numeric and core.debug_artifact are pure-stdlib (math / json +
+    # pathlib) and ocr_pipeline imports from both, so load the REAL modules
+    # rather than stub them — otherwise this file only passes when another
+    # test happens to import them first (i.e. it can't run in isolation).
+    def load_real(name):
+        spec = importlib.util.spec_from_file_location(
+            f"core.{name}", PIPELINE_PATH.parent / f"{name}.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        setattr(core_pkg, name, module)
+        return module
+
+    numeric = load_real("numeric")
+    debug_artifact = load_real("debug_artifact")
 
     module_name = "ocr_pipeline_grouping_test_module"
     spec = importlib.util.spec_from_file_location(module_name, PIPELINE_PATH)
@@ -67,6 +72,7 @@ def load_pipeline_without_models():
         "core": core_pkg,
         "core.preprocess": preprocess,
         "core.numeric": numeric,
+        "core.debug_artifact": debug_artifact,
         "core.c_code_cleanup": c_code_cleanup,
         "core.c_code_suggestions": c_code_suggestions,
         module_name: module,
@@ -156,17 +162,60 @@ class GroupDetectionRecordsTests(unittest.TestCase):
         self.assertEqual(lines, [["a", "b", "c"], ["next"]])
 
     def test_repeated_x_positions_anchor_prediction_to_first_member(self):
-        lines = self.group_texts(
-            ["a", "b", "c", "next"],
-            [box(0, 10), box(0, 11), box(0, 16), box(0, 17)],
+        expected_y = self.pipeline._expected_line_y(
+            [
+                {"x": 0, "y": 10},
+                {"x": 0, "y": 11},
+            ],
+            candidate_x=20,
         )
 
-        self.assertEqual(lines, [["a", "b", "c"], ["next"]])
+        self.assertEqual(expected_y, 10)
+
+    def test_identical_x_boxes_within_tolerance_do_not_merge(self):
+        # End-to-end guard for the same-x case: two boxes with identical
+        # x-ranges are 100% horizontally overlapped, so even though their
+        # vertical centers are within line_tol they must be treated as stacked
+        # rows and kept separate. (This is the scenario the direct
+        # _expected_line_y test above can no longer cover through grouping.)
+        lines = self.group_texts(["a", "b"], [box(0, 10), box(0, 13)])
+
+        self.assertEqual(lines, [["a"], ["b"]])
 
     def test_exact_vertical_tolerance_boundary_stays_on_the_line(self):
         lines = self.group_texts(["a", "b"], [box(0, 10), box(20, 16)])
 
         self.assertEqual(lines, [["a", "b"]])
+
+    def test_separates_nearby_rows_with_significant_horizontal_overlap(self):
+        lines = self.group_texts(
+            ["int main C){", "int result = add (3, 4);"],
+            [[162, 438, 455, 511], [253, 477, 780, 552]],
+        )
+
+        self.assertEqual(
+            lines,
+            [["int main C){"], ["int result = add (3, 4);"]],
+        )
+
+    def test_separates_nearby_rows_with_moderate_horizontal_overlap(self):
+        lines = self.group_texts(
+            ["do {", 'printf ("---MENU---\\n");'],
+            [[50, 108, 109, 148], [87, 120, 374, 173]],
+        )
+
+        self.assertEqual(
+            lines,
+            [["do {"], ['printf ("---MENU---\\n");']],
+        )
+
+    def test_merges_nearby_fragments_without_horizontal_overlap(self):
+        lines = self.group_texts(
+            ["int main()", "{"],
+            [[162, 438, 455, 511], [465, 477, 600, 552]],
+        )
+
+        self.assertEqual(lines, [["int main()", "{"]])
 
     def test_accepts_a_finite_box_centered_at_zero(self):
         lines = self.group_texts(["a", "b"], [box(0, 0), box(20, 0)])
