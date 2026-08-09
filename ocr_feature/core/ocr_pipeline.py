@@ -1,4 +1,3 @@
-import json
 import math
 from pathlib import Path
 
@@ -8,6 +7,7 @@ from paddleocr import PaddleOCR
 
 from core.preprocess import preprocess_image, PreprocessConfig, DEFAULT_CONFIG
 from core.numeric import finite_float
+from core.debug_artifact import write_debug_artifact
 from core.c_code_cleanup import clean_c_code
 from core.c_code_suggestions import suggest_c_code
 
@@ -39,7 +39,9 @@ ocr = PaddleOCR(
 
 
 def warmup() -> None:
-   
+    """Run one throwaway prediction so PaddleOCR loads its models now, at
+    startup, instead of on the first real request. Called from main.py's
+    lifespan hook."""
     dummy = np.full((80, 240, 3), 255, dtype=np.uint8)
     cv2.putText(
         dummy, "int main", (5, 55),
@@ -61,6 +63,12 @@ def warmup() -> None:
 # 0.3 sits cleanly in the 0.291 -> 0.334 gap, so it removes noise without
 # touching real text.
 REC_SCORE_FLOOR = 0.3
+
+# Same-row fragments are side by side; stacked rows overlap in x. Across the
+# available cohort artifacts, the largest overlap retained on one row was 8%
+# and the smallest confirmed stacked-row merge was 37%. Keep a margin on both
+# sides of that measured gap.
+MAX_SAME_LINE_X_OVERLAP = 0.3
 
 
 def _filter_low_confidence(rec_texts, rec_scores, rec_boxes):
@@ -168,7 +176,7 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
             return _original_detection_records(rec_texts, rec_scores), False
         score = rec_scores[i] if i < len(rec_scores) else 0.0
         items.append({"text": rec_texts[i], "score": score,
-                      "x": x_min, "y": y_center,
+                      "x": x_min, "x_max": x_max, "y": y_center,
                       "y_min": y_min, "y_max": y_max})
         heights.append(height)
 
@@ -194,11 +202,30 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
             center_delta = abs(it["y"] - mean_y)
             # A tightly fitted trend can continue beyond the center band, but
             # only within half tolerance to avoid absorbing an indented row.
-            if (trend_delta <= line_tol
-                    and (center_delta <= line_tol
-                         or trend_delta <= line_tol * 0.5)):
-                members.append(it)
-                continue
+            within_vertical_tolerance = (
+                trend_delta <= line_tol
+                and (center_delta <= line_tol
+                     or trend_delta <= line_tol * 0.5)
+            )
+            if within_vertical_tolerance:
+                overlap_fractions = (
+                    max(
+                        0.0,
+                        min(member["x_max"], it["x_max"])
+                        - max(member["x"], it["x"]),
+                    ) / min(
+                        member["x_max"] - member["x"],
+                        it["x_max"] - it["x"],
+                    )
+                    for member in members
+                )
+                # Stacked rows overlap heavily in x; genuine fragments on one
+                # row are side by side. Compare the candidate with each actual
+                # member so an empty gap inside the line's span cannot veto a
+                # merge merely because detections arrived out of x-order.
+                if max(overlap_fractions) <= MAX_SAME_LINE_X_OVERLAP:
+                    members.append(it)
+                    continue
         else:
             lines.append({"members": [it]})
             continue
@@ -210,6 +237,19 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
         for line in lines
     ]
     return ordered_lines, True
+
+
+def line_member_bounds(members):
+    """Union bounding box (x_min, y_min, x_max, y_max) in raw pixel space over
+    a line's grouped members. Members must carry finite x/x_max/y_min/y_max --
+    i.e. come from the geometry-safe path of _group_detection_records; callers
+    guard for that before calling. Shared so the live pipeline and the offline
+    crop builder compute a line's box the same way."""
+    x_min = min(member["x"] for member in members)
+    x_max = max(member["x_max"] for member in members)
+    y_min = min(member["y_min"] for member in members)
+    y_max = max(member["y_max"] for member in members)
+    return x_min, y_min, x_max, y_max
 
 
 def _group_structured_lines(rec_texts, rec_scores, rec_boxes, image_height):
@@ -255,8 +295,9 @@ def _group_structured_lines(rec_texts, rec_scores, rec_boxes, image_height):
         y_max = None
         if geometry_safe:
             try:
-                y_min = min(member["y_min"] for member in members) / normalized_height
-                y_max = max(member["y_max"] for member in members) / normalized_height
+                _, raw_y_min, _, raw_y_max = line_member_bounds(members)
+                y_min = raw_y_min / normalized_height
+                y_max = raw_y_max / normalized_height
             except (TypeError, ValueError, OverflowError, ZeroDivisionError):
                 y_min = None
                 y_max = None
@@ -321,42 +362,6 @@ def _attach_suggestion_reasons(line_details, suggestions) -> None:
             continue
         if rule_id not in detail["review_reasons"]:
             detail["review_reasons"].append(rule_id)
-
-
-def _jsonable(value):
-    """Best-effort conversion of PaddleOCR values (numpy scalars/arrays) into
-    plain Python types for the debug JSON. Unconvertible values become their
-    string form rather than failing the dump."""
-    if value is None or isinstance(value, (bool, int, float, str)):
-        return value
-    if isinstance(value, dict):
-        return {str(k): _jsonable(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_jsonable(v) for v in value]
-    tolist = getattr(value, "tolist", None)
-    if callable(tolist):
-        try:
-            return _jsonable(tolist())
-        except Exception:
-            pass
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return str(value)
-
-
-def _write_debug_artifact(preprocessed_path: str, debug: dict) -> None:
-    """Save the extraction's intermediate data as outputs/debug/<stem>.json,
-    matching the preprocessed image's stem so the pair is easy to correlate.
-    Diagnostic only -- a failure here must never break the extraction itself."""
-    try:
-        debug_dir = Path(preprocessed_path).parent / "debug"
-        debug_dir.mkdir(exist_ok=True)
-        out_path = debug_dir / (Path(preprocessed_path).stem + ".json")
-        with out_path.open("w", encoding="utf-8") as f:
-            json.dump(_jsonable(debug), f, indent=2, ensure_ascii=False)
-    except Exception:
-        pass
 
 
 def _recognize_preprocessed(preprocessed_path: str) -> dict:
@@ -481,7 +486,7 @@ def extract_text_from_image(
         "review_suggestions": review_suggestions,
         "review_diagnostics": review_diagnostics,
     }
-    _write_debug_artifact(preprocessed_path, debug)
+    write_debug_artifact(preprocessed_path, debug)
 
     result = {
         "raw_text": raw_text,

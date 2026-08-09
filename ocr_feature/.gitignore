@@ -23,7 +23,12 @@ uploads/*
 outputs/*
 !outputs/.gitkeep
 
-# samples/ and datasets/ are tracked — shared ground-truth/training data for the team
+# samples/ and datasets/verified/ are tracked — shared ground-truth/training
+# data for the team. datasets/recognition/ is NOT: it's fully regenerated
+# from those two via evaluators/build_recognition_dataset.py (rerun after any
+# retake/relabel), so committing it would just churn binary crops in history
+# for something anyone can reproduce with one command.
+datasets/recognition/
 
 # macOS files
 .DS_Store
