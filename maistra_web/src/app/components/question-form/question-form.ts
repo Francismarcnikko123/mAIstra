@@ -59,6 +59,7 @@ export class QuestionFormComponent {
 
   readonly FUNCTION_TEMPLATE = ``;
   readonly PROGRAM_TEMPLATE = `#include <stdio.h>\n\nint main(void) {\n  return 0;\n}`;
+   
   constructor(
     private supabase: SupabaseService,
     private cdr: ChangeDetectorRef,
@@ -91,6 +92,7 @@ async validateModelAnswer() {
         const sourceCode =
           this.questionType === 'function'
             ? `#include <stdio.h>
+            
 
 ${this.modelAnswer}
 
@@ -215,13 +217,13 @@ onTypeChange() {
     this.successMessage = '';
     this.cdr.detectChanges();
 
-    const { error } = await this.supabase.saveQuestion({
-      question_name: this.questionName,
-      question_text: this.questionText,
-      question_type: this.questionType,
-      model_answer: this.modelAnswer,
-      test_cases: this.testCases,
-    });
+const { data, error } = await this.supabase.saveQuestion({
+  question_name: this.questionName,
+  question_text: this.questionText,
+  question_type: this.questionType,
+  model_answer: this.modelAnswer,
+  test_cases: this.testCases,
+});
 
     if (error) {
       this.errorMessage = 'Error: ' + error.message;

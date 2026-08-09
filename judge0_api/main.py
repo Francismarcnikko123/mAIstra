@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-
+import re
 load_dotenv()
 
 app = FastAPI()
@@ -28,7 +28,12 @@ class RunCodeRequest(BaseModel):
     source_code: str
     language_id: int
     stdin: Optional[str] = ""
-
+class GradeSubmissionRequest(BaseModel):
+    model_code: str
+    student_code: str
+    expected_output: str
+    actual_output: str
+    compilation_passed: bool
 
 @app.get("/")
 def health_check():
@@ -122,6 +127,129 @@ async def get_languages():
         )
 
     return response.json()
+def normalize_output(output: str) -> str:
+    if output is None:
+        return ""
+
+    output = output.strip().lower()
+    output = re.sub(r"\s*:\s*", ":", output)
+    output = re.sub(r"\s+", " ", output)
+
+    return output
+
+
+def remove_comments(code: str) -> str:
+    code = re.sub(r"//.*", "", code)
+    code = re.sub(r"/\*.*?\*/", "", code, flags=re.DOTALL)
+    return code
+
+
+def normalize_code(code: str) -> str:
+    code = remove_comments(code or "")
+    code = code.lower()
+    code = re.sub(r"\s+", " ", code)
+    return code.strip()
+
+
+def extract_logic_features(code: str) -> dict:
+    normalized = normalize_code(code)
+    numbers = re.findall(r"\b\d+\b", normalized)
+
+    return {
+        "has_main": "main" in normalized,
+        "has_printf": "printf" in normalized,
+        "has_scanf": "scanf" in normalized,
+        "has_assignment": "=" in normalized,
+        "uses_addition": "+" in normalized,
+        "uses_subtraction": "-" in normalized,
+        "uses_multiplication": "*" in normalized,
+        "uses_division": "/" in normalized,
+        "has_return": "return" in normalized,
+        "numbers": set(numbers),
+    }
+
+
+def compare_logic(model_code: str, student_code: str) -> dict:
+    model = extract_logic_features(model_code)
+    student = extract_logic_features(student_code)
+
+    checks = []
+
+    def add_check(name: str, passed: bool, weight: int):
+        checks.append({
+            "name": name,
+            "passed": passed,
+            "weight": weight,
+            "score": weight if passed else 0,
+        })
+
+    add_check("Has main function", student["has_main"], 10)
+    add_check("Has output statement", student["has_printf"], 10)
+    add_check("Uses assignment", student["has_assignment"], 15)
+
+    if model["uses_addition"]:
+        add_check("Uses addition operator", student["uses_addition"], 25)
+
+    if model["uses_subtraction"]:
+        add_check("Uses subtraction operator", student["uses_subtraction"], 25)
+
+    if model["uses_multiplication"]:
+        add_check("Uses multiplication operator", student["uses_multiplication"], 25)
+
+    if model["uses_division"]:
+        add_check("Uses division operator", student["uses_division"], 25)
+
+    if model["numbers"]:
+        add_check(
+            "Uses required numeric values",
+            model["numbers"].issubset(student["numbers"]),
+            25,
+        )
+
+    total_weight = sum(check["weight"] for check in checks)
+    earned_score = sum(check["score"] for check in checks)
+    score = round((earned_score / total_weight) * 100, 2) if total_weight else 0
+
+    return {
+        "score": score,
+        "checks": checks,
+    }
+
+@app.post("/api/judge0/grade-submission")
+async def grade_submission(payload: GradeSubmissionRequest):
+    compilation_score = 100 if payload.compilation_passed else 0
+
+    logic_result = compare_logic(
+        payload.model_code,
+        payload.student_code,
+    )
+
+    expected = normalize_output(payload.expected_output)
+    actual = normalize_output(payload.actual_output)
+
+    output_passed = expected == actual
+    output_score = 100 if output_passed else 0
+
+    final_score = (
+        logic_result["score"] * 0.50
+        + output_score * 0.40
+        + compilation_score * 0.10
+    )
+
+    return {
+        "final_score": round(final_score, 2),
+        "compilation_score": compilation_score,
+        "logic_score": logic_result["score"],
+        "output_score": output_score,
+        "logic_details": logic_result["checks"],
+        "output_details": {
+            "passed": output_passed,
+            "score": output_score,
+            "expected_normalized": expected,
+            "actual_normalized": actual,
+        },
+    }
+
 def encode_base64(value: str) -> str:
     return base64.b64encode(value.encode("utf-8")).decode("utf-8")
 

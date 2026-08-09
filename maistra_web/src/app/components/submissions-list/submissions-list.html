@@ -4,16 +4,26 @@
     <span class="total-count">{{ submissions.length }} total</span>
   </div>
 
-  <div class="folders-container" *ngIf="groupedSubmissions.length > 0; else empty">
+  <div
+    class="folders-container"
+    *ngIf="groupedSubmissions.length > 0; else empty"
+  >
     <div class="folder" *ngFor="let group of groupedSubmissions">
       <div class="folder-header" (click)="toggleFolder(group.topic)">
-        <span class="folder-arrow" [class.collapsed]="collapsedFolders[group.topic]">▾</span>
+        <span
+          class="folder-arrow"
+          [class.collapsed]="collapsedFolders[group.topic]"
+          >▾</span
+        >
         <span class="folder-icon">📁</span>
         <span class="folder-name">{{ group.topic }}</span>
         <span class="folder-count">{{ group.submissions.length }}</span>
       </div>
 
-      <div class="folder-content" [class.hidden]="collapsedFolders[group.topic]">
+      <div
+        class="folder-content"
+        [class.hidden]="collapsedFolders[group.topic]"
+      >
         <div class="thumbnails-grid">
           <div
             class="thumbnail-card"
@@ -21,7 +31,12 @@
             (click)="openModal(s)"
           >
             <img [src]="s.image_url" alt="Submission" />
-            <div class="thumb-badge" *ngIf="s.verified_text || s.extracted_text">✓</div>
+            <div
+              class="thumb-badge"
+              *ngIf="s.verified_text || s.extracted_text"
+            >
+              ✓
+            </div>
           </div>
         </div>
       </div>
@@ -42,14 +57,19 @@
       <!-- Left: Image -->
       <div class="modal-image-section">
         <a [href]="selectedSubmission.image_url" target="_blank">
-          <img [src]="selectedSubmission.image_url" alt="Submission" class="modal-image" />
+          <img
+            [src]="selectedSubmission.image_url"
+            alt="Submission"
+            class="modal-image"
+          />
         </a>
-        <p class="modal-date">{{ selectedSubmission.captured_at | date:'medium' }}</p>
+        <p class="modal-date">
+          {{ selectedSubmission.captured_at | date:'medium' }}
+        </p>
       </div>
 
       <!-- Right: Controls -->
       <div class="modal-controls">
-
         <!-- Topic Assignment -->
         <div class="control-group">
           <label>Topic / Folder</label>
@@ -59,7 +79,11 @@
               [(ngModel)]="editableTopic"
               placeholder="e.g. Algebra, Chapter 3"
             />
-            <button class="btn-save-topic" (click)="saveTopic()" [disabled]="savingTopic">
+            <button
+              class="btn-save-topic"
+              (click)="saveTopic()"
+              [disabled]="savingTopic"
+            >
               {{ savingTopic ? 'Saving…' : 'Assign' }}
             </button>
           </div>
@@ -73,12 +97,16 @@
             (click)="extractText()"
             [disabled]="isExtracting(selectedSubmission.id)"
           >
-            {{ isExtracting(selectedSubmission.id) ? 'Extracting…' : 'Extract Text' }}
+            {{ isExtracting(selectedSubmission.id) ? 'Extracting…' : 'Extract
+            Text' }}
           </button>
 
-          <div class="extract-error" *ngIf="extractionError[selectedSubmission.id]">
+          <div
+            class="extract-error"
+            *ngIf="extractionError[selectedSubmission.id]"
+          >
             {{ extractionError[selectedSubmission.id] }}
-        </div>
+          </div>
 
           <app-code-editor
             *ngIf="hasExtractedText(selectedSubmission.id)"
@@ -92,7 +120,8 @@
             (click)="saveVerifiedText()"
             [disabled]="isSaving(selectedSubmission.id)"
           >
-            {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save Verified Text' }}
+            {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save Verified
+            Text' }}
           </button>
 
           <span
@@ -100,20 +129,75 @@
             *ngIf="saveStatus[selectedSubmission.id]"
             [ngClass]="saveStatus[selectedSubmission.id]"
           >
-            {{ saveStatus[selectedSubmission.id] === 'saved'
-              ? '✓ Saved successfully'
-              : '✕ Save failed — please try again' }}
+            {{ saveStatus[selectedSubmission.id] === 'saved' ? '✓ Saved
+            successfully' : '✕ Save failed — please try again' }}
           </span>
         </div>
 
-        
-              <!--after save click the save button it will show the code execution -->
-        <div  *ngIf="showCodeExecutionEditor[selectedSubmission.id]">
-              <!-- Code Execution -->
-                 <app-judge0
-                   [initialCode]="editableText[selectedSubmission.id]">
-                   </app-judge0> 
+        <!--after save click the save button it will show the code execution -->
+        <div *ngIf="showCodeExecutionEditor[selectedSubmission.id]">
+          <!-- Code Execution -->
+          <app-judge0 [initialCode]="editableText[selectedSubmission.id]">
+          </app-judge0>
+        </div>
+        <div>
+          <select [(ngModel)]="selectedQuestionId">
+            <option value="">Select question</option>
+            <option *ngFor="let q of questions" [value]="q.id">
+              {{ q.question_name }}
+            </option>
+          </select>
+        </div>
+        <div>
+          <button
+            type="button"
+            class="btn-check"
+            (click)="checkSubmission(selectedSubmission)"
+            [disabled]="isChecking"
+          >
+            {{ isChecking ? 'Checking...' : 'Check Logic & Output' }}
+          </button>
+        </div>
+        <div class="grading-error" *ngIf="checkError">{{ checkError }}</div>
 
+        <div
+          class="grading-result"
+          *ngIf="checkResult && checkedSubmissionId === selectedSubmission.id"
+        >
+          <h4>Check Result</h4>
+
+          <div>
+            <strong>Overall:</strong>
+            {{ checkResult.overallMatched ? 'Matched' : 'Not Matched' }}
+          </div>
+
+          <div>
+            <strong>Logic:</strong>
+            {{ checkResult.logicSimilar ? 'Similar / Same Logic' : 'Not Similar
+            Logic' }}
+          </div>
+
+          <div>
+            <strong>Output:</strong>
+            {{ checkResult.outputSame ? 'Same Output' : 'Different Output' }}
+          </div>
+
+          <div class="logic-details">
+            <strong>Logic Details</strong>
+
+            <div *ngFor="let check of checkResult.logicDetails">
+              {{ check.passed ? 'Passed' : 'Failed' }} - {{ check.name }}
+            </div>
+          </div>
+
+          <div class="logic-details">
+            <strong>Output Details</strong>
+
+            <div>
+              Expected: {{ checkResult.expectedOutput || '(no output)' }}
+            </div>
+            <div>Actual: {{ checkResult.actualOutput || '(no output)' }}</div>
+          </div>
         </div>
       </div>
     </div>

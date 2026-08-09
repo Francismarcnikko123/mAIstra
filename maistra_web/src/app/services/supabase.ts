@@ -13,12 +13,13 @@ export class SupabaseService {
   }
 
   // ── QUESTIONS ──────────────────────────────────────────
-  async saveQuestion(question: any) {
-    return await this.supabase
-      .from('questions')
-      .insert([question]);
-  }
-
+async saveQuestion(question: any) {
+  return await this.supabase
+    .from('questions')
+    .insert([question])
+    .select()
+    .single();
+}
   async getQuestions() {
     return await this.supabase
       .from('questions')
@@ -27,12 +28,29 @@ export class SupabaseService {
   }
 
   // ── SUBMISSIONS ─────────────────────────────────────────
-  async getSubmissions() {
-    return await this.supabase
-      .from('submissions')
-      .select('id, image_url, captured_at, status, topic, student_name, extracted_text, verified_text')
-      .order('captured_at', { ascending: false });
-  }
+async getSubmissions() {
+  return await this.supabase
+    .from('submissions')
+    .select(`
+      id,
+      image_url,
+      captured_at,
+      status,
+      topic,
+      student_name,
+      extracted_text,
+      verified_text,
+      question_id,
+      questions (
+        id,
+        question_name,
+        question_type,
+        model_answer,
+        test_cases
+      )
+    `)
+    .order('captured_at', { ascending: false });
+}
 
   async updateSubmissionTopic(id: string, topic: string): Promise<void> {
     const { error } = await this.supabase
@@ -71,4 +89,5 @@ export class SupabaseService {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'submissions' }, callback)
       .subscribe();
   }
+  
 }

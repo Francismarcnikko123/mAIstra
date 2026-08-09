@@ -25,7 +25,7 @@ app = FastAPI(title="MaestrAI OCR Backend", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -111,7 +111,6 @@ def download_image(url: str, dest: Path) -> None:
 
 @app.post("/api/ocr/extract-from-url")
 def extract_from_url(request: ImageUrlRequest):
-
     image_path = UPLOAD_DIR / f"{request.submission_id}.jpg"
 
     download_image(request.image_url, image_path)

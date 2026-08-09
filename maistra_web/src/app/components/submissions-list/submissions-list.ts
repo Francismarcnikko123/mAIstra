@@ -5,6 +5,23 @@ import { HttpClient } from '@angular/common/http';
 import { SupabaseService } from '../../services/supabase';
 import { CodeEditorComponent } from '../code-editor/code-editor';
 import { Judge0 } from '../judge0/judge0';
+import { Judge0Service, GradingResult } from '../../services/judge0.service';
+import { firstValueFrom } from 'rxjs';
+
+interface TestCase {
+  test_code: string;
+  test_input: string;
+  expected_output: string;
+  mark: number;
+}
+interface SubmissionQuestion {
+  id: string;
+  question_name: string;
+  question_type: 'function' | 'program';
+  model_answer: string;
+  test_cases: TestCase[];
+}
+
 interface Submission {
   id: string;
   image_url: string;
@@ -14,6 +31,18 @@ interface Submission {
   extracted_text?: string;
   verified_text?: string;
   topic?: string;
+  question_id?: string;
+  questions?: SubmissionQuestion;
+}
+
+interface CodeCheckResult {
+  logicSimilar: boolean;
+  outputSame: boolean;
+  compilationPassed: boolean;
+  overallMatched: boolean;
+  expectedOutput: string;
+  actualOutput: string;
+  logicDetails: GradingResult['logic_details'];
 }
 
 interface TopicGroup {
@@ -24,11 +53,13 @@ interface TopicGroup {
 @Component({
   selector: 'app-submissions-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, CodeEditorComponent, Judge0,],
+  imports: [CommonModule, FormsModule, CodeEditorComponent, Judge0],
   templateUrl: './submissions-list.html',
-  styleUrl: './submissions-list.css'
+  styleUrl: './submissions-list.css',
 })
 export class SubmissionsListComponent implements OnInit, OnDestroy {
+  selectedQuestionId = '';
+  questions: any[] = [];
   submissions: Submission[] = [];
   groupedSubmissions: TopicGroup[] = [];
   collapsedFolders: Record<string, boolean> = {};
@@ -44,8 +75,14 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   extractedText: Record<string, string> = {};
   editableText: Record<string, string> = {};
   extractionError: Record<string, string> = {};
-  saveStatus: Record<string, string> = {};   // '' | 'saved' | 'error'
+  saveStatus: Record<string, string> = {}; // '' | 'saved' | 'error'
   showCodeExecutionEditor: Record<string, boolean> = {};
+
+  // code checking state
+  checkResult: CodeCheckResult | null = null;
+  checkedSubmissionId: string | null = null;
+  isChecking = false;
+  checkError = '';
 
   private subscription: any;
   private saveStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -55,10 +92,12 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   constructor(
     private supabase: SupabaseService,
     private http: HttpClient,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private judge0Service: Judge0Service,
   ) {}
 
   async ngOnInit() {
+    await this.loadQuestions();
     await this.loadSubmissions();
 
     this.subscription = this.supabase.subscribeToSubmissions((payload: any) => {
@@ -99,8 +138,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   async loadSubmissions() {
     const { data, error } = await this.supabase.getSubmissions();
-    if (error) { console.error(error); return; }
-    this.submissions = (data ?? []) as Submission[];
+    if (error) {
+      console.error(error);
+      return;
+    }
+    this.submissions = (data ?? []) as unknown as Submission[];
     // Seed the editor with previously saved text so verified/extracted work
     // reappears when the page reloads or a submission is reopened.
     for (const s of this.submissions) {
@@ -135,6 +177,12 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   openModal(submission: Submission) {
     this.selectedSubmission = { ...submission };
     this.editableTopic = submission.topic || 'Uncategorized';
+
+    this.checkResult = null;
+    this.checkError = '';
+    this.isChecking = false;
+    this.checkedSubmissionId = null;
+
     const saved = submission.verified_text || submission.extracted_text || '';
     if (saved && !this.editableText[submission.id]) {
       this.editableText[submission.id] = saved;
@@ -149,8 +197,13 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (!this.selectedSubmission) return;
     this.savingTopic = true;
     try {
-      await this.supabase.updateSubmissionTopic(this.selectedSubmission.id, this.editableTopic);
-      const s = this.submissions.find(x => x.id === this.selectedSubmission!.id);
+      await this.supabase.updateSubmissionTopic(
+        this.selectedSubmission.id,
+        this.editableTopic,
+      );
+      const s = this.submissions.find(
+        (x) => x.id === this.selectedSubmission!.id,
+      );
       if (s) s.topic = this.editableTopic;
       this.selectedSubmission.topic = this.editableTopic;
       this.groupSubmissions();
@@ -171,16 +224,17 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       const res: any = await this.http
         .post('http://localhost:8000/api/ocr/extract-from-url', {
           image_url: this.selectedSubmission.image_url,
-          submission_id: id
+          submission_id: id,
         })
         .toPromise();
-      const text = res?.cleaned_text ?? ''; 
+      const text = res?.cleaned_text ?? '';
       this.extractedText[id] = text;
       this.editableText[id] = text;
       this.extractionError[id] = '';
     } catch (err) {
       console.error('OCR failed:', err);
-      this.extractionError[id] = 'Failed to extract text. Please try again later.';
+      this.extractionError[id] =
+        'Failed to extract text. Please try again later.';
     } finally {
       this.extractingId = null;
       this.cdr.detectChanges();
@@ -202,14 +256,15 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       await this.supabase.updateSubmissionText(id, text, ocrText);
       if (!this.isCurrentSave(id, generation)) return;
 
-      const s = this.submissions.find(x => x.id === id);
+      const s = this.submissions.find((x) => x.id === id);
       if (s) {
         s.verified_text = text;
         if (ocrText !== undefined) s.extracted_text = ocrText;
       }
       if (this.selectedSubmission?.id === id) {
         this.selectedSubmission.verified_text = text;
-        if (ocrText !== undefined) this.selectedSubmission.extracted_text = ocrText;
+        if (ocrText !== undefined)
+          this.selectedSubmission.extracted_text = ocrText;
       }
       this.saveStatus[id] = 'saved';
       this.showCodeExecutionEditor[id] = true;
@@ -245,4 +300,126 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   isSaving(id: string): boolean {
     return this.savingId === id;
   }
+
+  async checkSubmission(submission: Submission | null) {
+    if (!submission) return;
+
+    this.isChecking = true;
+    this.checkError = '';
+    this.checkResult = null;
+    this.checkedSubmissionId = submission.id;
+
+    try {
+      const linkedQuestion = Array.isArray(submission.questions)
+        ? submission.questions[0]
+        : submission.questions;
+
+      const selectedQuestion = this.getSelectedQuestion();
+      const question = linkedQuestion || selectedQuestion;
+
+      const studentCode =
+        this.editableText[submission.id] ||
+        submission.verified_text ||
+        submission.extracted_text ||
+        '';
+
+      if (!question) {
+        this.checkError = 'No question is linked to this submission.';
+        return;
+      }
+
+      if (!studentCode.trim()) {
+        this.checkError = 'No student code found.';
+        return;
+      }
+
+      if (!question.model_answer?.trim()) {
+        this.checkError = 'No model answer found.';
+        return;
+      }
+
+      const firstTestCase = question.test_cases?.[0];
+
+      if (!firstTestCase) {
+        this.checkError = 'No test case found for this question.';
+        return;
+      }
+
+      const sourceCode =
+        question.question_type === 'function'
+          ? `#include <stdio.h>
+
+${studentCode}
+
+int main() {
+${firstTestCase.test_code}
+
+  return 0;
+}`
+          : studentCode;
+
+      const stdin =
+        question.question_type === 'program'
+          ? firstTestCase.test_input || ''
+          : '';
+
+      const runResult = await firstValueFrom(
+        this.judge0Service.runCCode(sourceCode, stdin),
+      );
+
+      const actualOutput = (runResult.stdout || '').trim();
+      const expectedOutput = (firstTestCase.expected_output || '').trim();
+
+      const compilationPassed =
+        !runResult.stderr &&
+        !runResult.compile_output &&
+        runResult.status?.id === 3;
+
+      const result = await firstValueFrom(
+        this.judge0Service.gradeSubmission({
+          model_code: question.model_answer,
+          student_code: studentCode,
+          expected_output: expectedOutput,
+          actual_output: actualOutput,
+          compilation_passed: compilationPassed,
+        }),
+      );
+
+      const logicSimilar = result.logic_details.every((check) => check.passed);
+      const outputSame = result.output_details.passed;
+
+      this.checkResult = {
+        logicSimilar,
+        outputSame,
+        compilationPassed,
+        overallMatched: logicSimilar && outputSame && compilationPassed,
+        expectedOutput: result.output_details.expected_normalized,
+        actualOutput: result.output_details.actual_normalized,
+        logicDetails: result.logic_details,
+      };
+
+      this.checkedSubmissionId = submission.id;
+    } catch (error) {
+      this.checkError = 'Failed to check logic and output.';
+    } finally {
+      this.isChecking = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async loadQuestions() {
+    const { data, error } = await this.supabase.getQuestions();
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    this.questions = data ?? [];
+  }
+  
+  getSelectedQuestion() {
+    return this.questions.find((q) => q.id === this.selectedQuestionId) || null;
+  }
+
 }
