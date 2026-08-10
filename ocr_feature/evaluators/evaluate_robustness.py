@@ -2,6 +2,10 @@
 
 These results are diagnostics, not real-paper accuracy. The original labeled
 images remain the only primary acceptance set.
+
+Run from the ocr_feature/ directory (module path, not the file path):
+
+    .venv/bin/python -m evaluators.evaluate_robustness
 """
 
 import csv

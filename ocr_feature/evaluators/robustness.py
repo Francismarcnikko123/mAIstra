@@ -1,3 +1,5 @@
+# Library module, not runnable on its own (no __main__) -- imported by
+# evaluate_robustness.py. Run that instead.
 """Deterministic image transforms for OCR robustness diagnostics."""
 
 import cv2

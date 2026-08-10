@@ -1,3 +1,5 @@
+# Library module, not runnable on its own (no __main__) -- imported by
+# evaluate_cer.py and evaluate_robustness.py. Run those instead.
 """Pure evaluation helpers shared by real and synthetic OCR measurements."""
 
 from collections import defaultdict
