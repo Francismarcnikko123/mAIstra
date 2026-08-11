@@ -51,8 +51,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
     }
   }
 
-  // Shared by camera scans and gallery uploads — same quality gate either
-  // way, since a bad photo is a bad photo regardless of where it came from.
+  // Shared by camera scans and gallery uploads.
   Future<void> _processPickedFile(File rawFile) async {
     setState(() {
       _isCheckingQuality = true;
@@ -78,9 +77,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = 'submission_$timestamp.jpg';
 
-      // Raw only — JC's OCR pipeline does its own preprocessing, so
-      // mAIstra doesn't upload a normalized version anymore. The quality
-      // gate still validates this raw image before Accept is enabled.
+      // Raw only — OCR handles preprocessing.
       await supabase.storage
           .from('handwritten-submissions')
           .upload(fileName, _rawImage!);

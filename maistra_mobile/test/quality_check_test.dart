@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:maistra_mobile/utils/quality_check.dart';
@@ -25,25 +26,6 @@ img.Image _checkerboard(int width, int height, {int cellSize = 4}) {
 }
 
 void main() {
-  group('computeAvgBrightness', () {
-    test('returns the flat value for a uniform image', () {
-      final image = _whiteImage(20, 20);
-
-      expect(computeAvgBrightness(image), 255);
-    });
-
-    test('averages a half-black half-white image to the midpoint', () {
-      final image = img.Image(width: 20, height: 20);
-      for (int y = 0; y < 20; y++) {
-        for (int x = 0; x < 20; x++) {
-          final value = x < 10 ? 0 : 255;
-          image.setPixelRgb(x, y, value, value, value);
-        }
-      }
-
-      expect(computeAvgBrightness(image), 127.5);
-    });
-  });
 
   group('cropTopPortion', () {
     test('keeps only the top fraction of the image, preserving width', () {
@@ -148,64 +130,193 @@ void main() {
     });
   });
 
+  group('computeBrightnessSpread', () {
+    test('returns 0 for a uniformly bright image', () {
+      final image = _whiteImage(30, 30);
+
+      expect(computeBrightnessSpread(image, rows: 3, cols: 3), 0);
+    });
+
+    test('returns a large spread when one region is much darker than the rest', () {
+      final image = img.Image(width: 30, height: 30);
+      for (int y = 0; y < 30; y++) {
+        for (int x = 0; x < 30; x++) {
+          // Bottom-left third dark (shadow-like), rest bright.
+          final inShadow = x < 10 && y >= 20;
+          final value = inShadow ? 60 : 200;
+          image.setPixelRgb(x, y, value, value, value);
+        }
+      }
+
+      expect(computeBrightnessSpread(image, rows: 3, cols: 3), closeTo(140, 0.001));
+    });
+  });
+
   group('evaluateQuality', () {
     test('passes with no issues for a normal, well-formed image', () {
-      final result = evaluateQuality(blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0);
+      final result = evaluateQuality(
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0);
 
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
     });
 
     test('low blur score blocks accept as image quality too low', () {
-      final result = evaluateQuality(blurScore: 479, darkClipFraction: 0, brightClipFraction: 0);
+      final result = evaluateQuality(
+          blurScore: 479, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0);
 
       expect(result.passed, isFalse);
       expect(result.issues, ['Image quality too low — hold steady, ensure good lighting, and avoid glare']);
     });
 
     test('does not flag blur score exactly at the low threshold', () {
-      final result = evaluateQuality(blurScore: 480, darkClipFraction: 0, brightClipFraction: 0);
+      final result = evaluateQuality(
+          blurScore: 480, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0);
 
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
     });
 
     test('high dark-clip fraction blocks accept as too dark', () {
-      final result = evaluateQuality(blurScore: 9000, darkClipFraction: 0.06, brightClipFraction: 0);
+      final result = evaluateQuality(
+          blurScore: 9000, darkClipFraction: 0.06, brightClipFraction: 0, brightnessSpread: 0);
 
       expect(result.passed, isFalse);
       expect(result.issues, ['Too dark — move to a brighter area']);
     });
 
     test('does not flag dark-clip fraction exactly at the threshold', () {
-      final result = evaluateQuality(blurScore: 9000, darkClipFraction: 0.05, brightClipFraction: 0);
+      final result = evaluateQuality(
+          blurScore: 9000, darkClipFraction: 0.05, brightClipFraction: 0, brightnessSpread: 0);
 
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
     });
 
     test('high bright-clip fraction blocks accept as too bright', () {
-      final result = evaluateQuality(blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0.06);
+      final result = evaluateQuality(
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0.21, brightnessSpread: 0);
 
       expect(result.passed, isFalse);
       expect(result.issues, ['Too bright / overexposed — reduce lighting or move away from light source']);
     });
 
     test('does not flag bright-clip fraction exactly at the threshold', () {
-      final result = evaluateQuality(blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0.05);
+      final result = evaluateQuality(
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0.20, brightnessSpread: 0);
+
+      expect(result.passed, isTrue);
+      expect(result.issues, isEmpty);
+    });
+
+    test('high brightness spread blocks accept as uneven lighting', () {
+      final result = evaluateQuality(
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 36);
+
+      expect(result.passed, isFalse);
+      expect(result.issues,
+          ["Uneven lighting detected — try repositioning so your shadow isn't blocking the page"]);
+    });
+
+    test('does not flag brightness spread exactly at the threshold', () {
+      final result = evaluateQuality(
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 35);
 
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
     });
 
     test('combines low blur and too-dark blocks together', () {
-      final result = evaluateQuality(blurScore: 50, darkClipFraction: 0.5, brightClipFraction: 0);
+      final result = evaluateQuality(
+          blurScore: 50, darkClipFraction: 0.5, brightClipFraction: 0, brightnessSpread: 0);
 
       expect(result.passed, isFalse);
       expect(result.issues, [
         'Image quality too low — hold steady, ensure good lighting, and avoid glare',
         'Too dark — move to a brighter area',
       ]);
+    });
+  });
+
+  group('evaluateLighting', () {
+    test('passes with no issues under normal lighting', () {
+      final result = evaluateLighting(
+          darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0);
+
+      expect(result.passed, isTrue);
+      expect(result.issues, isEmpty);
+    });
+
+    test('flags too dark', () {
+      final result = evaluateLighting(
+          darkClipFraction: 0.06, brightClipFraction: 0, brightnessSpread: 0);
+
+      expect(result.passed, isFalse);
+      expect(result.issues, ['Too dark — move to a brighter area']);
+    });
+
+    test('flags too bright', () {
+      final result = evaluateLighting(
+          darkClipFraction: 0, brightClipFraction: 0.21, brightnessSpread: 0);
+
+      expect(result.passed, isFalse);
+      expect(result.issues, ['Too bright / overexposed — reduce lighting or move away from light source']);
+    });
+
+    test('flags uneven lighting', () {
+      final result = evaluateLighting(
+          darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 36);
+
+      expect(result.passed, isFalse);
+      expect(result.issues,
+          ["Uneven lighting detected — try repositioning so your shadow isn't blocking the page"]);
+    });
+  });
+
+  group('checkLightingFrame', () {
+    test('passes for a uniform mid-brightness luma frame with no row padding', () {
+      final bytes = Uint8List(20 * 20);
+      bytes.fillRange(0, bytes.length, 128);
+      final frame = LumaFrame(bytes: bytes, width: 20, height: 20, bytesPerRow: 20);
+
+      final result = checkLightingFrame(frame);
+
+      expect(result.passed, isTrue);
+      expect(result.issues, isEmpty);
+    });
+
+    test('flags too dark when the luma plane is mostly near-black', () {
+      final bytes = Uint8List(20 * 20);
+      bytes.fillRange(0, bytes.length, 10);
+      final frame = LumaFrame(bytes: bytes, width: 20, height: 20, bytesPerRow: 20);
+
+      final result = checkLightingFrame(frame);
+
+      expect(result.passed, isFalse);
+      expect(result.issues, contains('Too dark — move to a brighter area'));
+    });
+
+    test('ignores row-stride padding bytes beyond the frame width', () {
+      // bytesPerRow (24) is wider than the actual frame (20) — common when
+      // the camera plugin pads rows to a byte alignment boundary. Real
+      // pixel data is mid-range (180, safely between the dark/bright
+      // thresholds); padding is 0 (near-black) and must be skipped, or
+      // it would wrongly read as a too-dark image.
+      const width = 20;
+      const height = 20;
+      const bytesPerRow = 24;
+      final bytes = Uint8List(bytesPerRow * height);
+      for (int y = 0; y < height; y++) {
+        for (int x = 0; x < bytesPerRow; x++) {
+          bytes[y * bytesPerRow + x] = x < width ? 180 : 0;
+        }
+      }
+      final frame = LumaFrame(bytes: bytes, width: width, height: height, bytesPerRow: bytesPerRow);
+
+      final result = checkLightingFrame(frame);
+
+      expect(result.passed, isTrue);
+      expect(result.issues, isEmpty);
     });
   });
 }

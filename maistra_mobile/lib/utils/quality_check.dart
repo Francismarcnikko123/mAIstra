@@ -7,24 +7,8 @@ class QualityResult {
   QualityResult({required this.passed, required this.issues});
 }
 
-// Mean grayscale pixel value of the whole image — used for too-dark/too-bright.
-double computeAvgBrightness(img.Image grayscale) {
-  double total = 0;
-  for (int y = 0; y < grayscale.height; y++) {
-    for (int x = 0; x < grayscale.width; x++) {
-      total += grayscale.getPixel(x, y).r.toDouble();
-    }
-  }
-  return total / (grayscale.width * grayscale.height);
-}
-
-// Fraction of pixels at or below a "near black" cutoff. Phone auto-exposure
-// compensates dim scenes toward a "medium" average, so the average
-// brightness alone can't reliably tell a genuinely dark room from a
-// well-lit one. Real device data showed this camera's shadow-lifting is
-// aggressive enough that literal pure black (<=10) never occurs even in
-// genuinely dim rooms — <=50 is where dim and well-lit captures actually
-// separate (clean scans measured ~0.0002, dim scans measured 0.10-0.23).
+// % of near-black pixels. More reliable than average brightness, since
+// phone auto-exposure hides genuine darkness by brightening the average.
 double computeDarkClipFraction(img.Image grayscale, {int threshold = 50}) {
   int clipped = 0;
   for (int y = 0; y < grayscale.height; y++) {
@@ -35,13 +19,7 @@ double computeDarkClipFraction(img.Image grayscale, {int threshold = 50}) {
   return clipped / (grayscale.width * grayscale.height);
 }
 
-// Fraction of pixels at or above a "near white" cutoff — the overexposure
-// mirror of computeDarkClipFraction. A flash glare or direct light hits
-// sensor saturation locally even when the auto-exposed average brightness
-// stays moderate, so this survives auto-exposure compensation the same way.
-// Real device data showed literal pure white (>=245) is too strict — >=200
-// is where clean and overexposed captures actually separate (clean scans
-// measured 0.0, overexposed scans measured 0.11-0.18).
+// Same idea, mirrored for overexposure (flash glare, direct light).
 double computeBrightClipFraction(img.Image grayscale, {int threshold = 200}) {
   int clipped = 0;
   for (int y = 0; y < grayscale.height; y++) {
@@ -52,19 +30,45 @@ double computeBrightClipFraction(img.Image grayscale, {int threshold = 200}) {
   return clipped / (grayscale.width * grayscale.height);
 }
 
-// Returns just the top fraction of an image (e.g. the top third). Used to
-// measure blur only where handwriting actually is, instead of over the
-// whole frame — blank paper below the writing has no texture to measure,
-// so including it drags a sharp page's score down and makes blur scores
-// incomparable across pages with different amounts of blank space.
+// Splits the frame into a rows x cols grid and returns the gap between the
+// brightest and darkest region's average — catches a localized shadow that
+// a whole-frame check would average away.
+double computeBrightnessSpread(img.Image grayscale, {required int rows, required int cols}) {
+  final cellWidth = grayscale.width ~/ cols;
+  final cellHeight = grayscale.height ~/ rows;
+
+  double? minAvg;
+  double? maxAvg;
+
+  for (int row = 0; row < rows; row++) {
+    for (int col = 0; col < cols; col++) {
+      double total = 0;
+      int count = 0;
+      for (int y = row * cellHeight; y < (row + 1) * cellHeight; y++) {
+        for (int x = col * cellWidth; x < (col + 1) * cellWidth; x++) {
+          total += grayscale.getPixel(x, y).r.toDouble();
+          count++;
+        }
+      }
+      if (count == 0) continue;
+      final avg = total / count;
+      minAvg = (minAvg == null) ? avg : (avg < minAvg ? avg : minAvg);
+      maxAvg = (maxAvg == null) ? avg : (avg > maxAvg ? avg : maxAvg);
+    }
+  }
+
+  if (minAvg == null || maxAvg == null) return 0;
+  return maxAvg - minAvg;
+}
+
+// Top third of the frame — blur is measured here only, so blank paper
+// below the handwriting doesn't dilute the score.
 img.Image cropTopPortion(img.Image image, {required double fraction}) {
   final cropHeight = (image.height * fraction).round();
   return img.copyCrop(image, x: 0, y: 0, width: image.width, height: cropHeight);
 }
 
-// Laplacian-variance sharpness score for the whole image: high for crisp
-// edges, low for blurred/flat content. Pulled out of checkQuality so it's
-// unit-testable against synthetic patterns.
+// Laplacian-variance sharpness — high for crisp edges, low for blur.
 double computeBlurScore(img.Image grayscale) {
   double laplacianSum = 0;
   double laplacianSumSquares = 0;
@@ -90,37 +94,42 @@ double computeBlurScore(img.Image grayscale) {
   return (laplacianSumSquares / count) - (mean * mean);
 }
 
-// Decides quality issues and whether Accept should be blocked. Simple,
-// deliberately: four checks (blurry, too dark, too bright, otherwise good),
-// all measured across the whole photo — no region detection. Split out from
-// checkQuality so the threshold logic is unit-testable without synthesizing
-// real JPEG pixel data.
-//
-// Thresholds are from this session's real device captures, 600x600
-// analysis size:
-// - blurScore < 480: too blurry. Blur is measured on the top-third crop
-//   (see cropTopPortion) rather than the whole frame, so blank paper below
-//   the writing no longer dilutes the score. Across white bond paper, green
-//   book, and yellow pad — clean scans measured 595-873, blurry scans
-//   measured 242-374 — this threshold sits in the ~220-point gap between
-//   the worst clean score and the worst blurry score.
-// - darkClipFraction > 0.05: too dark. Whole-frame average brightness
-//   couldn't separate genuinely dim captures from good ones (phone
-//   auto-exposure pulls the average toward "medium" regardless), so this
-//   checks the fraction of near-black (<=50) pixels instead, which survives
-//   that compensation. Real device data across white bond paper and green
-//   book: clean scans measured ~0.0002, dim scans measured 0.10-0.23 — this
-//   threshold sits well inside that gap.
-// - brightClipFraction > 0.05: too bright. Same idea, mirrored: fraction of
-//   near-white (>=200) pixels (flash glare, direct light) instead of average
-//   brightness, which also couldn't separate overexposed captures from good
-//   ones. Real device data across white bond paper, green book, and yellow
-//   pad: clean scans measured 0.0, overexposed scans measured 0.11-0.18 —
-//   this threshold sits well inside that gap.
+// Dark/bright/shadow checks only — no blur. Used by both the final gate
+// and the live pre-check screen, which can't measure blur from a preview frame.
+QualityResult evaluateLighting({
+  required double darkClipFraction,
+  required double brightClipFraction,
+  required double brightnessSpread,
+}) {
+  final List<String> issues = [];
+  bool blocked = false;
+
+  if (darkClipFraction > 0.05) {
+    issues.add('Too dark — move to a brighter area');
+    blocked = true;
+  }
+
+  if (brightClipFraction > 0.20) {
+    issues.add('Too bright / overexposed — reduce lighting or move away from light source');
+    blocked = true;
+  }
+
+  if (brightnessSpread > 35) {
+    issues.add("Uneven lighting detected — try repositioning so your shadow isn't blocking the page");
+    blocked = true;
+  }
+
+  return QualityResult(passed: !blocked, issues: issues);
+}
+
+// Thresholds calibrated against real device captures across white bond
+// paper, green book, and yellow pad
+
 QualityResult evaluateQuality({
   required double blurScore,
   required double darkClipFraction,
   required double brightClipFraction,
+  required double brightnessSpread,
 }) {
   final List<String> issues = [];
   bool blocked = false;
@@ -130,21 +139,17 @@ QualityResult evaluateQuality({
     blocked = true;
   }
 
-  if (darkClipFraction > 0.05) {
-    issues.add('Too dark — move to a brighter area');
-    blocked = true;
-  }
-
-  if (brightClipFraction > 0.05) {
-    issues.add('Too bright / overexposed — reduce lighting or move away from light source');
-    blocked = true;
-  }
+  final lighting = evaluateLighting(
+    darkClipFraction: darkClipFraction,
+    brightClipFraction: brightClipFraction,
+    brightnessSpread: brightnessSpread,
+  );
+  issues.addAll(lighting.issues);
+  if (!lighting.passed) blocked = true;
 
   return QualityResult(passed: !blocked, issues: issues);
 }
 
-// Checks a single image for blur, darkness, and overexposure across the
-// whole frame.
 QualityResult checkQuality(List<int> bytes) {
   final image = img.decodeImage(Uint8List.fromList(bytes));
   if (image == null) return QualityResult(passed: false, issues: ['Could not read image']);
@@ -152,17 +157,64 @@ QualityResult checkQuality(List<int> bytes) {
   final small = img.copyResize(image, width: 600, height: 600);
   final grayscale = img.grayscale(small);
 
-  final avgBrightness = computeAvgBrightness(grayscale);
   final blurScore = computeBlurScore(cropTopPortion(grayscale, fraction: 1 / 3));
   final darkClipFraction = computeDarkClipFraction(grayscale);
   final brightClipFraction = computeBrightClipFraction(grayscale);
+  final brightnessSpread = computeBrightnessSpread(grayscale, rows: 3, cols: 3);
 
   // ignore: avoid_print
-  print('[quality-check diagnostic] blurScore=$blurScore avgBrightness=$avgBrightness '
-      'darkClipFraction=$darkClipFraction brightClipFraction=$brightClipFraction');
+  print('[quality-check] ----------------------------------------');
+  // ignore: avoid_print
+  print('[quality-check] dimensions:        ${image.width}x${image.height}');
+  // ignore: avoid_print
+  print('[quality-check] blurScore:         ${blurScore.toStringAsFixed(1)}');
+  // ignore: avoid_print
+  print('[quality-check] darkClipFraction:  ${darkClipFraction.toStringAsFixed(4)}');
+  // ignore: avoid_print
+  print('[quality-check] brightClipFraction:${brightClipFraction.toStringAsFixed(4)}');
+  // ignore: avoid_print
+  print('[quality-check] brightnessSpread:  ${brightnessSpread.toStringAsFixed(1)}');
+
   return evaluateQuality(
     blurScore: blurScore,
     darkClipFraction: darkClipFraction,
     brightClipFraction: brightClipFraction,
+    brightnessSpread: brightnessSpread,
+  );
+}
+
+// One Y-plane (luma) sample from a live YUV420 camera frame. bytesPerRow
+// can be wider than width — camera plugins pad rows to an alignment
+// boundary, so it can't be assumed equal to width.
+class LumaFrame {
+  final Uint8List bytes;
+  final int width;
+  final int height;
+  final int bytesPerRow;
+  LumaFrame({
+    required this.bytes,
+    required this.width,
+    required this.height,
+    required this.bytesPerRow,
+  });
+}
+
+// Lighting check straight off a live camera frame — the Y-plane of a
+// YUV420 frame is already grayscale brightness data, so no JPEG decode
+// or color conversion is needed like checkQuality does.
+QualityResult checkLightingFrame(LumaFrame frame) {
+  final grayscale = img.Image(width: frame.width, height: frame.height);
+  for (int y = 0; y < frame.height; y++) {
+    final rowStart = y * frame.bytesPerRow;
+    for (int x = 0; x < frame.width; x++) {
+      final v = frame.bytes[rowStart + x];
+      grayscale.setPixelRgb(x, y, v, v, v);
+    }
+  }
+
+  return evaluateLighting(
+    darkClipFraction: computeDarkClipFraction(grayscale),
+    brightClipFraction: computeBrightClipFraction(grayscale),
+    brightnessSpread: computeBrightnessSpread(grayscale, rows: 3, cols: 3),
   );
 }
