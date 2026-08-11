@@ -2,9 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cunning_document_scanner/cunning_document_scanner.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../utils/quality_check.dart';
+import '../utils/batch_queue.dart';
 
 class CaptureScreen extends StatefulWidget {
   const CaptureScreen({super.key});
@@ -18,6 +18,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
   bool _isUploading = false;
   bool _isCheckingQuality = false;
   QualityResult? _qualityResult;
+  BatchQueue? _batch;
 
   final supabase = Supabase.instance.client;
 
@@ -38,9 +39,13 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   Future<void> _pickFromGallery() async {
     try {
-      final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-      if (picked == null) return;
-      await _processPickedFile(File(picked.path));
+      final paths = await CunningDocumentScanner.getPictures(
+        isGalleryImportAllowed: true,
+        noOfPages: 20,
+      );
+      if (paths == null || paths.isEmpty) return;
+      _batch = BatchQueue(paths);
+      await _processPickedFile(File(_batch!.current));
     } catch (e) {
       setState(() => _isCheckingQuality = false);
       if (mounted) {
