@@ -4,9 +4,12 @@ Export teacher-verified submissions from Supabase as an OCR dataset --
 fine-tuning will need, produced as a byproduct of normal grading use.
 
 Dev tool, not used by the live backend. Reads SUPABASE_URL and
-SUPABASE_ANON_KEY from .env (same values the backend uses):
+SUPABASE_ANON_KEY from .env (same values the backend uses). Run from the
+ocr_feature/ directory (module path, not the file path -- this file does
+`from evaluators.evaluation import ...`, which only resolves as a package
+import):
 
-    python export_dataset.py
+    .venv/bin/python -m evaluators.export_dataset
 
 Writes to datasets/verified/:
     labels.csv   one row per verified submission

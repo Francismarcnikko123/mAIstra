@@ -80,30 +80,42 @@
             {{ extractionError[selectedSubmission.id] }}
         </div>
 
-          <app-code-editor
-            *ngIf="hasExtractedText(selectedSubmission.id)"
-            class="text-editor"
-            [(value)]="editableText[selectedSubmission.id]"
-          ></app-code-editor>
+          <ng-container *ngIf="hasExtractedText(selectedSubmission.id)">
+            <app-code-editor
+              #codeEditor
+              class="text-editor"
+              [(value)]="editableText[selectedSubmission.id]"
+            ></app-code-editor>
 
-          <button
-            *ngIf="hasExtractedText(selectedSubmission.id)"
-            class="btn-save-text"
-            (click)="saveVerifiedText()"
-            [disabled]="isSaving(selectedSubmission.id)"
-          >
-            {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save Verified Text' }}
-          </button>
+            <div class="editor-actions">
+              <button
+                type="button"
+                class="btn-format"
+                (click)="codeEditor.format()"
+                title="Re-indent the code by brace depth (Shift+Alt+F). Editing aid only — does not change any characters."
+              >
+                Format
+              </button>
 
-          <span
-            class="save-status"
-            *ngIf="saveStatus[selectedSubmission.id]"
-            [ngClass]="saveStatus[selectedSubmission.id]"
-          >
-            {{ saveStatus[selectedSubmission.id] === 'saved'
-              ? '✓ Saved successfully'
-              : '✕ Save failed — please try again' }}
-          </span>
+              <button
+                class="btn-save-text"
+                (click)="saveVerifiedText()"
+                [disabled]="isSaving(selectedSubmission.id)"
+              >
+                {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save Verified Text' }}
+              </button>
+
+              <span
+                class="save-status"
+                *ngIf="saveStatus[selectedSubmission.id]"
+                [ngClass]="saveStatus[selectedSubmission.id]"
+              >
+                {{ saveStatus[selectedSubmission.id] === 'saved'
+                  ? '✓ Saved successfully'
+                  : '✕ Save failed — please try again' }}
+              </span>
+            </div>
+          </ng-container>
         </div>
 
       </div>
