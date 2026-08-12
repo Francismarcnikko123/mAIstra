@@ -21,13 +21,19 @@ class PreprocessConfig:
     denoise_template_window: int = 7
     denoise_search_window: int = 21
 
-    # Adaptive Gaussian threshold to a black/white image. Off by default:
-    # PaddleOCR's recognizer is trained on natural grayscale images and reads
-    # the anti-aliased gradients on stroke edges, so hard-binarizing before
-    # recognition throws that information away and measurably hurts CER. The
-    # threshold code stays functional behind threshold=True for cases that
-    # need the old binarized pipeline. Denoise still runs either way.
-    # Full A/B numbers: docs/ocr/EVALUATION.md.
+    # Adaptive Gaussian threshold to a black/white image. Off by default,
+    # decided by measurement (same-cohort A/B on the 14 black-pen samples,
+    # 2026-08-07): grayscale clean_ws 0.149 vs binarized 0.201 (+0.052 worse;
+    # bond +0.026, greenbook +0.098). Binarization hardens the anti-aliased
+    # edges of pen strokes and turns greenbook ruled lines into solid black
+    # runs the detector then skips. NOTE: this is NOT "PaddleOCR is trained on
+    # grayscale" -- that claim was checked against the PP-OCRv6 paper and a
+    # maintainer comment and could not be confirmed (the recognizer takes a
+    # 3-channel 3x48xW input, RGB reportedly preferred). The real win is that
+    # grayscale unlocks an effective single-channel denoiser; with denoise off,
+    # color slightly beats grayscale. The threshold code stays functional
+    # behind threshold=True for evaluators / the old binarized pipeline; denoise
+    # runs either way. Full numbers + 4-way color A/B: docs/ocr/EVALUATION.md.
     threshold: bool = False
     threshold_block_size: int = 31
     threshold_c: int = 15

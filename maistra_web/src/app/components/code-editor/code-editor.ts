@@ -56,6 +56,14 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
     });
     this.editor.setValue(this.value ?? '', -1);
 
+    // Shift-Alt-F is the conventional "format document" chord. Formatting is
+    // teacher-triggered on purpose (see format()), never automatic on load.
+    this.editor.commands.addCommand({
+      name: 'formatC',
+      bindKey: { win: 'Shift-Alt-F', mac: 'Shift-Alt-F' },
+      exec: () => this.format(),
+    });
+
     this.editor.on('change', () => {
       const current = this.editor!.getValue();
       if (current !== this.value) {
@@ -63,6 +71,97 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
         this.valueChange.emit(current);
       }
     });
+  }
+
+  /**
+   * Re-indent the current buffer by C brace depth. This is a *display*
+   * convenience for the teacher's editing pass, not part of OCR extraction:
+   * OCR deliberately outputs a faithful, flat transcription (line structure
+   * only, no indentation), and this lets the teacher make it readable on
+   * demand without asserting anything about the student's handwriting.
+   *
+   * It only rewrites leading whitespace — never any other character — and is a
+   * single undoable edit (Ctrl+Z reverts it). Because it keys off braces, it's
+   * only as correct as the braces in the buffer; OCR frequently misreads `}`
+   * (see the OCR brace error profile), so it's most useful after the teacher
+   * has fixed the braces, not before. Not brace-aware of `switch`/`case`
+   * labels or line-continuations — a simple, predictable reindent, not a full
+   * C beautifier.
+   */
+  format(): void {
+    if (!this.editor) return;
+    const current = this.editor.getValue();
+    const formatted = CodeEditorComponent.reindent(current);
+    if (formatted === current) return;
+
+    // Replace the whole document as one edit so the teacher can undo it, and
+    // so the 'change' handler above still fires the two-way [(value)] update.
+    const session = this.editor.session;
+    const { Range } = (ace as any).require('ace/range');
+    const lastRow = session.getLength() - 1;
+    const lastCol = session.getLine(lastRow).length;
+    session.replace(new Range(0, 0, lastRow, lastCol), formatted);
+    this.editor.clearSelection();
+  }
+
+  /**
+   * Pure brace-depth reindenter. Braces inside string/char literals and `//`
+   * or block comments are ignored so they don't shift the indent level. A line
+   * that starts by closing a block dedents itself.
+   */
+  private static reindent(source: string, unit = '  '): string {
+    const out: string[] = [];
+    let depth = 0;
+    let inBlockComment = false;
+
+    for (const raw of source.split('\n')) {
+      const trimmed = raw.trim();
+      if (trimmed === '') {
+        out.push('');
+        continue;
+      }
+
+      // A line whose first real character closes a block sits one level out.
+      const startsWithClose = !inBlockComment && trimmed[0] === '}';
+      const lineDepth = Math.max(0, depth - (startsWithClose ? 1 : 0));
+      out.push(unit.repeat(lineDepth) + trimmed);
+
+      // Walk the line to update depth for the lines below, skipping any braces
+      // that live inside literals or comments.
+      let inString: string | null = null;
+      for (let i = 0; i < trimmed.length; i++) {
+        const ch = trimmed[i];
+        const next = trimmed[i + 1];
+        if (inBlockComment) {
+          if (ch === '*' && next === '/') {
+            inBlockComment = false;
+            i++;
+          }
+          continue;
+        }
+        if (inString) {
+          if (ch === '\\') {
+            i++; // skip the escaped character
+          } else if (ch === inString) {
+            inString = null;
+          }
+          continue;
+        }
+        if (ch === '/' && next === '/') break; // rest of line is a comment
+        if (ch === '/' && next === '*') {
+          inBlockComment = true;
+          i++;
+          continue;
+        }
+        if (ch === '"' || ch === "'") {
+          inString = ch;
+          continue;
+        }
+        if (ch === '{') depth++;
+        else if (ch === '}') depth = Math.max(0, depth - 1);
+      }
+    }
+    return out.join('\n');
   }
 
   ngOnChanges(changes: SimpleChanges): void {

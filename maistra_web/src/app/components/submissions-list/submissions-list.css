@@ -231,13 +231,32 @@
   font-size: 14px;
 }
 
-.btn-save-topic, .btn-extract, .btn-save-text {
+.btn-save-topic, .btn-extract, .btn-save-text, .btn-format {
   padding: 8px 16px;
   border: none;
   border-radius: 6px;
   font-size: 14px;
   cursor: pointer;
   font-weight: 500;
+}
+
+/* Format sits next to Save; keep it a lighter secondary action so Save stays
+   the clear primary. */
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.btn-format {
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+.btn-format:hover {
+  background: #f1f5f9;
 }
 
 .btn-save-topic {

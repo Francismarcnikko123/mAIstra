@@ -4,9 +4,12 @@ between OCR output and the correct text, divided by the correct text's
 length. Lower is better, 0 = perfect.
 
 Dev tool, not used by the live backend. Run it after any pipeline change,
-and before/after fine-tuning to measure the actual difference:
+and before/after fine-tuning to measure the actual difference. Run from the
+ocr_feature/ directory (module path, not the file path -- this file does
+`from evaluators.evaluation import ...`, which only resolves as a package
+import):
 
-    python evaluate_cer.py
+    .venv/bin/python -m evaluators.evaluate_cer
 
 Reports raw vs. cleaned text, each strict and whitespace-normalized (the
 latter isolates recognition errors from formatting, since the teacher
