@@ -1,6 +1,8 @@
 import {
   Component,
   Input,
+  Output,
+  EventEmitter,
   OnChanges,
   SimpleChanges,
   ChangeDetectorRef,
