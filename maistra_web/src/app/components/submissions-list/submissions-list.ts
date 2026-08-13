@@ -4,8 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { SupabaseService } from '../../services/supabase';
 import { CodeEditorComponent } from '../code-editor/code-editor';
-import { Judge0 } from '../judge0/judge0';
-import { Judge0Service, GradingResult } from '../../services/judge0.service';
+import { Judge0, TestCaseResult } from '../judge0/judge0';
+import { Judge0Service } from '../../services/judge0.service';
 import { firstValueFrom } from 'rxjs';
 
 interface TestCase {
@@ -33,16 +33,6 @@ interface Submission {
   topic?: string;
   question_id?: string;
   questions?: SubmissionQuestion;
-}
-
-interface CodeCheckResult {
-  logicSimilar: boolean;
-  outputSame: boolean;
-  compilationPassed: boolean;
-  overallMatched: boolean;
-  expectedOutput: string;
-  actualOutput: string;
-  logicDetails: GradingResult['logic_details'];
 }
 
 interface TopicGroup {
@@ -79,10 +69,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   showCodeExecutionEditor: Record<string, boolean> = {};
 
   // code checking state
-  checkResult: CodeCheckResult | null = null;
-  checkedSubmissionId: string | null = null;
   isChecking = false;
   checkError = '';
+  submissionCheckStatus: Record<string, string> = {};
+  submissionRunOutput: Record<string, string> = {};
+  submissionTestResults: Record<string, TestCaseResult[]> = {};
 
   private subscription: any;
   private saveStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -178,10 +169,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.selectedSubmission = { ...submission };
     this.editableTopic = submission.topic || 'Uncategorized';
 
-    this.checkResult = null;
     this.checkError = '';
     this.isChecking = false;
-    this.checkedSubmissionId = null;
+    this.submissionCheckStatus[submission.id] = '';
+    this.submissionTestResults[submission.id] = [];
 
     const saved = submission.verified_text || submission.extracted_text || '';
     if (saved && !this.editableText[submission.id]) {
@@ -301,21 +292,21 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     return this.savingId === id;
   }
 
+  updateSubmissionCode(id: string, code: string) {
+    this.editableText[id] = code;
+  }
+
   async checkSubmission(submission: Submission | null) {
     if (!submission) return;
 
     this.isChecking = true;
     this.checkError = '';
-    this.checkResult = null;
-    this.checkedSubmissionId = submission.id;
+    this.submissionCheckStatus[submission.id] = '';
+    this.submissionRunOutput[submission.id] = '';
+    this.submissionTestResults[submission.id] = [];
 
     try {
-      const linkedQuestion = Array.isArray(submission.questions)
-        ? submission.questions[0]
-        : submission.questions;
-
-      const selectedQuestion = this.getSelectedQuestion();
-      const question = linkedQuestion || selectedQuestion;
+      const question = this.getSubmissionQuestion(submission);
 
       const studentCode =
         this.editableText[submission.id] ||
@@ -338,69 +329,81 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         return;
       }
 
-      const firstTestCase = question.test_cases?.[0];
+      const testCases = question.test_cases || [];
 
-      if (!firstTestCase) {
+      if (testCases.length === 0) {
         this.checkError = 'No test case found for this question.';
         return;
       }
 
-      const sourceCode =
-        question.question_type === 'function'
-          ? `#include <stdio.h>
+      const testResults: TestCaseResult[] = [];
+
+      for (const [index, testCase] of testCases.entries()) {
+        const sourceCode =
+          question.question_type === 'function'
+            ? `#include <stdio.h>
 
 ${studentCode}
 
 int main() {
-${firstTestCase.test_code}
+${testCase.test_code}
 
   return 0;
 }`
-          : studentCode;
+            : studentCode;
 
-      const stdin =
-        question.question_type === 'program'
-          ? firstTestCase.test_input || ''
-          : '';
+        const stdin =
+          question.question_type === 'program' ? testCase.test_input || '' : '';
 
-      const runResult = await firstValueFrom(
-        this.judge0Service.runCCode(sourceCode, stdin),
-      );
+        const runResult = await firstValueFrom(
+          this.judge0Service.runCCode(sourceCode, stdin),
+        );
 
-      const actualOutput = (runResult.stdout || '').trim();
-      const expectedOutput = (firstTestCase.expected_output || '').trim();
+        const actualOutput = (runResult.stdout || '').trim();
+        const expectedOutput = (testCase.expected_output || '').trim();
 
-      const compilationPassed =
-        !runResult.stderr &&
-        !runResult.compile_output &&
-        runResult.status?.id === 3;
+        const compilationPassed =
+          !runResult.stderr &&
+          !runResult.compile_output &&
+          runResult.status?.id === 3;
 
-      const result = await firstValueFrom(
-        this.judge0Service.gradeSubmission({
-          model_code: question.model_answer,
-          student_code: studentCode,
-          expected_output: expectedOutput,
-          actual_output: actualOutput,
-          compilation_passed: compilationPassed,
-        }),
-      );
+        const result = await firstValueFrom(
+          this.judge0Service.gradeSubmission({
+            model_code: question.model_answer,
+            student_code: studentCode,
+            expected_output: expectedOutput,
+            actual_output: actualOutput,
+            compilation_passed: compilationPassed,
+          }),
+        );
 
-      const logicSimilar = result.logic_details.every((check) => check.passed);
-      const outputSame = result.output_details.passed;
+        const passed = result.output_details.passed && compilationPassed;
 
-      this.checkResult = {
-        logicSimilar,
-        outputSame,
-        compilationPassed,
-        overallMatched: logicSimilar && outputSame && compilationPassed,
-        expectedOutput: result.output_details.expected_normalized,
-        actualOutput: result.output_details.actual_normalized,
-        logicDetails: result.logic_details,
-      };
+        testResults.push({
+          caseNumber: index + 1,
+          stdin,
+          expectedOutput: result.output_details.expected_normalized,
+          actualOutput: result.output_details.actual_normalized || actualOutput,
+          status: passed
+            ? 'Accepted'
+            : compilationPassed
+              ? 'Wrong Answer'
+              : runResult.status?.description || 'Error',
+          passed,
+        });
+      }
 
-      this.checkedSubmissionId = submission.id;
+      this.submissionTestResults[submission.id] = testResults;
+      this.submissionRunOutput[submission.id] =
+        testResults.at(-1)?.actualOutput || '';
+      this.submissionCheckStatus[submission.id] = testResults.every(
+        (result) => result.passed,
+      )
+        ? 'Accepted'
+        : 'Wrong Answer';
     } catch (error) {
       this.checkError = 'Failed to check logic and output.';
+      this.submissionCheckStatus[submission.id] = 'Error';
     } finally {
       this.isChecking = false;
       this.cdr.detectChanges();
@@ -417,9 +420,67 @@ ${firstTestCase.test_code}
 
     this.questions = data ?? [];
   }
-  
+
   getSelectedQuestion() {
     return this.questions.find((q) => q.id === this.selectedQuestionId) || null;
   }
 
+  getExecutionSourceCode(submission: Submission | null): string {
+    if (!submission) return '';
+
+    const question = this.getSubmissionQuestion(submission);
+    const studentCode = this.getStudentCode(submission);
+    const firstTestCase = question?.test_cases?.[0];
+
+    if (!question || question.question_type === 'program' || !firstTestCase) {
+      return studentCode;
+    }
+
+    return `#include <stdio.h>
+
+${studentCode}
+
+int main() {
+${firstTestCase.test_code}
+
+  return 0;
+}`;
+  }
+
+  getExecutionStdin(submission: Submission | null): string {
+    const question = submission ? this.getSubmissionQuestion(submission) : null;
+    const firstTestCase = question?.test_cases?.[0];
+
+    return question?.question_type === 'program'
+      ? firstTestCase?.test_input || ''
+      : '';
+  }
+
+  getExecutionExpectedOutput(submission: Submission | null): string {
+    const question = submission ? this.getSubmissionQuestion(submission) : null;
+
+    return question?.test_cases?.[0]?.expected_output || '';
+  }
+
+  private getSubmissionQuestion(
+    submission: Submission,
+  ): SubmissionQuestion | null {
+    const selectedQuestion = this.getSelectedQuestion();
+    if (selectedQuestion) return selectedQuestion;
+
+    const linkedQuestion = Array.isArray(submission.questions)
+      ? submission.questions[0]
+      : submission.questions;
+
+    return linkedQuestion || null;
+  }
+
+  private getStudentCode(submission: Submission): string {
+    return (
+      this.editableText[submission.id] ||
+      submission.verified_text ||
+      submission.extracted_text ||
+      ''
+    );
+  }
 }

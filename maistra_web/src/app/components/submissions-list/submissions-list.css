@@ -103,7 +103,9 @@
   overflow: hidden;
   cursor: pointer;
   border: 2px solid transparent;
-  transition: border-color 0.15s, transform 0.15s;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
 }
 
 .thumbnail-card:hover {
@@ -231,7 +233,10 @@
   font-size: 14px;
 }
 
-.btn-save-topic, .btn-extract, .btn-save-text, .btn-format {
+.btn-save-topic,
+.btn-extract,
+.btn-save-text,
+.btn-format {
   padding: 8px 16px;
   border: none;
   border-radius: 6px;
@@ -277,7 +282,9 @@
   align-self: flex-start;
 }
 
-.btn-save-topic:disabled, .btn-extract:disabled, .btn-save-text:disabled {
+.btn-save-topic:disabled,
+.btn-extract:disabled,
+.btn-save-text:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -287,7 +294,7 @@
   border: 1px solid #d0d0d0;
   border-radius: 6px;
   padding: 10px;
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   font-size: 13px;
   resize: vertical;
   box-sizing: border-box;
@@ -304,40 +311,16 @@
   font-size: 13px;
   font-weight: 500;
 }
-.save-status.saved { color: #1e8e3e; }
-.save-status.error { color: #c0392b; }
-.btn-check {
-  margin-top: 10px;
-  padding: 10px 14px;
-  background: #B71C1C;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
+.save-status.saved {
+  color: #1e8e3e;
 }
-
-.btn-check:disabled {
-  background: #ccc;
-  cursor: not-allowed;
+.save-status.error {
+  color: #c0392b;
 }
-
-.grading-result {
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fafafa;
-}
-
 .grading-error {
   margin-top: 12px;
   padding: 10px;
   color: #c62828;
   background: #ffebee;
   border-radius: 8px;
-}
-
-.logic-details {
-  margin-top: 10px;
 }
