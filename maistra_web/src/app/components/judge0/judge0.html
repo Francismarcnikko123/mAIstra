@@ -1,51 +1,98 @@
 <div>
-  <p>Code Execution</p>
-  <app-code-editor [(value)]="codeToRun"></app-code-editor>
-  <button
-    class="execute-button"
-    type="button"
-    (click)="executeCode()"
-    [disabled]="isRunning"
-    [class.running]="isRunning"
-  >
-    <span class="spinner" *ngIf="isRunning"></span>
-    <span>{{ isRunning ? 'Running...' : 'Execute' }}</span>
-  </button>
+  <p class="runner-title">Code Execution</p>
+  <app-code-editor
+    [value]="codeToRun"
+    (valueChange)="updateCode($event)"
+  ></app-code-editor>
+  <div class="runner-actions">
+    <button
+      class="execute-button"
+      type="button"
+      (click)="executeCode()"
+      [disabled]="isRunning"
+      [class.running]="isRunning"
+    >
+      <span class="spinner" *ngIf="isRunning"></span>
+      <span>{{ isRunning ? 'Running...' : 'Run Code' }}</span>
+    </button>
 
-  <div
-    class="gdb-console"
-    *ngIf="isRunning || stdout || stderr || compileOutput || statusDescription"
-  >
-    <div class="gdb-console-header">
-      <span class="gdb-tab active">Output</span>
+    <button
+      class="submit-button"
+      type="button"
+      (click)="requestSubmit()"
+      [disabled]="isSubmitting"
+      [class.running]="isSubmitting"
+    >
+      {{ isSubmitting ? 'Submitting...' : 'Submit Code' }}
+    </button>
+  </div>
 
-      <span
-        class="gdb-status"
-        [class.success]="statusDescription === 'Accepted'"
-        [class.error]="compileOutput || stderr"
-        [class.running]="isRunning"
+  <div class="terminal-results" *ngIf="shouldShowTerminalResults">
+    <section class="terminal-section">
+      <div class="terminal-section-header">
+        <span>Input (stdin)</span>
+      </div>
+      <pre class="terminal-block">{{ stdin || '(no input)' }}</pre>
+    </section>
+
+    <section class="terminal-section">
+      <div class="terminal-section-header">
+        <span>Your Output (stdout)</span>
+        <span
+          class="terminal-status"
+          *ngIf="displayedStatus"
+          [class.success]="displayedStatus === 'Accepted'"
+          [class.error]="hasErrorStatus"
+        >
+          {{ displayedStatus }}
+        </span>
+      </div>
+      <pre class="terminal-block">{{ displayedOutput }}</pre>
+    </section>
+
+    <section class="terminal-section">
+      <div class="terminal-section-header">
+        <span>Expected Output</span>
+      </div>
+      <pre class="terminal-block">
+{{ expectedOutput || '(no expected output)' }}</pre>
+    </section>
+
+    <section class="testcase-results" *ngIf="testCaseResults.length">
+      <div class="testcase-results-header">
+        <span>Test Cases</span>
+        <span>
+          {{ passedTestCaseCount }}/{{ testCaseResults.length }} passed
+        </span>
+      </div>
+
+      <article
+        class="testcase-card"
+        *ngFor="let result of testCaseResults"
+        [class.passed]="result.passed"
+        [class.failed]="!result.passed"
       >
-        {{ isRunning ? 'Running' : statusDescription }}
-      </span>
-    </div>
-
-    <div class="gdb-console-body">
-      <pre *ngIf="isRunning" class="gdb-text running">
-Compiling and running<span class="typing-dots"></span>
-    </pre>
-
-      <pre *ngIf="!isRunning && compileOutput" class="gdb-text error">
-{{ compileOutput }}</pre>
-      <pre *ngIf="!isRunning && stderr" class="gdb-text error">
-{{ stderr }}</pre>
-      <pre *ngIf="!isRunning && stdout" class="gdb-text output">
-{{ stdout }}</pre>
-
-      <pre
-        *ngIf="!isRunning && !stdout && !stderr && !compileOutput && statusDescription"
-        class="gdb-text muted"
-      >
-{{ statusDescription }}</pre>
-    </div>
+        <div class="testcase-card-header">
+          <span>Test Case {{ result.caseNumber }}</span>
+          <span class="testcase-badge">
+            {{ result.passed ? 'Accepted' : result.status }}
+          </span>
+        </div>
+        <div class="testcase-grid">
+          <div>
+            <span>Input</span>
+            <pre>{{ result.stdin || '(no input)' }}</pre>
+          </div>
+          <div>
+            <span>Your Output</span>
+            <pre>{{ result.actualOutput || '(no output)' }}</pre>
+          </div>
+          <div>
+            <span>Expected</span>
+            <pre>{{ result.expectedOutput || '(no output)' }}</pre>
+          </div>
+        </div>
+      </article>
+    </section>
   </div>
 </div>

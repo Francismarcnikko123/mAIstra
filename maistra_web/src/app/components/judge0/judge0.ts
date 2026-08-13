@@ -11,6 +11,15 @@ import { CodeEditorComponent } from '../code-editor/code-editor';
 import { HttpClient } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 
+export interface TestCaseResult {
+  caseNumber: number;
+  stdin: string;
+  expectedOutput: string;
+  actualOutput: string;
+  status: string;
+  passed: boolean;
+}
+
 @Component({
   selector: 'app-judge0',
   standalone: true,
@@ -20,13 +29,21 @@ import { CommonModule } from '@angular/common';
 })
 export class Judge0 implements OnChanges {
   @Input() initialCode = ''; // comes from parent
+  @Input() runCode = '';
+  @Input() stdin = '';
+  @Input() expectedOutput = '';
+  @Input() submittedOutput = '';
+  @Input() submitStatus = '';
+  @Input() isSubmitting = false;
+  @Input() testCaseResults: TestCaseResult[] = [];
   codeToRun = ''; // editable copy
-  stdin = '';
   stdout = '';
   stderr = '';
   compileOutput = '';
   statusDescription = '';
   isRunning = false;
+  @Output() submitCode = new EventEmitter<void>();
+  @Output() codeChange = new EventEmitter<string>();
 
   constructor(
     private http: HttpClient,
@@ -49,7 +66,7 @@ export class Judge0 implements OnChanges {
 
     this.http
       .post<any>('http://127.0.0.1:8001/api/judge0/run', {
-        source_code: this.codeToRun,
+        source_code: this.runCode || this.codeToRun,
         language_id: 50,
         stdin: this.stdin,
       })
@@ -71,5 +88,55 @@ export class Judge0 implements OnChanges {
           this.cdr.detectChanges();
         },
       });
+  }
+
+  updateCode(value: string) {
+    this.codeToRun = value;
+    this.codeChange.emit(value);
+  }
+
+  requestSubmit() {
+    this.submitCode.emit();
+  }
+
+  get displayedOutput(): string {
+    return (
+      this.submittedOutput ||
+      this.stdout ||
+      this.stderr ||
+      this.compileOutput ||
+      (this.isRunning || this.isSubmitting ? 'Running...' : '(no output)')
+    );
+  }
+
+  get displayedStatus(): string {
+    if (this.isRunning) return 'Running';
+    if (this.isSubmitting) return 'Checking';
+    return this.submitStatus || this.statusDescription;
+  }
+
+  get shouldShowTerminalResults(): boolean {
+    return (
+      this.isRunning ||
+      this.isSubmitting ||
+      !!this.stdout ||
+      !!this.submittedOutput ||
+      !!this.stderr ||
+      !!this.compileOutput ||
+      this.testCaseResults.length > 0
+    );
+  }
+
+  get hasErrorStatus(): boolean {
+    return (
+      !!this.compileOutput ||
+      !!this.stderr ||
+      this.displayedStatus === 'Wrong Answer' ||
+      this.displayedStatus === 'Error'
+    );
+  }
+
+  get passedTestCaseCount(): number {
+    return this.testCaseResults.filter((result) => result.passed).length;
   }
 }
