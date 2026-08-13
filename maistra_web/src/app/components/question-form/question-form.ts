@@ -23,6 +23,14 @@ interface ValidationResult {
   compile_output?: string;
 }
 ('');
+
+const DEFAULT_TEST_CASE: TestCase = {
+  test_code: '',
+  test_input: '',
+  expected_output: '',
+  mark: 2,
+};
+
 @Component({
   selector: 'app-question-form',
   standalone: true,
@@ -37,14 +45,7 @@ export class QuestionFormComponent {
   questionText = '';
   questionType = 'function';
   modelAnswer = '';
- testCases: TestCase[] = [
-  {
-    test_code: '',
-    test_input: '',
-    expected_output: '',
-    mark: 2,
-  },
-];
+  testCases: TestCase[] = [this.createDefaultTestCase()];
   validationResults: ValidationResult[] = [];
   isValidating = false;
   canPublish = false;
@@ -59,39 +60,39 @@ export class QuestionFormComponent {
 
   readonly FUNCTION_TEMPLATE = ``;
   readonly PROGRAM_TEMPLATE = `#include <stdio.h>\n\nint main(void) {\n  return 0;\n}`;
-   
+
   constructor(
     private supabase: SupabaseService,
     private cdr: ChangeDetectorRef,
     private judge0: Judge0Service,
   ) {}
   toggleTestCase(index: number) {
-  this.collapsedTestCases[index] = !this.collapsedTestCases[index];
-}
-async validateModelAnswer() {
-  this.isValidating = true;
-  this.canPublish = false;
+    this.collapsedTestCases[index] = !this.collapsedTestCases[index];
+  }
+  async validateModelAnswer() {
+    this.isValidating = true;
+    this.canPublish = false;
 
-  this.testRunStatuses = this.testCases.map((_, i) =>
-    this.validationResults[i]?.passed ? 'passed' : 'idle',
-  );
+    this.testRunStatuses = this.testCases.map((_, i) =>
+      this.validationResults[i]?.passed ? 'passed' : 'idle',
+    );
 
-  this.cdr.detectChanges();
+    this.cdr.detectChanges();
 
-  try {
-    const validationPromises = this.testCases.map(async (tc, i) => {
-      if (this.validationResults[i]?.passed) {
-        this.testRunStatuses[i] = 'passed';
-        return this.validationResults[i];
-      }
+    try {
+      const validationPromises = this.testCases.map(async (tc, i) => {
+        if (this.validationResults[i]?.passed) {
+          this.testRunStatuses[i] = 'passed';
+          return this.validationResults[i];
+        }
 
-      this.testRunStatuses[i] = 'running';
-      this.cdr.detectChanges();
+        this.testRunStatuses[i] = 'running';
+        this.cdr.detectChanges();
 
-      try {
-        const sourceCode =
-          this.questionType === 'function'
-            ? `#include <stdio.h>
+        try {
+          const sourceCode =
+            this.questionType === 'function'
+              ? `#include <stdio.h>
             
 
 ${this.modelAnswer}
@@ -101,60 +102,60 @@ ${tc.test_code}
 
   return 0;
 }`
-            : this.modelAnswer;
+              : this.modelAnswer;
 
-        const stdin = this.questionType === 'program' ? tc.test_input : '';
+          const stdin = this.questionType === 'program' ? tc.test_input : '';
 
-        const result = await firstValueFrom(
-          this.judge0.runCCode(sourceCode, stdin),
-        );
+          const result = await firstValueFrom(
+            this.judge0.runCCode(sourceCode, stdin),
+          );
 
-        const actual = (result.stdout || '').trim();
-        const expected = tc.expected_output.trim();
-        const passed = actual === expected;
+          const actual = (result.stdout || '').trim();
+          const expected = tc.expected_output.trim();
+          const passed = actual === expected;
 
-        this.validationResults[i] = {
-          passed,
-          expected,
-          actual,
-          status: result.status?.description,
-          stderr: result.stderr,
-          compile_output: result.compile_output,
-        };
+          this.validationResults[i] = {
+            passed,
+            expected,
+            actual,
+            status: result.status?.description,
+            stderr: result.stderr,
+            compile_output: result.compile_output,
+          };
 
-        this.testRunStatuses[i] = passed ? 'passed' : 'failed';
+          this.testRunStatuses[i] = passed ? 'passed' : 'failed';
 
-        return this.validationResults[i];
-      } catch (error) {
-        this.validationResults[i] = {
-          passed: false,
-          expected: tc.expected_output.trim(),
-          actual: '',
-          status: 'Validation request failed',
-          stderr: 'Unable to validate this test case.',
-          compile_output: '',
-        };
+          return this.validationResults[i];
+        } catch (error) {
+          this.validationResults[i] = {
+            passed: false,
+            expected: tc.expected_output.trim(),
+            actual: '',
+            status: 'Validation request failed',
+            stderr: 'Unable to validate this test case.',
+            compile_output: '',
+          };
 
-        this.testRunStatuses[i] = 'failed';
+          this.testRunStatuses[i] = 'failed';
 
-        return this.validationResults[i];
-      } finally {
-        this.cdr.detectChanges();
-      }
-    });
+          return this.validationResults[i];
+        } finally {
+          this.cdr.detectChanges();
+        }
+      });
 
-    const results = await Promise.all(validationPromises);
-    this.validationResults = results;
+      const results = await Promise.all(validationPromises);
+      this.validationResults = results;
 
-    this.canPublish =
-      this.validationResults.length === this.testCases.length &&
-      this.validationResults.every((result) => result.passed);
-  } finally {
-    this.isValidating = false;
-    this.cdr.detectChanges();
+      this.canPublish =
+        this.validationResults.length === this.testCases.length &&
+        this.validationResults.every((result) => result.passed);
+    } finally {
+      this.isValidating = false;
+      this.cdr.detectChanges();
+    }
   }
-}
-  
+
   async runModelAnswer() {
     this.isRunningModelAnswer = true;
     this.runOutput = '';
@@ -176,33 +177,28 @@ ${tc.test_code}
     }
   }
 
-onTypeChange() {
-  this.modelAnswer =
-    this.questionType === 'program'
-      ? this.PROGRAM_TEMPLATE
-      : this.FUNCTION_TEMPLATE;
+  onTypeChange() {
+    this.modelAnswer =
+      this.questionType === 'program'
+        ? this.PROGRAM_TEMPLATE
+        : this.FUNCTION_TEMPLATE;
 
-  this.clearValidationResults();
-  this.cdr.detectChanges();
-}
+    this.clearValidationResults();
+    this.cdr.detectChanges();
+  }
 
   addTestCase() {
-      this.testCases.push({
-    test_code: '',
-    test_input: '',
-    expected_output: '',
-    mark: 2,
-  });
+    this.testCases.push(this.createDefaultTestCase());
 
-  this.validationResults = [];
-  this.canPublish = false;
+    this.validationResults = [];
+    this.canPublish = false;
   }
 
   removeTestCase(index: number) {
     this.testCases.splice(index, 1);
 
-  this.validationResults = [];
-  this.canPublish = false;
+    this.validationResults = [];
+    this.canPublish = false;
   }
 
   async save() {
@@ -217,13 +213,13 @@ onTypeChange() {
     this.successMessage = '';
     this.cdr.detectChanges();
 
-const { data, error } = await this.supabase.saveQuestion({
-  question_name: this.questionName,
-  question_text: this.questionText,
-  question_type: this.questionType,
-  model_answer: this.modelAnswer,
-  test_cases: this.testCases,
-});
+    const { data, error } = await this.supabase.saveQuestion({
+      question_name: this.questionName,
+      question_text: this.questionText,
+      question_type: this.questionType,
+      model_answer: this.modelAnswer,
+      test_cases: this.testCases,
+    });
 
     if (error) {
       this.errorMessage = 'Error: ' + error.message;
@@ -233,12 +229,9 @@ const { data, error } = await this.supabase.saveQuestion({
       this.questionText = '';
       this.questionType = 'program';
       this.modelAnswer = '';
-       this.testCases.push({
-    test_code: '',
-    test_input: '',
-    expected_output: '',
-    mark: 2,
-  });
+      this.testCases = [this.createDefaultTestCase()];
+      this.collapsedTestCases = {};
+      this.clearValidationResults();
     }
 
     this.isSaving = false;
@@ -256,14 +249,18 @@ const { data, error } = await this.supabase.saveQuestion({
     );
   }
   isTestCaseCollapsed(index: number): boolean {
-  return !!this.collapsedTestCases[index];
-}
-clearValidationResults() {
-  this.validationResults = [];
-  this.testRunStatuses = [];
-  this.canPublish = false;
-}
-getTestCaseStatus(index: number): TestRunStatus {
-  return this.testRunStatuses[index] || 'idle';
-}
+    return !!this.collapsedTestCases[index];
+  }
+  clearValidationResults() {
+    this.validationResults = [];
+    this.testRunStatuses = [];
+    this.canPublish = false;
+  }
+  getTestCaseStatus(index: number): TestRunStatus {
+    return this.testRunStatuses[index] || 'idle';
+  }
+
+  private createDefaultTestCase(): TestCase {
+    return { ...DEFAULT_TEST_CASE };
+  }
 }

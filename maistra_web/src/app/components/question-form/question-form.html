@@ -46,13 +46,16 @@
     ></textarea>
   </div>
 
+  <div class="error-message" *ngIf="errorMessage">{{ errorMessage }}</div>
+  <div class="success-message" *ngIf="successMessage">{{ successMessage }}</div>
+
   <!-- Model Answer -->
   <div class="form-group">
     <label>Model Answer</label>
     <app-code-editor
-  [(value)]="modelAnswer"
-  (valueChange)="clearValidationResults()"
-></app-code-editor>
+      [(value)]="modelAnswer"
+      (valueChange)="clearValidationResults()"
+    ></app-code-editor>
     <div class="test-cases-header">
       <!-- Test Cases -->
       <span>Test Cases</span>
@@ -88,42 +91,42 @@
         <button class="btn-remove" (click)="removeTestCase(i)">Remove</button>
       </button>
 
-<div class="test-case-body" *ngIf="!isTestCaseCollapsed(i)">
-  <ng-container *ngIf="questionType === 'function'">
-    <label>Test Code</label>
+      <div class="test-case-body" *ngIf="!isTestCaseCollapsed(i)">
+        <ng-container *ngIf="questionType === 'function'">
+          <label>Test Code</label>
 
-    <div
-      class="test-editor-shell"
-      [class.running]="getTestCaseStatus(i) === 'running'"
-      [class.passed]="getTestCaseStatus(i) === 'passed'"
-      [class.failed]="getTestCaseStatus(i) === 'failed'"
-    >
-      <app-code-editor
-        [(value)]="tc.test_code"
-        (valueChange)="clearValidationResults()"
-      ></app-code-editor>
-    </div>
-  </ng-container>
+          <div
+            class="test-editor-shell"
+            [class.running]="getTestCaseStatus(i) === 'running'"
+            [class.passed]="getTestCaseStatus(i) === 'passed'"
+            [class.failed]="getTestCaseStatus(i) === 'failed'"
+          >
+            <app-code-editor
+              [(value)]="tc.test_code"
+              (valueChange)="clearValidationResults()"
+            ></app-code-editor>
+          </div>
+        </ng-container>
 
-  <label>Expected Output</label>
-  <textarea
-    [(ngModel)]="tc.expected_output"
-    (ngModelChange)="clearValidationResults()"
-  ></textarea>
+        <label>Expected Output</label>
+        <textarea
+          [(ngModel)]="tc.expected_output"
+          (ngModelChange)="clearValidationResults()"
+        ></textarea>
 
-  <label>Standard Input</label>
-  <textarea
-    [(ngModel)]="tc.test_input"
-    rows="3"
-    placeholder="Input passed to scanf"
-    (ngModelChange)="clearValidationResults()"
-  ></textarea>
+        <label>Standard Input</label>
+        <textarea
+          [(ngModel)]="tc.test_input"
+          rows="3"
+          placeholder="Input passed to scanf"
+          (ngModelChange)="clearValidationResults()"
+        ></textarea>
 
-  <div class="form-group">
-    <label>Mark</label>
-    <input type="number" [(ngModel)]="tc.mark" style="width: 80px" />
-  </div>
-</div>
+        <div class="form-group">
+          <label>Mark</label>
+          <input type="number" [(ngModel)]="tc.mark" style="width: 80px" />
+        </div>
+      </div>
 
       <div
         class="test-result-row"
@@ -156,25 +159,23 @@
       </div>
     </div>
     <div class="test-summary" *ngIf="validationResults.length">
-    {{ passedAllTests() ? 'Passed all tests' : 'Failed ' + failedTestCount() + '
-    test(s)' }}
-  </div>
+      {{ passedAllTests() ? 'Passed all tests' : 'Failed ' + failedTestCount() +
+      ' test(s)' }}
+    </div>
   </div>
 </div>
 <div>
-
-        <!-- Validate Button -->
-    <button
-      class="btn-save"
-      type="button"
-      (click)="validateModelAnswer()"
-      [disabled]="isValidating"
-    >
-      {{ isValidating ? 'Validating...' : 'Validate Test Cases' }}
-    </button>
-    <!-- Save -->
+  <!-- Validate Button -->
+  <button
+    class="btn-save"
+    type="button"
+    (click)="validateModelAnswer()"
+    [disabled]="isValidating"
+  >
+    {{ isValidating ? 'Validating...' : 'Validate Test Cases' }}
+  </button>
+  <!-- Save -->
   <button class="btn-save" (click)="save()" [disabled]="isSaving">
     {{ isSaving ? 'Saving...' : 'Save Question' }}
   </button>
-
 </div>
