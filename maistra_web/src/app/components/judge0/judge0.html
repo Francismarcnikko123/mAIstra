@@ -27,38 +27,70 @@
     </button>
   </div>
 
+  <div class="run-notification" *ngIf="runNotification">
+    {{ runNotification }}
+  </div>
+
+  <div class="processing-panel" *ngIf="shouldShowProcessingState">
+    <span class="processing-spinner"></span>
+    <span>Processing code</span>
+    <span class="processing-dots"></span>
+  </div>
+
   <div class="terminal-results" *ngIf="shouldShowTerminalResults">
-    <section class="terminal-section">
-      <div class="terminal-section-header">
-        <span>Input (stdin)</span>
-      </div>
-      <pre class="terminal-block">{{ stdin || '(no input)' }}</pre>
-    </section>
+    <ng-container *ngIf="shouldShowRunResultPanel">
+      <section
+        class="run-result-summary"
+        *ngIf="runResultTitle"
+        [class.passed]="firstRunTestCasePassed === true"
+        [class.failed]="firstRunTestCasePassed === false"
+      >
+        <h3>{{ runResultTitle }}</h3>
+        <p>{{ runResultSummary }}</p>
+      </section>
 
-    <section class="terminal-section">
-      <div class="terminal-section-header">
-        <span>Your Output (stdout)</span>
-        <span
-          class="terminal-status"
-          *ngIf="displayedStatus"
-          [class.success]="displayedStatus === 'Accepted'"
-          [class.error]="hasErrorStatus"
-        >
-          {{ displayedStatus }}
-        </span>
-      </div>
-      <pre class="terminal-block">{{ displayedOutput }}</pre>
-    </section>
+      <section
+        class="sample-testcase-strip"
+        *ngIf="firstTestCasePassedLabel"
+        [class.passed]="firstRunTestCasePassed === true"
+        [class.failed]="firstRunTestCasePassed === false"
+      >
+        <span aria-hidden="true">{{ firstRunTestCasePassed ? '✓' : '×' }}</span>
+        <span>Sample Test Case 1</span>
+      </section>
 
-    <section class="terminal-section">
-      <div class="terminal-section-header">
-        <span>Expected Output</span>
-      </div>
-      <pre class="terminal-block">
+      <section class="terminal-section">
+        <div class="terminal-section-header">
+          <span>Input (stdin)</span>
+        </div>
+        <pre class="terminal-block">{{ stdin || '(no input)' }}</pre>
+      </section>
+
+      <section class="terminal-section">
+        <div class="terminal-section-header">
+          <span>Your Output (stdout)</span>
+          <span
+            class="terminal-status"
+            *ngIf="firstTestCasePassedLabel || displayedStatus"
+            [class.success]="firstRunTestCasePassed === true || displayedStatus === 'Accepted'"
+            [class.error]="hasErrorStatus"
+          >
+            {{ firstTestCasePassedLabel || displayedStatus }}
+          </span>
+        </div>
+        <pre class="terminal-block">{{ displayedOutput }}</pre>
+      </section>
+
+      <section class="terminal-section">
+        <div class="terminal-section-header">
+          <span>Expected Output</span>
+        </div>
+        <pre class="terminal-block">
 {{ expectedOutput || '(no expected output)' }}</pre>
-    </section>
+      </section>
+    </ng-container>
 
-    <section class="testcase-results" *ngIf="testCaseResults.length">
+    <section class="testcase-results submit-results" *ngIf="shouldShowSubmitResults">
       <div class="testcase-results-header">
         <span>Test Cases</span>
         <span>
@@ -93,6 +125,41 @@
           </div>
         </div>
       </article>
+    </section>
+
+    <section class="logic-analysis" *ngIf="logicAnalysisResults.length">
+      <button
+        class="logic-analysis-toggle"
+        type="button"
+        (click)="toggleLogicAnalysis()"
+        [attr.aria-expanded]="logicAnalysisExpanded"
+      >
+        <span class="logic-analysis-title">
+          <span
+            class="logic-analysis-chevron"
+            [class.expanded]="logicAnalysisExpanded"
+          >
+            ›
+          </span>
+          <span>Logic Analysis</span>
+        </span>
+        <span>
+          {{ passedLogicCheckCount }}/{{ logicAnalysisResults.length }} checks
+          passed
+        </span>
+      </button>
+
+      <div class="logic-analysis-body" *ngIf="logicAnalysisExpanded">
+        <div
+          class="logic-check"
+          *ngFor="let check of logicAnalysisResults"
+          [class.passed]="check.passed"
+          [class.failed]="!check.passed"
+        >
+          <span>{{ check.name }}</span>
+          <span>{{ check.passed ? 'Passed' : 'Review' }}</span>
+        </div>
+      </div>
     </section>
   </div>
 </div>

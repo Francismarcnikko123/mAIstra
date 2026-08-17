@@ -101,7 +101,10 @@
             Text' }}
           </button>
           <div>
-            <select [(ngModel)]="selectedQuestionId">
+            <select
+              [ngModel]="selectedQuestionId"
+              (ngModelChange)="onSelectedQuestionChange($event)"
+            >
               <option value="">Select question</option>
               <option *ngFor="let q of questions" [value]="q.id">
                 {{ q.question_name }}
@@ -161,10 +164,15 @@
             [runCode]="getExecutionSourceCode(selectedSubmission)"
             [stdin]="getExecutionStdin(selectedSubmission)"
             [expectedOutput]="getExecutionExpectedOutput(selectedSubmission)"
+            [hasQuestion]="hasExecutionQuestion(selectedSubmission)"
+            [requiresQuestion]="true"
             [submittedOutput]="submissionRunOutput[selectedSubmission.id] || ''"
             [submitStatus]="submissionCheckStatus[selectedSubmission.id] || ''"
             [isSubmitting]="isChecking"
             [testCaseResults]="submissionTestResults[selectedSubmission.id] || []"
+            [logicAnalysisResults]="
+              submissionLogicResults[selectedSubmission.id] || []
+            "
             (codeChange)="updateSubmissionCode(selectedSubmission.id, $event)"
             (submitCode)="checkSubmission(selectedSubmission)"
           >

@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { SupabaseService } from '../../services/supabase';
 import { CodeEditorComponent } from '../code-editor/code-editor';
-import { Judge0, TestCaseResult } from '../judge0/judge0';
+import { Judge0, LogicAnalysisResult, TestCaseResult } from '../judge0/judge0';
 import { Judge0Service } from '../../services/judge0.service';
 import { firstValueFrom } from 'rxjs';
 
@@ -74,6 +74,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   submissionCheckStatus: Record<string, string> = {};
   submissionRunOutput: Record<string, string> = {};
   submissionTestResults: Record<string, TestCaseResult[]> = {};
+  submissionLogicResults: Record<string, LogicAnalysisResult[]> = {};
 
   private subscription: any;
   private saveStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -173,6 +174,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.isChecking = false;
     this.submissionCheckStatus[submission.id] = '';
     this.submissionTestResults[submission.id] = [];
+    this.submissionLogicResults[submission.id] = [];
 
     const saved = submission.verified_text || submission.extracted_text || '';
     if (saved && !this.editableText[submission.id]) {
@@ -296,6 +298,15 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.editableText[id] = code;
   }
 
+  onSelectedQuestionChange(questionId: string) {
+    this.selectedQuestionId = questionId;
+
+    if (!this.selectedSubmission) return;
+
+    this.clearExecutionResults(this.selectedSubmission.id);
+    this.cdr.detectChanges();
+  }
+
   async checkSubmission(submission: Submission | null) {
     if (!submission) return;
 
@@ -304,6 +315,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.submissionCheckStatus[submission.id] = '';
     this.submissionRunOutput[submission.id] = '';
     this.submissionTestResults[submission.id] = [];
+    this.submissionLogicResults[submission.id] = [];
 
     try {
       const question = this.getSubmissionQuestion(submission);
@@ -337,6 +349,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       }
 
       const testResults: TestCaseResult[] = [];
+      let logicResults: LogicAnalysisResult[] | null = null;
 
       for (const [index, testCase] of testCases.entries()) {
         const sourceCode =
@@ -378,6 +391,7 @@ ${testCase.test_code}
         );
 
         const passed = result.output_details.passed && compilationPassed;
+        logicResults ??= result.logic_details;
 
         testResults.push({
           caseNumber: index + 1,
@@ -394,6 +408,7 @@ ${testCase.test_code}
       }
 
       this.submissionTestResults[submission.id] = testResults;
+      this.submissionLogicResults[submission.id] = logicResults ?? [];
       this.submissionRunOutput[submission.id] =
         testResults.at(-1)?.actualOutput || '';
       this.submissionCheckStatus[submission.id] = testResults.every(
@@ -460,6 +475,18 @@ ${firstTestCase.test_code}
     const question = submission ? this.getSubmissionQuestion(submission) : null;
 
     return question?.test_cases?.[0]?.expected_output || '';
+  }
+
+  hasExecutionQuestion(submission: Submission | null): boolean {
+    return !!(submission && this.getSubmissionQuestion(submission));
+  }
+
+  private clearExecutionResults(id: string) {
+    this.checkError = '';
+    this.submissionCheckStatus[id] = '';
+    this.submissionRunOutput[id] = '';
+    this.submissionTestResults[id] = [];
+    this.submissionLogicResults[id] = [];
   }
 
   private getSubmissionQuestion(

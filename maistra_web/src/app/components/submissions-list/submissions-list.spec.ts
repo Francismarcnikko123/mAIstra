@@ -177,7 +177,9 @@ describe('SubmissionsListComponent save feedback', () => {
     );
     const gradeSubmission = vi.fn().mockReturnValue(
       of({
-        logic_details: [{ name: 'Has main', passed: true }],
+        logic_details: [
+          { name: 'Has main', passed: true, weight: 1, score: 1 },
+        ],
         output_details: {
           passed: true,
           expected_normalized: '5',
@@ -254,6 +256,9 @@ describe('SubmissionsListComponent save feedback', () => {
         status: 'Accepted',
         passed: true,
       },
+    ]);
+    expect(component.submissionLogicResults['submission-1']).toEqual([
+      { name: 'Has main', passed: true, weight: 1, score: 1 },
     ]);
   });
 
@@ -410,5 +415,37 @@ describe('SubmissionsListComponent save feedback', () => {
 
     expect(component.getExecutionStdin(submission)).toBe('2 3');
     expect(component.getExecutionExpectedOutput(submission)).toBe('5');
+  });
+
+  it('clears stale execution results when the selected question changes', () => {
+    const { component } = createComponent(vi.fn());
+    component.selectedSubmission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-07-28T00:00:00.000Z',
+    };
+    component.submissionRunOutput['submission-1'] = 'sum= 32765';
+    component.submissionCheckStatus['submission-1'] = 'Wrong Answer';
+    component.submissionTestResults['submission-1'] = [
+      {
+        caseNumber: 1,
+        stdin: '5 3',
+        expectedOutput: 'sum: 8',
+        actualOutput: 'sum= 32765',
+        status: 'Wrong Answer',
+        passed: false,
+      },
+    ];
+    component.submissionLogicResults['submission-1'] = [
+      { name: 'Has main', passed: true, weight: 1, score: 1 },
+    ];
+
+    component.onSelectedQuestionChange('question-2');
+
+    expect(component.selectedQuestionId).toBe('question-2');
+    expect(component.submissionRunOutput['submission-1']).toBe('');
+    expect(component.submissionCheckStatus['submission-1']).toBe('');
+    expect(component.submissionTestResults['submission-1']).toEqual([]);
+    expect(component.submissionLogicResults['submission-1']).toEqual([]);
   });
 });
