@@ -1,4 +1,10 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  OnDestroy,
+  ChangeDetectorRef,
+  ViewChild,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -32,13 +38,16 @@ interface Submission {
   verified_text?: string;
   topic?: string;
   question_id?: string;
-  questions?: SubmissionQuestion;
+  questions?: SubmissionQuestion | SubmissionQuestion[];
 }
 
 interface TopicGroup {
   topic: string;
   submissions: Submission[];
 }
+
+type ReviewStep = 1 | 2 | 3;
+type SubmissionFilter = 'all' | 'new' | 'extracted' | 'verified' | 'graded';
 
 @Component({
   selector: 'app-submissions-list',
@@ -48,14 +57,18 @@ interface TopicGroup {
   styleUrl: './submissions-list.css',
 })
 export class SubmissionsListComponent implements OnInit, OnDestroy {
+  @ViewChild('codeEditor') codeEditor?: CodeEditorComponent;
   selectedQuestionId = '';
-  questions: any[] = [];
+  questions: SubmissionQuestion[] = [];
   submissions: Submission[] = [];
   groupedSubmissions: TopicGroup[] = [];
   collapsedFolders: Record<string, boolean> = {};
+  searchQuery = '';
+  statusFilter: SubmissionFilter = 'all';
 
   // Modal state
   selectedSubmission: Submission | null = null;
+  reviewStep: ReviewStep = 1;
   editableTopic: string = '';
   savingTopic = false;
 
@@ -66,7 +79,6 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   editableText: Record<string, string> = {};
   extractionError: Record<string, string> = {};
   saveStatus: Record<string, string> = {}; // '' | 'saved' | 'error'
-  showCodeExecutionEditor: Record<string, boolean> = {};
 
   // code checking state
   isChecking = false;
@@ -76,7 +88,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   submissionTestResults: Record<string, TestCaseResult[]> = {};
   submissionLogicResults: Record<string, LogicAnalysisResult[]> = {};
 
-  private subscription: any;
+  private subscription?: ReturnType<
+    SupabaseService['subscribeToSubmissions']
+  >;
   private saveStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private saveGenerations = new Map<string, number>();
   private destroyed = false;
@@ -92,8 +106,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     await this.loadQuestions();
     await this.loadSubmissions();
 
-    this.subscription = this.supabase.subscribeToSubmissions((payload: any) => {
-      this.loadSubmissions();
+    this.subscription = this.supabase.subscribeToSubmissions(() => {
+      void this.loadSubmissions();
     });
   }
 
@@ -147,7 +161,23 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   groupSubmissions() {
     const map = new Map<string, Submission[]>();
-    for (const s of this.submissions) {
+    const query = this.searchQuery.trim().toLowerCase();
+    const filtered = this.submissions.filter((submission) => {
+      const statusMatches =
+        this.statusFilter === 'all' ||
+        this.getSubmissionStatus(submission) === this.statusFilter;
+      const searchMatches =
+        !query ||
+        [
+          submission.student_name,
+          submission.topic,
+          this.getQuestionName(submission),
+        ].some((value) => value?.toLowerCase().includes(query));
+
+      return statusMatches && searchMatches;
+    });
+
+    for (const s of filtered) {
       const topic = s.topic?.trim() || 'Uncategorized';
       if (!map.has(topic)) map.set(topic, []);
       map.get(topic)!.push(s);
@@ -162,6 +192,16 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       .map(([topic, submissions]) => ({ topic, submissions }));
   }
 
+  onFiltersChanged() {
+    this.groupSubmissions();
+  }
+
+  clearFilters() {
+    this.searchQuery = '';
+    this.statusFilter = 'all';
+    this.groupSubmissions();
+  }
+
   toggleFolder(topic: string) {
     this.collapsedFolders[topic] = !this.collapsedFolders[topic];
   }
@@ -169,6 +209,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   openModal(submission: Submission) {
     this.selectedSubmission = { ...submission };
     this.editableTopic = submission.topic || 'Uncategorized';
+    const linkedQuestion = this.getLinkedQuestion(submission);
+    this.selectedQuestionId = submission.question_id || linkedQuestion?.id || '';
+    this.reviewStep = 1;
 
     this.checkError = '';
     this.isChecking = false;
@@ -184,25 +227,54 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   closeModal() {
     this.selectedSubmission = null;
+    this.reviewStep = 1;
   }
 
-  async saveTopic() {
-    if (!this.selectedSubmission) return;
+  setReviewStep(step: ReviewStep) {
+    if (step === 3 && !this.canOpenGradingStep()) return;
+    this.reviewStep = step;
+  }
+
+  async continueFromDetails() {
+    if (!this.selectedQuestionId) return;
+
+    const saved = await this.saveSubmissionDetails();
+    if (saved) this.reviewStep = 2;
+  }
+
+  async saveCodeAndContinue() {
+    if (!this.canOpenGradingStep()) return;
+
+    await this.saveVerifiedText();
+    if (this.selectedSubmission && this.saveStatus[this.selectedSubmission.id] === 'saved') {
+      this.reviewStep = 3;
+    }
+  }
+
+  async saveSubmissionDetails(): Promise<boolean> {
+    if (!this.selectedSubmission) return false;
     this.savingTopic = true;
     try {
-      await this.supabase.updateSubmissionTopic(
+      await this.supabase.updateSubmissionDetails(
         this.selectedSubmission.id,
         this.editableTopic,
+        this.selectedQuestionId || null,
       );
       const s = this.submissions.find(
         (x) => x.id === this.selectedSubmission!.id,
       );
-      if (s) s.topic = this.editableTopic;
+      if (s) {
+        s.topic = this.editableTopic;
+        s.question_id = this.selectedQuestionId || undefined;
+      }
       this.selectedSubmission.topic = this.editableTopic;
+      this.selectedSubmission.question_id = this.selectedQuestionId || undefined;
       this.groupSubmissions();
       this.cdr.detectChanges();
+      return true;
     } catch (err) {
-      console.error('Failed to save topic:', err);
+      console.error('Failed to save submission details:', err);
+      return false;
     } finally {
       this.savingTopic = false;
     }
@@ -214,12 +286,15 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.extractingId = id;
     this.extractionError[id] = '';
     try {
-      const res: any = await this.http
-        .post('http://localhost:8000/api/ocr/extract-from-url', {
-          image_url: this.selectedSubmission.image_url,
-          submission_id: id,
-        })
-        .toPromise();
+      const res = await firstValueFrom(
+        this.http.post<{ cleaned_text?: string }>(
+          'http://localhost:8000/api/ocr/extract-from-url',
+          {
+            image_url: this.selectedSubmission.image_url,
+            submission_id: id,
+          },
+        ),
+      );
       const text = res?.cleaned_text ?? '';
       this.extractedText[id] = text;
       this.editableText[id] = text;
@@ -260,7 +335,6 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
           this.selectedSubmission.extracted_text = ocrText;
       }
       this.saveStatus[id] = 'saved';
-      this.showCodeExecutionEditor[id] = true;
       // Auto-clear the confirmation after a few seconds.
       const timer = setTimeout(() => {
         if (!this.isCurrentSave(id, generation)) return;
@@ -286,6 +360,60 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     return !!this.editableText[id];
   }
 
+  canOpenGradingStep(): boolean {
+    if (!this.selectedSubmission) return false;
+    return (
+      !!this.getStudentCode(this.selectedSubmission).trim() &&
+      !!this.getSubmissionQuestion(this.selectedSubmission)
+    );
+  }
+
+  getSubmissionStatus(submission: Submission): Exclude<SubmissionFilter, 'all'> {
+    const persistedStatus = submission.status?.trim().toLowerCase();
+    if (
+      persistedStatus === 'graded' ||
+      this.submissionTestResults[submission.id]?.length ||
+      this.submissionCheckStatus[submission.id]
+    ) {
+      return 'graded';
+    }
+    if (persistedStatus === 'verified' || submission.verified_text) {
+      return 'verified';
+    }
+    if (
+      persistedStatus === 'extracted' ||
+      submission.extracted_text ||
+      this.extractedText[submission.id]
+    ) {
+      return 'extracted';
+    }
+    return 'new';
+  }
+
+  getSubmissionStatusLabel(submission: Submission): string {
+    const labels: Record<Exclude<SubmissionFilter, 'all'>, string> = {
+      new: 'Needs OCR',
+      extracted: 'Needs review',
+      verified: 'Ready to grade',
+      graded: 'Graded',
+    };
+    return labels[this.getSubmissionStatus(submission)];
+  }
+
+  getQuestionName(submission: Submission): string {
+    const selectedOrAssignedId =
+      submission.id === this.selectedSubmission?.id
+        ? this.selectedQuestionId || submission.question_id
+        : submission.question_id;
+    const assigned = this.questions.find(
+      (question) => question.id === selectedOrAssignedId,
+    );
+    if (assigned) return assigned.question_name;
+
+    const linked = this.getLinkedQuestion(submission);
+    return linked?.question_name || 'No question assigned';
+  }
+
   isExtracting(id: string): boolean {
     return this.extractingId === id;
   }
@@ -298,10 +426,16 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.editableText[id] = code;
   }
 
+  formatCode() {
+    this.codeEditor?.format();
+  }
+
   onSelectedQuestionChange(questionId: string) {
     this.selectedQuestionId = questionId;
 
     if (!this.selectedSubmission) return;
+
+    this.selectedSubmission.question_id = questionId || undefined;
 
     this.clearExecutionResults(this.selectedSubmission.id);
     this.cdr.detectChanges();
@@ -495,11 +629,18 @@ ${firstTestCase.test_code}
     const selectedQuestion = this.getSelectedQuestion();
     if (selectedQuestion) return selectedQuestion;
 
-    const linkedQuestion = Array.isArray(submission.questions)
-      ? submission.questions[0]
-      : submission.questions;
+    const linkedQuestion = this.getLinkedQuestion(submission);
 
     return linkedQuestion || null;
+  }
+
+  private getLinkedQuestion(
+    submission: Submission,
+  ): SubmissionQuestion | null {
+    if (Array.isArray(submission.questions)) {
+      return submission.questions[0] || null;
+    }
+    return submission.questions || null;
   }
 
   private getStudentCode(submission: Submission): string {
