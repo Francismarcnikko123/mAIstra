@@ -52,10 +52,14 @@ async getSubmissions() {
     .order('captured_at', { ascending: false });
 }
 
-  async updateSubmissionTopic(id: string, topic: string): Promise<void> {
+  async updateSubmissionDetails(
+    id: string,
+    topic: string,
+    questionId: string | null,
+  ): Promise<void> {
     const { error } = await this.supabase
       .from('submissions')
-      .update({ topic })
+      .update({ topic, question_id: questionId })
       .eq('id', id);
     if (error) throw error;
   }
