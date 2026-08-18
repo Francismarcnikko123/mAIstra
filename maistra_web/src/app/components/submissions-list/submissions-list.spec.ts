@@ -1,7 +1,7 @@
 import '@angular/compiler';
 import { ChangeDetectorRef } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Judge0Service } from '../../services/judge0.service';
 import { SupabaseService } from '../../services/supabase';
@@ -47,6 +47,39 @@ describe('SubmissionsListComponent save feedback', () => {
     });
 
     return { promise, resolve, reject };
+  }
+
+  function createWorkflowComponent(options?: {
+    updateSubmissionDetails?: ReturnType<typeof vi.fn>;
+    updateSubmissionText?: ReturnType<typeof vi.fn>;
+    post?: ReturnType<typeof vi.fn>;
+  }) {
+    const cdr = { detectChanges: vi.fn() } as unknown as ChangeDetectorRef;
+    const updateSubmissionDetails =
+      options?.updateSubmissionDetails ?? vi.fn().mockResolvedValue(undefined);
+    const updateSubmissionText =
+      options?.updateSubmissionText ?? vi.fn().mockResolvedValue(undefined);
+    const post =
+      options?.post ?? vi.fn().mockReturnValue(of({ cleaned_text: 'int main() {}' }));
+    const supabase = {
+      updateSubmissionDetails,
+      updateSubmissionText,
+    } as unknown as SupabaseService;
+    const http = { post } as unknown as HttpClient;
+    const component = new SubmissionsListComponent(
+      supabase,
+      http,
+      cdr,
+      {} as Judge0Service,
+    );
+
+    return {
+      component,
+      cdr,
+      post,
+      updateSubmissionDetails,
+      updateSubmissionText,
+    };
   }
 
   it('keeps a second save confirmation visible for its full three seconds', async () => {
@@ -447,5 +480,154 @@ describe('SubmissionsListComponent save feedback', () => {
     expect(component.submissionCheckStatus['submission-1']).toBe('');
     expect(component.submissionTestResults['submission-1']).toEqual([]);
     expect(component.submissionLogicResults['submission-1']).toEqual([]);
+  });
+
+  it('does not leave Details until a question is selected', async () => {
+    const { component, updateSubmissionDetails } = createWorkflowComponent();
+    selectSubmission(component, 'submission-1');
+    component.reviewStep = 1;
+
+    await component.continueFromDetails();
+
+    expect(updateSubmissionDetails).not.toHaveBeenCalled();
+    expect(component.reviewStep).toBe(1);
+  });
+
+  it('saves the topic and selected question together before code review', async () => {
+    const { component, updateSubmissionDetails } = createWorkflowComponent();
+    selectSubmission(component, 'submission-1');
+    component.submissions = [component.selectedSubmission!];
+    component.editableTopic = 'Loops';
+    component.selectedQuestionId = 'question-1';
+
+    await component.continueFromDetails();
+
+    expect(updateSubmissionDetails).toHaveBeenCalledWith(
+      'submission-1',
+      'Loops',
+      'question-1',
+    );
+    expect(component.reviewStep).toBe(2);
+  });
+
+  it.each([
+    ['object', false],
+    ['array', true],
+  ])('restores a linked question returned as an %s', (_, asArray) => {
+    const { component } = createWorkflowComponent();
+    const question = {
+      id: 'question-1',
+      question_name: 'Addition',
+      question_type: 'program' as const,
+      model_answer: 'int main(void) { return 0; }',
+      test_cases: [],
+    };
+    const submission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-08-18T00:00:00.000Z',
+      questions: asArray ? [question] : question,
+    };
+
+    component.openModal(submission);
+
+    expect(component.selectedQuestionId).toBe('question-1');
+    expect(component.getQuestionName(submission)).toBe('Addition');
+  });
+
+  it('blocks grading until both student code and a question exist', () => {
+    const { component } = createWorkflowComponent();
+    selectSubmission(component, 'submission-1');
+
+    expect(component.canOpenGradingStep()).toBe(false);
+
+    component.questions = [{
+      id: 'question-1',
+      question_name: 'Addition',
+      question_type: 'program',
+      model_answer: 'int main(void) { return 0; }',
+      test_cases: [],
+    }];
+    component.selectedQuestionId = 'question-1';
+
+    expect(component.canOpenGradingStep()).toBe(true);
+  });
+
+  it.each([
+    ['pending', 'new'],
+    ['extracted', 'extracted'],
+    ['verified', 'verified'],
+    ['graded', 'graded'],
+  ] as const)('maps persisted status %s to %s', (status, expected) => {
+    const { component } = createWorkflowComponent();
+    const submission = {
+      id: `submission-${status}`,
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-08-18T00:00:00.000Z',
+      status,
+    };
+
+    expect(component.getSubmissionStatus(submission)).toBe(expected);
+  });
+
+  it('keeps the user in code review and displays an OCR error on failure', async () => {
+    const post = vi.fn().mockReturnValue(
+      throwError(() => new Error('OCR unavailable')),
+    );
+    const { component } = createWorkflowComponent({ post });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    selectSubmission(component, 'submission-1');
+    component.reviewStep = 2;
+
+    await component.extractText();
+
+    expect(component.reviewStep).toBe(2);
+    expect(component.extractionError['submission-1']).toContain(
+      'Failed to extract text',
+    );
+    expect(component.extractingId).toBeNull();
+  });
+
+  it('advances to grading only after verified code saves successfully', async () => {
+    const updateSubmissionText = vi.fn().mockResolvedValue(undefined);
+    const { component } = createWorkflowComponent({ updateSubmissionText });
+    selectSubmission(component, 'submission-1');
+    component.questions = [{
+      id: 'question-1',
+      question_name: 'Addition',
+      question_type: 'program',
+      model_answer: 'int main(void) { return 0; }',
+      test_cases: [],
+    }];
+    component.selectedQuestionId = 'question-1';
+    component.reviewStep = 2;
+
+    await component.saveCodeAndContinue();
+
+    expect(updateSubmissionText).toHaveBeenCalled();
+    expect(component.reviewStep).toBe(3);
+  });
+
+  it('does not advance to grading when verified code fails to save', async () => {
+    const updateSubmissionText = vi
+      .fn()
+      .mockRejectedValue(new Error('database unavailable'));
+    const { component } = createWorkflowComponent({ updateSubmissionText });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    selectSubmission(component, 'submission-1');
+    component.questions = [{
+      id: 'question-1',
+      question_name: 'Addition',
+      question_type: 'program',
+      model_answer: 'int main(void) { return 0; }',
+      test_cases: [],
+    }];
+    component.selectedQuestionId = 'question-1';
+    component.reviewStep = 2;
+
+    await component.saveCodeAndContinue();
+
+    expect(component.saveStatus['submission-1']).toBe('error');
+    expect(component.reviewStep).toBe(2);
   });
 });
