@@ -37,5 +37,23 @@ datasets/recognition/
 models/*
 !models/README.md
 
+# dataset_review/ is a 53 MB local staging area of raw, un-gated IMG_XXXX
+# photos being manually triaged into usable/deferred/etc. The photos are
+# working material, not a deliverable -- only the human review decisions
+# (VERDICTS.md) are worth tracking. See docs/CLAUDE.md.
+dataset_review/*
+!dataset_review/VERDICTS.md
+
+# A zipped copy of datasets/recognition/ (the per-line crops), fully
+# regenerable via build_recognition_dataset.py -- same reason recognition/
+# itself is ignored above; a zip of it doesn't belong in history either.
+recognition_dataset.zip
+
+# PaddleX wrapper config for the *broken* py3.13 install path (only the
+# superseded COLAB_FINE_TUNING_GUIDE.md references it). The working path uses
+# a native config -- see docs/ocr/COLAB_SETUP_WORKING.md. Kept locally, not
+# committed.
+PP-OCRv6_medium_rec.yaml
+
 # macOS files
 .DS_Store
