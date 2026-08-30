@@ -30,5 +30,12 @@ outputs/*
 # for something anyone can reproduce with one command.
 datasets/recognition/
 
+# Fine-tuned recognizer weights are distributed via a GitHub Release (~76 MB),
+# not committed -- they'd bloat the repo and are fully regenerable from
+# notebooks/finetune_ppocrv6_rec_colab.ipynb. Keep only the README pointer that
+# says where to download them. See models/README.md.
+models/*
+!models/README.md
+
 # macOS files
 .DS_Store
