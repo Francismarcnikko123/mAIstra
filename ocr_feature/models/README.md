@@ -20,9 +20,13 @@ Full result + methodology: `docs/ocr/EVALUATION.md`.
 1. Download `fine_tuned_rec_model.zip` from the repo's GitHub **Releases**
    page (release tag: `ocr-rec-v1` — update this if the tag differs).
 2. From the `ocr_feature/` directory, unzip it into
-   `models/fine_tuned_rec/inference/`:
+   `models/fine_tuned_rec/inference/`. The `mkdir -p` is required on a fresh
+   clone -- `models/fine_tuned_rec/` doesn't exist yet (git doesn't track
+   empty directories; only `models/README.md` is tracked), and `unzip -d`
+   fails outright if its parent directory is missing:
    ```bash
    cd ocr_feature
+   mkdir -p models/fine_tuned_rec/inference
    unzip fine_tuned_rec_model.zip -d models/fine_tuned_rec/inference
    ```
 3. Verify the layout — you should have exactly these three files, directly
