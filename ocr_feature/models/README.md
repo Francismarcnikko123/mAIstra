@@ -20,22 +20,33 @@ Full result + methodology: `docs/ocr/EVALUATION.md`.
 1. Download `fine_tuned_rec_model.zip` from the repo's GitHub **Releases**
    page (release tag: `ocr-rec-v1` — update this if the tag differs).
 2. From the `ocr_feature/` directory, unzip it into
-   `models/fine_tuned_rec/inference/`. The `mkdir -p` is required on a fresh
-   clone -- `models/fine_tuned_rec/` doesn't exist yet (git doesn't track
-   empty directories; only `models/README.md` is tracked), and `unzip -d`
-   fails outright if its parent directory is missing:
+   `models/fine_tuned_rec/inference/`. Creating the directory first is
+   required on a fresh clone -- `models/fine_tuned_rec/` doesn't exist yet
+   (git doesn't track empty directories; only `models/README.md` is tracked),
+   and both `unzip -d` and `Expand-Archive` fail outright if the parent
+   directory is missing.
+
+   **macOS / Linux / Git Bash:**
    ```bash
    cd ocr_feature
    mkdir -p models/fine_tuned_rec/inference
    unzip fine_tuned_rec_model.zip -d models/fine_tuned_rec/inference
    ```
+
+   **Windows (PowerShell):**
+   ```powershell
+   cd ocr_feature
+   New-Item -ItemType Directory -Force -Path models\fine_tuned_rec\inference
+   Expand-Archive -Path "$env:USERPROFILE\Downloads\fine_tuned_rec_model.zip" -DestinationPath models\fine_tuned_rec\inference -Force
+   ```
 3. Verify the layout — you should have exactly these three files, directly
    inside `inference/` (no extra nested folder):
    ```bash
-   ls models/fine_tuned_rec/inference
+   ls models/fine_tuned_rec/inference          # macOS/Linux/Git Bash
+   dir models\fine_tuned_rec\inference          # Windows PowerShell
    # inference.json  inference.pdiparams  inference.yml
    ```
-   If `unzip` instead created a nested folder (e.g.
+   If unzipping instead created a nested folder (e.g.
    `inference/fine_tuned_rec_model/inference.json`), move the three files up
    one level so they sit directly in `inference/`.
 4. Confirm it's picked up — start the backend (`uvicorn main:app --reload`
