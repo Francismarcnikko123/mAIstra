@@ -1,4 +1,5 @@
 import math
+import os
 from pathlib import Path
 
 import cv2
@@ -40,7 +41,14 @@ from core.c_code_suggestions import suggest_c_code
 # Release) and reproduced via docs/ocr/COLAB_SETUP_WORKING.md. A teammate who
 # hasn't downloaded them yet gets a clear error below, not a silent
 # degradation to stock.
-_FINE_TUNED_REC_DIR = "models/fine_tuned_rec/inference"
+# Default is the shipped fine-tuned recognizer. An offline eval experiment can
+# point the pipeline at a DIFFERENT recognizer (e.g. the cross-writer
+# measurement model in models/fine_tuned_rec_crosswriter/) by setting
+# MAISTRA_REC_MODEL_DIR, without editing this file -- see
+# evaluators/crosswriter_eval.py. Unset (the default) is unchanged behaviour.
+_FINE_TUNED_REC_DIR = os.environ.get(
+    "MAISTRA_REC_MODEL_DIR", "models/fine_tuned_rec/inference"
+)
 if not Path(_FINE_TUNED_REC_DIR).exists():
     raise FileNotFoundError(
         f"Fine-tuned recognizer not found at '{_FINE_TUNED_REC_DIR}'. "

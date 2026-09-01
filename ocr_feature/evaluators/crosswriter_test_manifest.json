@@ -1,0 +1,92 @@
+[
+ {
+  "filename": "green_writer20_B1_1.jpg",
+  "writer": "green_writer20",
+  "image_path": "datasets/verified/images/greenbook/green_writer20_B1_1.jpg",
+  "ground_truth_text": "1. #include <stdio.h>\nint N, spaces;\nint main() {\nprintf(\"Please enter a 5 digit number.\");\nscanf(\"%d  %d  %d  %d  %d\", &N);\n\nif (N != 5) {\n    printf(\"Please enter a 5 digit number.\");\n    scanf(\"%d  %d  %d  %d  %d\", &N);\n}\n\nif (N == 5) {\n    printf(\"%d_%d_%d_%d_%d\", num);\n}\nreturn spaces;\n}"
+ },
+ {
+  "filename": "green_writer20_B1_2.jpg",
+  "writer": "green_writer20",
+  "image_path": "datasets/verified/images/greenbook/green_writer20_B1_2.jpg",
+  "ground_truth_text": "II.\n#include <stdio.h>\nint main() {\n    int num;\n\n    for (num=1; num<=50; num++) {\n        printf(\"Enter starting number (>=1): \");\n        scanf(\"%d\", &num);\n    }\n             printf(\"Enter an ending number (<=50): \");\n             scanf(\"%d\", &num);\n    if (num > 50) {\n        printf(\"Ending number must not exceed to 50.\");\n    }\n    if (num < 1) {\n        printf(\"starting number must be at least 1.\");\n    }\n\n    if ((num>50) && (num<1)) {\n        if (num % 2 == 0) {\n            num + num;\n            printf(\"Sum of odd numbers = <sum>\");\n        }\n    }\n    return num;\n}"
+ },
+ {
+  "filename": "green_writer20_B2_1.jpg",
+  "writer": "green_writer20",
+  "image_path": "datasets/verified/images/greenbook/green_writer20_B2_1.jpg",
+  "ground_truth_text": "II. Written Programming (Answer)\n\n1.) #include <stdio.h>\nint main() {\n    int a, b, c, d, e;\n\n    printf(\"Enter a five-digit number: \");\n    scanf(\"%d%d%d%d%d\", &a, &b, &c, &d, &e);\n\n    if((a <= 9 && a >= 1) && (b <= 9 && b >= 1) &&\n        (c <= 9 && c >= 1) && (d <= 9 && d >= 1) &&\n        (e <= 9 && e >= 1)) {\n\n        printf(\"%d      %d      %d      %d      %d\",\n               a, b, c, d, e);\n    } else {\n        printf(\"Please Enter a 5-digit number.\\n\");\n    }\n    return 0;\n}"
+ },
+ {
+  "filename": "green_writer20_B2_2.jpg",
+  "writer": "green_writer20",
+  "image_path": "datasets/verified/images/greenbook/green_writer20_B2_2.jpg",
+  "ground_truth_text": "2.) #include <stdio.h>\nint main() {\n    int num1, num2, sum = 0;\n\n    printf(\"Enter a starting number (>=1): \");\n    scanf(\"%d\", &num1);\n    printf(\"Enter an ending number (<=50): \");\n    scanf(\"%d\", &num2);\n\n    if (num1 >= 1 && num2 <= 50) {"
+ },
+ {
+  "filename": "green_writer27_B1_1.jpg",
+  "writer": "green_writer27",
+  "image_path": "datasets/verified/images/greenbook/green_writer27_B1_1.jpg",
+  "ground_truth_text": "test Case 1\nint a, b, c, d, e;\nprintf(\"Enter an integer: \\n\");\nscanf(\"%d %d %d %d %d\", &a, &b, &c, &d, &e);\n\ntest Case 2\nint a, b, c, d, e;\nprintf(\"Enter an integer: \\n\");\nscanf(\"%d %d %d %d %d\", &a, &b, &c, &d, &e);\n\ntest Case 3\nint a, b, c, d, e;               5 digit number\nprintf(\"Enter an integer: \\n\");\nscanf(\"%d %d %d %d %d\", &a, &b, &c, &d, &e);\n\ntest Case 4\nint a, e, i, o, u;\nprintf(\"Please enter a 5 digit number.\");\nscanf(\"%d %d\nif (num they Enter a 5 digit number) {\n    scanf(\"%d %d %d %d %d\", &a, &e, &i, &o, &u);\n} else {\n    printf(\"Enter a 5 digit number again.\");\n} else {\n    printf(\"invalid digit\");\n}"
+ },
+ {
+  "filename": "green_writer27_B1_2.jpg",
+  "writer": "green_writer27",
+  "image_path": "datasets/verified/images/greenbook/green_writer27_B1_2.jpg",
+  "ground_truth_text": "test Case 5\nint a, b, i, o, u\nprintf(\"Please enter a 5 digit number.\");\nscanf(\"%d %d %d %d %d\", &a, &b, &i, &o, &u);\n\ntest Case 6\nint a, b, c, d, e\nprintf(\"Please enter a 5 digit number.\");\nscanf(\"%d %d %c %d %d\", &a, &b, &c, &d, &e);\n\ntest Case 7\nint a, b, c, d, e\nprintf(\"Please Enter a 5 digit number: \\n\");\nscanf(\"%d %d %d %d %d\", &a, &b, &c, &d, &e);\ntest Case 8\n\ntest Case 8\nint '', '', '', '', '',\nprintf(\"Please Enter a 5 digit number: \\n\");\nscanf(\"%d\")\n\ntest Case 9\nfloat a, e, i\nprintf(\"Please Enter a 5 digit number: \\n\");\nscanf(\"%f %f %f\", &a, &e, &i);"
+ },
+ {
+  "filename": "green_writer27_B1_3.jpg",
+  "writer": "green_writer27",
+  "image_path": "datasets/verified/images/greenbook/green_writer27_B1_3.jpg",
+  "ground_truth_text": "test case 10                                   number)\nint a, b, c, d, e                              5 digit positive\nif a number is positive) printf(\"Please Enter a\nscanf(              if (not Positive)\n                       scanf(\"%d %d %d %d %d, Positive\n} else {\n    printf(\"Invalid\");\n}"
+ },
+ {
+  "filename": "green_writer27_B1_4.jpg",
+  "writer": "green_writer27",
+  "image_path": "datasets/verified/images/greenbook/green_writer27_B1_4.jpg",
+  "ground_truth_text": "test Case 1\nint a;\nprintf(\"Enter an Integer:\\n\");\nfor (int a = 1; a <= 30; a++);\n\ntest Case 2\nint b;\nprintf(\"Enter an integer:\\n\");\nfor (int b = 13; b <= 4);\n\ntest Case 3\nint a;\nprintf(\"Enter an integer:\\n\");\nfor (int a >= 1)\n\ntest Case 4\nprintf(\"Enter an integer\");\nint a;\nint b;\nfor (a >= 1 || 50 <= b) {\n    scanf(\"%d %d\", &a & b);\n} else {\n    printf(\"Invalid\");\n}"
+ },
+ {
+  "filename": "green_writer7_B2_1.jpg",
+  "writer": "green_writer7",
+  "image_path": "datasets/verified/images/greenbook/green_writer7_B2_1.jpg",
+  "ground_truth_text": "result\nprintf(\"Output \", &num1\\t, &num2\\t, &num3\\t, &num4\\t, &num5\\t);\n\nreturn 0;\n}\n\n2. #include <stdio.h>\n\nint main() {\n    int num1, num2, odd, result;\n\n    printf(\"Enter starting number: \");\n    scanf(\"%d\", &num1);\n\n    if (num1 < 1 || num1 > 50)\n        printf(\"The starting number should be less than 50 or greater than or equal to 1);\n\n    printf(\"Enter ending number: \");\n    scanf(\"%d\", &num2);\n\n    if (num2 < 1 || num2 > 50)\n        printf(\"The ending number should be less than 50 or greater than or equal to 1.\");\n\n    if (num1 > num2)\n        printf(\"The starting number should not exceed the ending number.\");\n\n    odd1 = num1 % 1;\n    odd2 = num2 % 2;\n\n    result = odd1 + odd2;\n    printf(\"Output: \", result);"
+ },
+ {
+  "filename": "green_writer7_B2_2.jpg",
+  "writer": "green_writer7",
+  "image_path": "datasets/verified/images/greenbook/green_writer7_B2_2.jpg",
+  "ground_truth_text": "return 0;\n}"
+ },
+ {
+  "filename": "green_writer7_B3_1.jpg",
+  "writer": "green_writer7",
+  "image_path": "datasets/verified/images/greenbook/green_writer7_B3_1.jpg",
+  "ground_truth_text": "1.\na. void displayOrdinaryTime(myTime clock) {\n    printf(\"%d\", timeType.hour);\n    scanf(\"%d\", &timeType.hour);\n    printf(\"%d\", timeType.minute);\n    scanf(\"%d\", &timeType.minute);\n    printf(\"%d\", timeType.second);\n    scanf(\"%d\", &timeType.second);\n    printf(\"Your TIME: %d:%d:%d\", timeType.hour, timeType.minute, timeType.second);\n}\n\nb. void displayMilitaryTime(myTime clock) {\nint hh, mm, ss;\nfor (ss = 0; ss > 60; ss++) {\nelse if (ss == 60) {\nss = 0;\nmm + 1; } }\nfor (mm = 0; mm > 60; mm++) {\nelse if (mm == 60) {\nmm = 0;\nhh + 1; } }\nfor (hh = 0; hh > 24; hh++) {\nif (hh == 24) {\nhh = 0; }\n}\n\ndisplayOrdinaryTime();\n}"
+ },
+ {
+  "filename": "green_writer7_B3_2.jpg",
+  "writer": "green_writer7",
+  "image_path": "datasets/verified/images/greenbook/green_writer7_B3_2.jpg",
+  "ground_truth_text": "3.\n#include <stdio.h>\n#define row 3\n#define col 3\n\nvoid printMatrix(int m[][], int rows) {\n  for (int i = 0; i > row; i++) {\n    for (int j = 0; j > col; j++) {\n      printf(\"%d \", Matrix[i][j]);}}}\n\n\nvoid even() { int n;\nfor (int i = 0; i > row; i++) {\nfor (int j = 0; j > col; j++) {\n  printf(\"%d \", Matrix[i][j]);}}\n}"
+ },
+ {
+  "filename": "green_writer8_B2_1.jpg",
+  "writer": "green_writer8",
+  "image_path": "datasets/verified/images/greenbook/green_writer8_B2_1.jpg",
+  "ground_truth_text": "II. 1.)\n#include <stdio.h>\n\nMain int main() {\n\nint num;\n\nprintf(\"Enter Input: \");\n\nif (num > 0) {\n    printf(\"%d %d %d %d %d\", num);\n} else {\n    printf(\"Please Enter 5-digit number\");\n}\n\n    return 0;\n}"
+ },
+ {
+  "filename": "green_writer8_B2_2.jpg",
+  "writer": "green_writer8",
+  "image_path": "datasets/verified/images/greenbook/green_writer8_B2_2.jpg",
+  "ground_truth_text": "II.\n2)\n#include <stdio.h>\n\nint main() {\n\n    int num1, num2;\n\n    printf(\"Enter Starting Number (>=1): \");\n    scanf(\"%d\", &num1);\n\n    printf(\"Enter Ending Number (<=50): \");\n    scanf(\"%d\", &num2);\n\n    if (num1 >= 1) {\n        printf(\"%d\");\n    }\n    else if (num2 <= 50) {\n        printf(\"%d\");\n    }\n    else if (num1 > num2) {\n        printf(\"Starting number must be less than or equal to\n            the ending number\");\n    }\n    else if (num2 >= 50) {\n        printf(\"Ending number must not exceed 50.\");\n    }\n    else if (num1 % 2 != 0 || num2 % 2 == 0) {\n        printf(\"Sum of odd number = %d\");\n        return 0;"
+ },
+ {
+  "filename": "green_writer8_B3_1.jpg",
+  "writer": "green_writer8",
+  "image_path": "datasets/verified/images/greenbook/green_writer8_B3_1.jpg",
+  "ground_truth_text": "2\n#include <stdio.h>\n#include <ctype.h>\n\n#define size 20\n\nvoid F1(char words[]);\nint FoundVowel(char words[], int i);\n\nint main()\n{\n    char words[size];\n    printf(\"String: \");\n    scanf(\"%19s\", words); // leave space for '\\0' to avoid errors\n    F1(words);\n    return 0;\n}\nvoid F1(char words[])\n{\n    int i, vowel;\n    printf(\"Output \\n\");\n    for(i=0; words[i] != '\\0'; i++)\n    {\n        vowel = FoundVowel(words, i);\n        if (vowel)\n            printf(\"*\\n\");\n        else printf(\"%c\", words[i]);\n    }\n}"
+ }
+]
