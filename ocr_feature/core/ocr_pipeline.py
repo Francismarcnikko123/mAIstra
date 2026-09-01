@@ -1,4 +1,5 @@
 import math
+import os
 from pathlib import Path
 
 import cv2
@@ -12,9 +13,11 @@ from core.c_code_cleanup import clean_c_code
 from core.c_code_suggestions import suggest_c_code
 
 
-# Detection and recognition are pinned by name -- passing a model name makes
-# PaddleOCR silently ignore lang/ocr_version, so setting those too would be
-# misleading.
+# Detection is pinned by name -- passing a model name makes PaddleOCR
+# silently ignore lang/ocr_version, so setting those too would be misleading.
+# Recognition is pinned by directory instead (see the fine-tuned recognizer
+# block below), since the fine-tuned weights are the only recognizer this
+# pipeline runs -- there is no stock-model fallback.
 #
 # No orientation/unwarp passes: captures are already gated upright/flat by
 # the mobile app, so these passes only add cost (~80s -> a few seconds/image
@@ -28,9 +31,35 @@ from core.c_code_suggestions import suggest_c_code
 # still emits occasional CJK, but rare enough to be cosmetic, not an accuracy
 # problem. Full sweep numbers: docs/ocr/EVALUATION.md.
 
+# Fine-tuned recognizer (2026-08-30): trained on 2,491 handwritten C-code
+# line crops, cut recognition CER on the held-out samples/ set from 0.274
+# (stock PP-OCRv6_medium_rec) to 0.126 (-54%), improving every sample with
+# no regressions. This is the ONLY recognizer this pipeline runs -- no
+# stock-model fallback -- so the result the thesis measured is always what's
+# actually running, never silently swapped for something weaker. Weights
+# aren't committed (see models/README.md -- ~76MB, distributed via a GitHub
+# Release) and reproduced via docs/ocr/COLAB_SETUP_WORKING.md. A teammate who
+# hasn't downloaded them yet gets a clear error below, not a silent
+# degradation to stock.
+# Default is the shipped fine-tuned recognizer. An offline eval experiment can
+# point the pipeline at a DIFFERENT recognizer (e.g. the cross-writer
+# measurement model in models/fine_tuned_rec_crosswriter/) by setting
+# MAISTRA_REC_MODEL_DIR, without editing this file -- see
+# evaluators/crosswriter_eval.py. Unset (the default) is unchanged behaviour.
+_FINE_TUNED_REC_DIR = os.environ.get(
+    "MAISTRA_REC_MODEL_DIR", "models/fine_tuned_rec/inference"
+)
+if not Path(_FINE_TUNED_REC_DIR).exists():
+    raise FileNotFoundError(
+        f"Fine-tuned recognizer not found at '{_FINE_TUNED_REC_DIR}'. "
+        "Download it from the GitHub Release and unzip it there -- see "
+        "models/README.md for instructions."
+    )
+print(f"[ocr_pipeline] recognizer: fine-tuned ({_FINE_TUNED_REC_DIR})")
+
 ocr = PaddleOCR(
     text_detection_model_name="PP-OCRv6_medium_det",
-    text_recognition_model_name="PP-OCRv6_medium_rec",
+    text_recognition_model_dir=_FINE_TUNED_REC_DIR,
     use_doc_orientation_classify=False,
     use_doc_unwarping=False,
     use_textline_orientation=False,

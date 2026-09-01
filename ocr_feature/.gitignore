@@ -30,5 +30,30 @@ outputs/*
 # for something anyone can reproduce with one command.
 datasets/recognition/
 
+# Fine-tuned recognizer weights are distributed via a GitHub Release (~76 MB),
+# not committed -- they'd bloat the repo and are fully regenerable from
+# notebooks/finetune_ppocrv6_rec_colab.ipynb. Keep only the README pointer that
+# says where to download them. See models/README.md.
+models/*
+!models/README.md
+
+# dataset_review/ is a 53 MB local staging area of raw, un-gated IMG_XXXX
+# photos being manually triaged into usable/deferred/etc. The photos are
+# working material, not a deliverable -- only the human review decisions
+# (VERDICTS.md) are worth tracking. See docs/CLAUDE.md.
+dataset_review/*
+!dataset_review/VERDICTS.md
+
+# A zipped copy of datasets/recognition/ (the per-line crops), fully
+# regenerable via build_recognition_dataset.py -- same reason recognition/
+# itself is ignored above; a zip of it doesn't belong in history either.
+recognition_dataset.zip
+
+# PaddleX wrapper config for the *broken* py3.13 install path (only the
+# superseded COLAB_FINE_TUNING_GUIDE.md references it). The working path uses
+# a native config -- see docs/ocr/COLAB_SETUP_WORKING.md. Kept locally, not
+# committed.
+PP-OCRv6_medium_rec.yaml
+
 # macOS files
 .DS_Store

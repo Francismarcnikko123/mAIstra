@@ -1,217 +1,432 @@
 filename,ground_truth_text,writer,paper_type,capture_condition,literal_verified,literal_verified_by,literal_verified_at
-nikko_001_array_loop.jpeg,"#include <stdio.h>
-
+bond/bond_writer1_1.jpg,"#include <stdio.h>
 int main() {
-	int arr[5] = {1,2,3,4,5};
-	for (int i=0; i<5; i++) {
-		printf(""%d\n"", arr[i]);
-	}
-	return 0;
-}",nikko,bond,small,true,John Cale Nombrado,2026-08-03
-nikko_002_function_add.jpeg,"#include <stdio.h>
+    int a, b;
+    printf(""Enter two numbers: "");
+    scanf(""%d %d"", &a, &b);
+    if (a > b) {
+        printf(""Larger: %d\n"", a);
+    } else {
+        printf(""Larger: %d\n"", b);
+    }
+    return 0;
+}",writer1,bond,gate_raw,true,Nikko,2026-08-30
+bond/bond_writer2_1.jpg,"#include <stdio.h>
+int main() {
+    int num = 10;
+    int *ptr = &num;
+    printf(""Value: %d \n"", *ptr);
+    return 0;
+}",writer2,bond,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer10_B2_1.jpg,"#include <stdio.h>
+int main(void) {
+    int num = 2;
 
-int add(int x, int y) {
-	return x + y;
+    switch (num) {
+    case 1:
+        printf(""One\n"");
+    case 2:
+
+    case 3:
+
+        break;
+    default
+        printf(""Other\n"");
+    }
+    return 0;
 }
 
-int main() {
-	int result = add(3,4);
-	printf(""Result: %d\n"", result);
-	return 0;
-}",nikko,bond,small,true,John Cale Nombrado,2026-08-03
-nikko_003_scanf_sum.jpeg,"#include <stdio.h>
-
-int main() {
-	int a, b, sum;
-	scanf(""%d %d"", &a, &b);
-	sum = a + b;
-	printf(""sum = %d\n"", sum);
-	return 0;
-}",nikko,bond,small,true,John Cale Nombrado,2026-08-03
-nikko_004_pointer.jpeg,"#include <stdio.h>
-
-int main() {
-	int num = 10;
-	int *ptr = &num;
-	printf(""Value: %d\n"", *ptr);
-	return 0;
-}",nikko,bond,small,true,John Cale Nombrado,2026-08-03
-nikko_005_add_scramble.jpeg,"#include <stdio.h>
-
-int add(int x, int y) {
-	return x + y;
+int main(void) {
+    int arr[5] = {2,4,6,8,10};
+    int sum = 0;
+    int i;
+    for (i=0; i<5; i++) {
+        sum += arr[i];
+    }
+    printf(""sum = %d\n"", sum);
+    return 0;
 }
 
-int main() {
-	int result = add(3,4);
-	printf(""Result: %d\n"", result);
-	return 0;
-}",nikko,bond,phone,true,John Cale Nombrado,2026-08-03
-nombrado_s01_total_loop_gate.jpeg,"#include <stdio.h>
+x % 2 = 00
 
-int main() {
-	int total = 0;
-	int count = 10;
-	for (int i = 0; i < count; i++) {
-		total = total + i;
-	}
-	printf(""Total: %d\n"", total);
-	return 0;
-}",nombrado,bond,gate_raw,true,John Cale Nombrado,2026-08-03
-nombrado_s02b_two_numbers_gate.jpeg,"#include <stdio.h>
-
-int main() {
-	int a, b;
-	printf(""Enter two numbers: "");
-	scanf(""%d %d"", &a, &b);
-	if (a > b) {
-		printf(""Larger: %d\n"", a);
-	} else {
-		printf(""Larger: %d\n"", b);
-	}
-	return 0;
-}",nombrado,bond,gate_raw,true,John Cale Nombrado,2026-08-03
-nombrado_s05_factorial_gate.jpeg,"#include <stdio.h>
-
-int main() {
-	int n = 1;
-	int factorial = 1;
-	while (n <= 5) {
-		factorial = factorial * n;
-		n++;
-	}
-	printf(""Factorial of 5 = %d\n"", factorial);
-	if (factorial > 100) {
-		printf(""Large result\n"");
-	}
-	return 0;
-}",nombrado,bond,gate_raw,true,John Cale Nombrado,2026-08-03
-nombrado_s04_sumarray_gate.jpeg,"#include <stdio.h>
-
-int sumArray(int arr[], int size) {
-	int sum = 0;
-	for (int i = 0; i < size; i++) {
-		sum += arr[i];
-	}
-	return sum;
+int main(void) {
+    int x=1, total=0, y;
+    while (x <= 10) {
+        y = x * x;
+        printf(""%d\n"", y);
+        total += y;
+        ++x;
+    }
+    printf(""Total is %d\n"", total);
+    return 0;
 }
 
+#include <stdio.h>
+int main(void) {
+    int x = 1;
+    do {
+        printf(""%d"", x);
+        x++;
+    } while (x <= 4);
+    return 0;
+}",writer10,greenbook,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer12_B2_1.jpg,"Part 2: Programming
+1. #include <stdio.h>
 int main() {
-	int nums[5] = {10, 20, 30, 40, 50};
-	printf(""Sum: %d\n"", sumArray(nums, 5));
-	return 0;
-}",nombrado,bond,gate_raw,true,John Cale Nombrado,2026-08-03
-nombrado_s06_struct_green_gate.jpeg,"#include <stdio.h>
+    int size = 5, num = 0, rem = 0, count = 0; // initialized
+    printf(""Input a number: "");
+    scanf(""%d"", &num);
+
+    for (int i = 0; i < size; i++) //counts # of digits
+        num /= 10;
+        count++;
+
+    int arr[size] = {0};
+    if (count == 5) { //if 5 digits, print numbers w/ spaces
+        rem = num;
+        for (int j = 4; j <= 0; j--) { //array sorter
+            arr[size-1] = rem % 10;
+            rem = rem / 10;
+        }
+        for (int k = 0; k < size; k++) {
+            printf(""%d\t"", arr[k]);
+        }
+    }
+    else if (count < 5 || count > 5) { //error statement
+        printf(""Please enter a 5 digit number."");
+    }
+}",writer12,greenbook,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer13_B2_1.jpg,"MULTIPLE CHOICE
+
+2.  (1.1) (1.2) (1.3)   1  2  3
+    (2.1) (2.2) (2.3)   2  4  6
+    (3.1) (3.2) (3.3)   3  6  9
+
+3.  1 _ 2 _ 3 _ 4 _ 5
+    6 _ 7
+
+5.  z = x + y
+
+6.  scanf(""%d %d %d"", &x, &y, &z);
+
+29. int a[6] = {2, 5, 8, 3, 0, 0}
+              0  1  2  3  4  5
+
+    a[i] . 2 /
+      - 1     4
+
+    i=0  a[0] = 2 . 2 = num
+    i=1  a[1] = 5 - 1 = 4
+    i=2  a[2] = 8 . 2 = 16
+    i=3  a[3] = 3 - 1 = 2
+    i=4  a[4] = 0 . 2 = 0
+    i=5  a[5] = 0 - 1 = -1
+
+              0  1  2  3
+    a[1] = a[3] (2)      -> 4, 2, 16, 4.
+    a[3] = a[1] (4)
+
+    switch  break!",writer13,greenbook,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer13_B2_2.jpg,"2)
+#include <stdio.h>
+
+int main() {
+    int st, en, sum = 0;
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", &st);
+    if (st < 1) {
+        printf(""Starting number must at least be 1"");
+    } else {
+        printf(""Enter ending number (<=50): "");
+        scanf(""%d"", &en);
+    }
+    if (st >= 1 && en <= 50 && st < en) {
+        for (int i = st; i <= en; i++) {
+            if ((i % 2) != 0) {
+                sum += i;
+            }
+        }
+        printf(""Sum of odd numbers = %d"", sum);
+    } else if (st > en) {
+        printf(""Starting number must be less than or equal to the ending number"");
+    } else if (en > 50) {
+        printf(""Ending number must not exceed 50"");
+    }
+    return 0;
+}",writer13,greenbook,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer14_B2_1.jpg,"2. Coding
+1) int main() {
+    int n[5];
+    int num;
+    printf(""Input 5 digit number: "");
+    for (int i = 0; i < 5; i++) {
+        scanf(""%d"", &n[i]);
+    }
+    if (n[i] < 0) {
+        printf(""Please enter a 5 digit positive number"");
+    } else if (n[i] != number) {
+        printf(""Please enter a 5 digit number"");
+    }
+    if (n[i] >= 5) {
+        printf(""%d \t \t \t %d \t \t \t %d \t \t \t %d \t \t \t %d"", n[i]);
+    } else {
+        printf(""Please enter a 5 digit number"");
+    }
+    return 0;
+}",writer14,greenbook,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer14_B2_2.jpg,"2) int main() {
+    int startnum, endnum;
+    int sum = 0;
+    printf(""Starting number: "");
+    scanf(""%d"", &startnum);
+    printf(""Ending number: "");
+    scanf(""%d"", &endnum);
+    if (startnum >= 1 && endnum <= 50) {
+        if (startnum % 2 == 0) {
+            break;
+        } else {
+            sum += startnum, endnum;
+        }
+    }
+    if (startnum != 1) {
+        printf(""Starting number must be at least 1"");
+    }
+    if (endnum != 50) {
+        printf(""Ending number must not exceed 50"");
+    }
+    printf(""Sum of odd number %d"", sum);
+    return 0;
+}",writer14,greenbook,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer16_B2_1.jpg,"Program 2.
+#include <stdio.h>
+
+int main() {
+    int start; i
+    int end;
+    int sum = 0;
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", &start);
+    if (start < 1) {
+        printf(""starting number must be at least 1"");
+        break;
+    }
+    printf(""Enter ending number (<=50): "");
+    scanf(""%d"", &end);
+    if (end > 50) {
+        printf(""Ending number must not exceed 50"");
+        break;
+    }
+    for (i = start; i <= end; i++) {
+        if ((start + end) % 2 == 1) {
+            sum = sum + i;
+        }
+    }
+    printf(""sum of odd integers: %d"", sum);
+    return 0;
+}",writer16,greenbook,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer17_B2_1.jpg,"#include <stdio.h>
+
+int main() {
+    int n;
+    printf(""Enter a 5 digit number: "");
+    scanf(""%d"", &n);
+
+    if (n < 1) {
+        printf(""Please enter a 5 digit number"");
+        return 0;
+    }
+    printf(""You chose: %d"", n);
+}
+
+1. #include <stdio.h>
+
+int main() {
+    int n;
+    printf(""Enter only a 5 digit positive number: "");
+    scanf(""%d"", &n);
+
+    if (n < 0) {
+        printf(""Please Enter a positive number."");
+    } else if (n < 6) {
+        printf(""Please enter a 5 digit number."");
+    }
+
+    printf(""You chose: %d"", n);
+    return 0;
+}
+return 0;",writer17,greenbook,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer17_B2_2.jpg,"#include <stdio.h>
+int main() {
+    int start, sum, odd, s, e;
+
+    printf(""Enter starting number (>=1)\n"");
+    scanf(""%d"", &s);
+    printf(""Enter ending number (<=50)\n"");
+    scanf(""%d"", &e);
+
+    if (s >= 1) {
+        printf(""%d\n"", s);
+    } else if (s <= 50) {
+        printf(""%d\n"", e);
+    }
+
+    if (s >= 1 && e <= 50) {
+        if (s % 2 == 0 && e % 2 == 0) {
+            printf(""The sum of odd numbers = %d"", s + e);
+        }
+    } else if (s >= 0) {
+        printf(""Starting number must be atleast 1"");
+    } else if (s <= e || s >= e) {
+        printf(""Number must less than or equal"");
+    } else if (e <= 51) {
+        printf(""Must not exceed 50."");
+    } else if (s == e) {
+        printf(""Sum of odd number: %d"", s, e);
+    } else {
+        printf(""Starting number must be atleast 1"");
+    }
+}",writer17,greenbook,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer17_B2_3.jpg,"s = 3
+e = 5
+
+if ( && ) {
+    if (s / 3 == 0 && ...) ;
+    print sum = e + s;
+    printf
+} else if (s >= e) {
+    printf
+} else if (e <= 51) {
+    printf
+}",writer17,greenbook,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer18_B1_1.jpg,"II.
+1) #include <stdio.h>
+int main() {
+int num, digit=5;
+    printf(""Enter a five-digit number."");
+    scanf(""%d"", &num);
+
+    if (num != digit) {
+        printf(""Please enter a 5-digit number."");
+    } else {
+        digit num = num % 2 = 0;
+        int i = num / 2 = 0;
+        printf(""Output: %d"", i);
+    }
+    return 0;
+}",writer18,greenbook,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer18_B1_2.jpg,"2
+#include <stdio.h>
+int main() {
+    int starting, ending;
+
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", &starting);
+    printf(""Enter ending number (<=50): "");
+    scanf(""%d"", &ending);
+
+    if (starting < 1) || ending {
+        printf(""Starting number must be atleast 1"");
+    } else if (ending > 50) {
+        printf(""Ending number must not exceed 50"");
+    } else if (starting >=1 && ending <=50) {
+        for (int i=1; i<=50; i++) {
+            int num = num % 2 != 0;
+            int sum = int odd += num num;
+            printf(""Sum of odd numbers = %d"", sum);
+        }
+    }
+    return 0;
+}",writer18,greenbook,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer19_B2_1.jpg,"#include <stdio.h>
+int main() {
+    int starting, ending, sum;
+
+    printf(""Enter a starting number: "");
+    scanf(""%d\n"", &starting);
+    printf(""Enter an ending number: "");
+    scanf(""%d\n"", &ending);
+
+    if (starting >= 1 && ending <= 50) {
+        for (int i = starting; i <= ending; i++) {
+            if (i % 2 != 0) {
+                sum += i;
+            }
+            printf(""Sum of odd numbers: %d "", sum);
+        }
+    }
+    else if (starting < 1 || starting < ending && ending <= 50) {
+        printf(""the starting number must be less than or
+    else if (starting < 1) {
+        printf(""Starting number must be at least 1.""); }
+    else if (starting > ending) {
+        printf(""Starting number must be less than or equal to
+            the ending number.""); }
+    else if (ending > 50) {
+        printf(""The ending must not exceed 50.""); }
+
+    return 0;
+}",writer19,greenbook,gate_raw,true,Nikko,2026-08-30
+greenbook/green_writer1_1.jpg,"#include <stdio.h>
 
 struct Point {
-	int x;
-	int y;
-};
-
-int main() {
-	struct Point p1;
-	p1.x = 10;
-	p1.y = 20;
-	printf(""Point: %d, %d\n"", p1.x, p1.y);
-	return 0;
-}",nombrado,greenbook,gate_raw,true,John Cale Nombrado,2026-08-03
-nombrado_s07_swap_green_gate.jpeg,"#include <stdio.h>
-
-void swap(int *a, int *b) {
-	int temp = *a;
-	*a = *b;
-	*b = temp;
+    int x;
+    int y;
 }
 
 int main() {
-	int x = 5, y = 10;
-	swap(&x, &y);
-	printf(""x = %d, y = %d\n"", x, y);
-	return 0;
-}",nombrado,greenbook,gate_raw,true,John Cale Nombrado,2026-08-03
-nombrado_s08_nested_green_gate.jpeg,"#include <stdio.h>
+    struct Point p1;
+    p1.x = 70;
+    p1.y = 20;
+    printf = (""Point: %d, %d\n"", p1.x, p1.y);
+    return 0;
+}",writer1,greenbook,gate_raw,true,Nikko,2026-08-30
+yellow_pad/yellow_writer1_1.jpg,"#include <stdio.h>
 
 int main() {
-	for (int i = 1; i <= 3; i++) {
-		for (int j = 1; j <= 3; j++) {
-			printf(""%d "", i * j);
-		}
-		printf(""\n"");
-	}
-	return 0;
-}",nombrado,greenbook,gate_raw,true,John Cale Nombrado,2026-08-03
-submission_1785907816105.jpg,"#include <stdio.h>
-
+    int n = 7;
+    printf(""Multiplication table for %d:\n"", n);
+    for (int i = 1; i <= 10; ++i) {
+        printf(""%d * %d = %d\n"", n, i, n * i);
+    }
+    return 0;
+}",writer1,yellow_pad,gate_raw,true,Nikko,2026-08-30
+yellow_pad/yellow_writer2_1.jpg,"#include <stdio.h>
 int main() {
-	int num = 10;
-	int *ptr = &num;
-	printf(""Value: %d\n"", *ptr);
-	return 0;
-}",writer1,yellow_pad,gate_raw,true,John Cale Nombrado,2026-08-05
-submission_1785907946017.jpg,"#include <stdio.h>
-
+    int num = 10;
+    int *ptr = &num;
+    printf(""Value: %d\n"", *ptr);
+    return 0;
+}",writer2,yellow_pad,gate_raw,true,Nikko,2026-08-30
+yellow_pad/yellow_writer3_1.jpg,"#include <stdio.h>
 int main() {
-	int arr[5] = {1,2,3,4,5};
-	for (int i = 0; i < 5; i++) {
-		printf(""%d\n"", arr[i]);
-	}
-	return 0;
-}",writer1,yellow_pad,gate_raw,true,John Cale Nombrado,2026-08-05
-submission_1785907170842.jpg,"#include <stdio.h>
+    printf(""=== EVEN/ODD COUNTDOWN PROGRAM ===\n"");
 
-int add(int x, int y) {
-	return x + y;
-}
+    for (int count = 5; count > 0; count--) {
 
-int main() {
-	int result = add(3,4);
-	printf(""Result: %d\n"", result);
-	return 0;
-}",nikko,greenbook,gate_raw,true,John Cale Nombrado,2026-08-05
-submission_1785907663332.jpg,"#include <stdio.h>
+        if (count % 2 == 0) {
+            printf(""Number %d is EVEN\n"", count);
+        } else {
+            printf(""Number %d is ODD\n"", count);
+        }
 
-int main() {
-	int a, b, sum;
-	scanf(""%d %d"", &a, &b);
-	sum = a + b;
-	printf(""sum = %d\n"", sum);
-	return 0;
-}",nikko,greenbook,gate_raw,true,John Cale Nombrado,2026-08-05
-submission_1785902823075.jpg,"#include <stdio.h>
+    }
 
-int main() {
-	int num = 10;
-	int *ptr = &num;
-	printf(""Value: %d\n"", *ptr);
-	return 0;
-}",writer1,bond,gate_raw,true,John Cale Nombrado,2026-08-05
-writer1_accesscontrol_green.jpeg,"#include <stdio.h>
-int main() {
-	int age = 20;
-	int hasID = 1;
-	int isVIP = 0;
+    int status = 0;
 
-	if ((age >= 18 && hasID == 1) || isVIP == 1) {
-		printf(""Access Granted!\n"");
-	}
-	else if (age < 18 && !hasID) {
-		printf(""Access Denied: Minor without ID.\n"");
-	}
-	else {
-		printf(""Access Denied.\n"");
-	}
-	return 0;
-}",writer1,greenbook,gate_raw,true,John Cale Nombrado,2026-08-06
-writer1_menu_dowhile_bond.jpeg,"#include <stdio.h>
+    while (status < 2) {
+        printf(""Status check passed (%d/2)\n"", status + 1);
+        status++;
+    }
+
+    return 0;
+}",writer3,yellow_pad,gate_raw,true,Nikko,2026-08-30
+yellow_pad/yellow_writer4_1.jpg,"#include <stdio.h>
 int main() {
-	int userChoice;
-	do {
-		printf(""\n--- MENU ---\n"");
-		printf(""1. Play Game\n"");
-		printf(""2. Settings\n"");
-		printf(""3. Exit\n"");
-		printf(""Enter your choice (1-3): "");
-	} while (userChoice < 1 || userChoice > 3);
-	printf(""Valid choice selected: %d\n"", userChoice);
-	return 0;
-}",writer1,bond,gate_raw,true,John Cale Nombrado,2026-08-06
+    double a, b, sum;
+
+    printf(""Enter two numbers: "");
+    scanf(""%lf %lf"", &a, &b);
+
+    sum = a + b;
+    printf(""sum: %.2lf\n"", sum);
+}",writer4,yellow_pad,gate_raw,true,Nikko,2026-08-30

@@ -32,8 +32,10 @@ class PreprocessConfig:
     # 3-channel 3x48xW input, RGB reportedly preferred). The real win is that
     # grayscale unlocks an effective single-channel denoiser; with denoise off,
     # color slightly beats grayscale. The threshold code stays functional
-    # behind threshold=True for evaluators / the old binarized pipeline; denoise
-    # runs either way. Full numbers + 4-way color A/B: docs/ocr/EVALUATION.md.
+    # behind threshold=True for compare_config.py (the binarization-vs-
+    # grayscale demo tool -- see docs/ocr/DEFENSE_PREP.md section 14) and any
+    # future evaluator that wants it; denoise runs either way. Full numbers +
+    # 4-way color A/B: docs/ocr/EVALUATION.md.
     threshold: bool = False
     threshold_block_size: int = 31
     threshold_c: int = 15

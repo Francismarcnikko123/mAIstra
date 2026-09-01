@@ -1,80 +1,78 @@
 submission_id,image_path,verified_text,extracted_text,verified_at,topic,student_name
-816a9fce-e838-4d8d-a993-2afd11a269c7,images/816a9fce-e838-4d8d-a993-2afd11a269c7.jpg,"#include <stdio.h>
-int main () {
-int arr [5] = {1,2,3,4,5};
-for (int i = 0; i < 5 ; i++) {
-printf (""%d\n"", arr [i]);
-}
-return 0;
-}","#include <stdio.h>
-int main () {
-int arr [5y = {1,2,3,4,5};
-fir (int i = 0; i < 5 ; itt) {
-printf ("".d \n"", avr [1]);
-3
-rcturn 0:",2026-08-05T06:04:59.534+00:00,Uncategorized,
-b78b49f9-d052-4160-8508-0c91fadb9b5f,images/b78b49f9-d052-4160-8508-0c91fadb9b5f.jpg,"#include <stdio.h>
-int main () {
-int a, b, sum;
-scanf ("" %d %d "", &a ,&b);
-sum = a + b;
-printf (""sum = %d\n "", sum);
-return 0;
-}","#include <stdio.h>
-int main () {
-int a, b, sum;
-scanf ("" %d %'d "", &a eh).
-sum - a t b i
-Printt (""sum- % d>n "", suim);
-return 0;
-J",2026-08-05T06:08:18.216+00:00,Uncategorized,
-00a005cc-ba42-4ac3-a15e-bfa0356ca3ea,images/00a005cc-ba42-4ac3-a15e-bfa0356ca3ea.jpg,"#include <stdio.h>
-int add (int x, int y) {
-return x + y;
-}
-int main () {
-int result = add (3,4);
-printf (""Result: %d\n"", result);
-return 0;
-}","include rstdio.h>
-int add (int x, inty) {
-return x ty i
-3
-int main () int result = add (3,4);
-printf (Result: % dn"", result);
-return 0;",2026-08-05T06:10:28.917+00:00,Uncategorized,
-2a10d909-3e22-4cec-afc1-023e01edc77d,images/2a10d909-3e22-4cec-afc1-023e01edc77d.jpg,"#include <stdio.h>
+bond_writer1_2,images/bond/bond_writer1_2.jpg,"#include <stdio.h>
 int main() {
-    int arr[5] = {1,2,3,4,5};
-    for (int i = 0; i < 5; i++) {
-        printf(""%d\n"", arr[i]);
+    int a, b;
+    printf(""Enter two numbers: "");
+    scanf(""%d %d"", &a, &b);
+    if (a > b) {
+        printf(""Larger: %d\n"", a);
+    } else {
+        printf(""Larger: %d\n"", b);
     }
     return 0;
-}","#include <stdio.h>
-int main C)
-int arr [5] = {1,213,A,53;
-for (int 1 =0j i<5; it+){
-printf (""%d>n"", arr [i]);
-return o:",2026-08-05T06:13:12.52+00:00,Uncategorized,
-7966fcdb-f33b-44fb-87f3-f1edc1b147bd,images/7966fcdb-f33b-44fb-87f3-f1edc1b147bd.jpg,"if (x > 5); {
-    printf(""Hello\n"");
+}",,2026-08-30,,writer1
+bond_writer1_3,images/bond/bond_writer1_3.jpg,"#include <stdio.h>
+int main() {
+    int n = 1;
+    int factorial = 1;
+    while (n <= 5) {
+        factorial = factorial * n;
+    }
+    printf(""Factorial of 5 = %d\n"", factorial);
+    if (factorial > 100) {
+        printf(""Large result\n"");
+    }
+    return 0;
+}",,2026-08-30,,writer1
+bond_writer1_4,images/bond/bond_writer1_4.jpg,"#include <stdio.h>
+int sumArray(int arr[], int size) {
+    int sum = 0;
+    for (int i = 0; i < size; i++) {
+        sum += arr[i];
+    }
+    return sum;
 }
 
+int main() {
+    int nums[5] = {70, 20, 30, 40, 50};
+    printf(""Sum: %d\n"", sumArray(nums, 5));
+    return 0;
+}",,2026-08-30,,writer1
+bond_writer2_2,images/bond/bond_writer2_2.jpg,"#include <stdio.h>
+int main() {
+    int arr[5] = {1, 2, 3, 4, 5};
+    for (int i = 0; i < 5; i++) {
+        printf(""%d \n"", arr[i]);
+    }
+    return 0;
+}",,2026-08-30,,writer2
+bond_writer2_3,images/bond/bond_writer2_3.jpg,"#include <stdio.h>
+int main() {
+    int a, b, sum;
+    scanf(""%d %d "", &a &b);
+    sum = a + b;
+    printf(""sum: %d\n "", sum);
+    return 0;
+}",,2026-08-30,,writer2
+bond_writer2_4,images/bond/bond_writer2_4.jpg,"#include <stdio.h>
+int add(int x, int y) {
+    return x + y;
+}
+int main() {
+    int result = add(3, 4);
+    printf(""Result: %d\n"", result);
+    return 0;
+}",,2026-08-30,,writer2
+bond_writer3_1,images/bond/bond_writer3_1.jpg,"if (x > 5); {
+    printf(""Hello\n"");
+}
 if (score = 100) {
     printf(""Perfect!\n"");
 }
-
 do {
     x++;
-} while (x < 5)","if (x>5);{
-printf(""Hello(n"");
-if (score = 100) {
-printf (""perfect!\n"");
-}
-do
-×t+i
-while(x<5)",2026-08-06T10:03:35.045+00:00,Uncategorized,
-b6986e8d-c1c0-4a47-bc10-0267485c62d0,images/b6986e8d-c1c0-4a47-bc10-0267485c62d0.jpg,"#include <stdio.h>
+} while (x < 5)",,2026-08-30,,writer3
+bond_writer3_2,images/bond/bond_writer3_2.jpg,"#include <stdio.h>
 int main() {
     int rows = 4;
     int cols = 5;
@@ -85,20 +83,10 @@ int main() {
         printf(""\n"");
     }
     return 0;
-}","Include stdio. n>
-int main a{
-int rows= 4;
-int cols = 5;
-for (int i= 1; i<= rows; i++){
-for (int j = 1 ; j<= colsi jt+ ){
-printf (""* "");
-3
-print f (""In "");
-j
-return 0;",2026-08-06T10:04:30.678+00:00,Uncategorized,
-52ba5f3f-90f0-4b86-be93-4b6a9840855e,images/52ba5f3f-90f0-4b86-be93-4b6a9840855e.jpg,"#include <stdio.h>
+}",,2026-08-30,,writer3
+bond_writer3_3,images/bond/bond_writer3_3.jpg,"#include <stdio.h>
 int main() {
-    printf(""Printing even numbers from 1 to 10 (stopping if we hit 8):\n"");
+    printf(""printing even numbers from 1 to 10 (stopping if we hit 8): \n"");
     for (int i = 1; i <= 10; i++) {
         if (i % 2 != 0) {
             continue;
@@ -110,15 +98,3311 @@ int main() {
         printf(""Number: %d\n"", i);
     }
     return 0;
-}","#include <stdio.h>
-int mainc) printf (""printing even numbers from 1 to 10 (stopping if we hit 8) : \n"");
-for (int i= 1;i <=10; 1++){
-if (i% 2! = 0) {
-continue;
-7
-if Ci==8){ printf ("" Reached 8! Breaking out of loop. Sn"");
-breaki
-b
-prints (""Number: %d\n"", i );
-l
-return 0;",2026-08-06T10:05:53.479+00:00,Uncategorized,
+}",,2026-08-30,,writer3
+bond_writer3_4,images/bond/bond_writer3_4.jpg,"#include <stdio.h>
+int main() {
+    int userChoice;
+    do {
+        printf(""\n--- MENU ---\n"");
+        printf(""1. Play Game\n"");
+        printf(""2. Settings\n"");
+        printf(""3. Exit\n"");
+        printf(""Enter your choice (1-3): "");
+    } while (userChoice < 1 || userChoice > 3);
+    printf(""Valid choice selected: %d\n"", userChoice);
+    return 0;
+}",,2026-08-30,,writer3
+bond_writer4_1,images/bond/bond_writer4_1.jpg,"#include <stdio.h>
+
+void bubblesort(int arr[], int n) {
+    for (int i = 0; i < n - 1; i++) {
+        for (int j = 0; j < n - i - 1; j++) {
+            if (arr[j] > arr[j + 1]) {
+                // Swap the elements
+                int temp = arr[j];
+                arr[j] = arr[j + 1];
+                arr[j + 1] = temp;
+            }
+        }
+    }
+}
+
+int main() {
+    int data[] = {64, 34, 25, 12, 22, 11, 90};
+    int size = sizeof(data) / sizeof(data[0];
+
+    bubblesort(data, size);
+    printf(""Sorted array in ascending order: \n"");
+    for (int i = 0; i < size; i++) {
+        printf(""%d "", data[i];
+    }
+    printf(""\n"");
+
+    return 0;
+}",,2026-08-30,,writer4
+bond_writer4_10,images/bond/bond_writer4_10.jpg,"#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct Node {int val; struct Node *next;} Node;
+
+void push(Node **head, int val) {
+    Node *n = malloc(sizeof(Node));
+    n->val = val; n->next = *head; *head = n;
+}
+
+int main(void) {
+    Node *head = NULL;
+    push(&head, 30); push(&head, 20); push(&head, 10);
+
+    for (Node *cur = head; cur; cur = cur->next) printf(""%d - "", cur->val);
+    printf(""NULL\n"");
+
+    while (head) {Node *tmp = head; head = head->next; free(tmp);}
+    return 0;
+}",,2026-08-30,,writer4
+bond_writer4_2,images/bond/bond_writer4_2.jpg,"#include <stdio.h>
+#include <string.h>
+
+void reverseString(char *str) {
+    int len = strlen(str);
+    for (int i = 0; i < len / 2; i++) {
+        char temp = str[i];
+        str[i] = str[len - 1 -1];
+        str[len - 1 - i] = temp;
+    }
+}
+
+int main() {
+    char myString[] = ""Hello World"";
+
+    print(""Original: %s\n"", myString);
+    reverseString(myString);
+    printf(""Reversed: %s\n"", myString);
+
+    return 0;
+}",,2026-08-30,,writer4
+bond_writer4_3,images/bond/bond_writer4_3.jpg,"#include <stdio.h>
+
+long long factorial(int n) {
+    if (n >= 1) {
+        return n * factorial(n - 1);
+    } else {
+        return 1;
+    }
+}
+
+int main() {
+    int num = 5;
+    printf(""The factorial of %d is %lld\n"", num, factorial(num));
+
+    return 0;
+}",,2026-08-30,,writer4
+bond_writer4_4,images/bond/bond_writer4_4.jpg,"#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    FILE *filePointer;
+
+    //Open a file in write mode
+    filePointer = fopen(""output.txt "", ""w"");
+
+    if (filePointer == NULL) {
+        printf(""Error: Could not open files!\n"");
+
+    }
+
+    fprintf(filePointer, ""Hello, File System!\n"");
+    fprintf(filePointer, ""This data was written by a C program.\n"");
+
+    fclose(filePointer); //Always close the file when done
+    printf(""Data successfully written to output.txt \n"");
+
+    return 0;
+}",,2026-08-30,,writer4
+bond_writer4_5,images/bond/bond_writer4_5.jpg,"#include <stdio.h>
+#include <math.h>
+
+// Define a custom struct
+struct Point {
+    double x;
+    double y;
+};
+
+double calculateDistance(struct Point p1, struct Point p2) {
+    return sqrt(pow(p2.x - p1.x, 2) + pow(p2.y - p1.y, 2));
+}
+
+int main() {
+    struct Point pointA = {0.0, 0.0};
+    struct Point pointB = {3.0, 4.0};
+
+    double distance = calculateDistance(pointA, pointB);
+    printf(""Distance between points: %.2f\n"", distance);
+
+    return 0;
+}",,2026-08-30,,writer4
+bond_writer4_6,images/bond/bond_writer4_6.jpg,"#include <stdio.h>
+
+typedef struct {int id; float score;} Record;
+
+int main(void) {
+    Record out = {101, 95.5f}, in = {0};
+
+    FILE *fp = fopen(""data.bin"", ""wb+"");
+    fwrite(&out, sizeof(Record), 1, fp);
+    rewind(fp);
+    fread(&in, size(Record), 1, fp);
+
+    fclose(fp);
+    printf(""Read Struct -> ID: %d, score %.1f\n"", in.id, in.score);
+    return 0;
+}",,2026-08-30,,writer4
+bond_writer4_7,images/bond/bond_writer4_7.jpg,"#include <stdio.h>
+#include <stdint.h>
+
+int count_set_bits(uint32_t n) {
+    int count = 0;
+    while (n) {n &= (n - 1); count++;}
+    return count;
+}
+
+int main(void) {
+    uint32_t val = 0x5D; // Binary: 01011101
+    printf(""Set bits in 0x%X: %d\n"", val, count_set_bits(val));
+    return 0;
+}",,2026-08-30,,writer4
+bond_writer4_8,images/bond/bond_writer4_8.jpg,"#include <stdio.h>
+#include <stdlib.h>
+
+int cmp_desc(const void *a, const void *b) {
+    return (*(const int *)b - *(const int *)a);
+}
+
+int main(void) {
+    int arr[] = {42, 17, 89, 5, 23};
+    size_t n = sizeof(arr) / sizeof(arr[0]);
+
+    qsort(arr, n, sizeof(int), cmp_desc);
+
+    for (size_t i = 0; i < n; i++) printf("" %d"", arr[i]);
+    printf(""\n"");
+    return 0;
+}",,2026-08-30,,writer4
+bond_writer4_9,images/bond/bond_writer4_9.jpg,"#include <stdio.h>
+#include <stdlib.h>
+
+int main(void) {
+    int rows = 3, cols = 3;
+    int **grid = malloc(rows * sizeof(int *));
+    for (int i = 0; i < rows; i++) {
+        grid[i] = malloc(cols * sizeof(int));
+    }
+
+    grid[1][1] = 99;
+    printf(""grid[1][1] = %d\n"", grid[1][1]);
+
+    for (int i = 0; < rows; i++) free(grid[i]);
+    free(grid);
+    return 0;
+}",,2026-08-30,,writer4
+green_writer10_B3_1,images/greenbook/green_writer10_B3_1.jpg,"1. #include <stdio.h>
+typedef struct {
+  int hour, minute, second;
+} timeType;
+
+void displayOrdinaryTime(myTime clock);
+void displayMilitaryTime(myTime clock);
+
+int main() {
+void displayOrdinaryTime(myTime clock) {
+  int i;
+  printf(""%d:%d:%d"");
+  for (i = 0; i < size; i++) {
+    int [i].hour;
+    int [i].minute;
+    int [i].second;
+  }
+}
+
+void displayMilitaryTime(myTime clock) {
+  int i;
+  printf(""%d%d"");
+  for (i = 0; i < size; i++) {
+    int [i].hour;
+    int[i].minute;
+  }
+}
+}
+return 0;",,2026-08-30,,writer10
+green_writer11_B2_1,images/greenbook/green_writer11_B2_1.jpg,"Case 5)
+int main() {
+    printf(""Please enter a 5 digit number"");
+    scanf(""%d %d %d %d %d"");
+    return 0;
+}
+
+Case 6)
+int main() {
+    printf(""Please enter a 5 digit number"");
+    scanf(""%d %d %d %d %d"");
+    return 0;
+}
+
+Case 7)
+int main() {
+    int n1, n2, n3, n4, n5;
+    printf(""Please enter a 5 digit number"");
+    scanf(""%d %d %d %d %d"", &n1, &n2, &n3, &n4, &n5);
+    return 0;
+}
+
+Case 8)
+int main() {
+    printf(""Please enter a 5 digit number"");
+}",,2026-08-30,,writer11
+green_writer11_B2_2,images/greenbook/green_writer11_B2_2.jpg,"Case 9)
+int main() {
+    int n1, n2, n3, n4, n5;
+    printf(""Please enter a 5 digit number"");
+    scanf(""%d %d %d %d %d"", &n1, &n2, &n3, &n4, &n5);
+    return 0;
+}
+
+Case 10)
+int main() {
+    int n1, n2, n3, n4, n5;
+    printf(""Please enter a 5 digit positive
+        number"");
+    scanf(""%d %d %d %d %d"", &n1, &n2, &n3, &n4,
+        &n5);
+    return 0;
+}",,2026-08-30,,writer11
+green_writer11_B2_3,images/greenbook/green_writer11_B2_3.jpg,"II
+
+Case 1
+
+int main() {
+    int n1, n2;
+    printf(""Please enter a starting number: %d"");
+    return 0;
+}
+
+case 2
+
+int main() {
+    int n1, n2;
+    printf(""please enter a starting number: n1"");
+    scanf(""n1 >= n2, n2 >= n1"");
+    printf(""please enter a ending number: n2"");
+    scanf(""n1 >= n2, n2 >= n1"");
+    return 0;
+}
+
+case 3
+int main() {
+    printf(""please enter a starting number: %d"");
+    return 0;
+}",,2026-08-30,,writer11
+green_writer11_B2_4,images/greenbook/green_writer11_B2_4.jpg,"Case 4
+int main() {
+    int n1, n2;
+    printf(""please enter a starting number: n1 \n"");
+    scanf(""n1 >= n2, n2 >= n1"");
+    printf(""please enter a ending number: n2 \n"");
+    scanf(""n1 >= n2, n2 >= n1"");
+    return 0;
+}
+
+Case 5
+int main() {
+    int n1, n2;
+    printf(""please enter a starting number: n1 \n"");
+    scanf(""n1 >= n2, n2 >= n1"");
+    printf(""please enter a ending number: n2 \n"");
+    scanf(""n1 >= n2, n2 >= n1"");
+    return 0;
+}
+
+Case 6
+int main()
+    int n1, n2;
+    printf(""please enter a starting number: n1 \n"");
+    scanf(""n1 >= n2, n2 >= n1"");
+    return 0;
+}",,2026-08-30,,writer11
+green_writer11_B2_5,images/greenbook/green_writer11_B2_5.jpg,"Case 7
+int main() {
+    int n1, n2;
+    printf(""please enter a starting number: n1""\n);
+    scanf(""n1 >= n2, n2 >= n2"");
+    return 0;
+}",,2026-08-30,,writer11
+green_writer12_B3_1,images/greenbook/green_writer12_B3_1.jpg,"1.) typedef struct {
+    int hour, minute, seconds;
+} timetype;
+
+void timetype getclock() {
+    timetype time;
+    printf(""Enter hours: \n"");
+    scanf(""%d"", &time.hour);
+    printf(""Enter minute: \n"");
+    scanf(""%d"", &time.minute);
+    printf(""Enter seconds: \n"");
+    scanf(""%d"", &time.second);
+    return time;
+}
+
+void displayOrdinaryTime(myTime clock) {
+    timetype oras;
+    printf(""%02d:%02d:%02d "", oras.hour, oras.minute, oras.seconds);
+}
+
+void displayMilitaryTime(myTime clock) {
+    timetype relo;
+    if (relo.hour == 24)
+        relo.hour = 00;
+    if (relo.minute == 60) {
+        relo.hour++;
+        relo.minute = 00;
+    }
+
+    if (relo.second == 60) {
+        relo.minute++;
+        relo.second = 00;
+    }",,2026-08-30,,writer12
+green_writer13_B3_1,images/greenbook/green_writer13_B3_1.jpg,"1.
+a.) void displayOrdinaryTime(myTime clock);
+
+void displayOrdinaryTime(myTime clock) {
+    if (clock.hour < 10 && clock.minute < 10 && clock.second < 10)
+        printf(""0%d:0%d:0%d "", clock.hour, clock.minute, clock.second);
+
+    else if (clock.hour < 10 && clock.minute < 10)
+        printf(""0%d:0%d:%d "", clock.hour, clock.minute, clock.second);
+
+    else if (clock.hour < 10 && clock.second < 10)
+        printf(""0%d:%d:0%d "", clock.hour, clock.minute, clock.second);
+
+    else if (clock.hour < 10)
+        printf(""0%d:%d:%d "", clock.hour, clock.minute, clock.second);
+
+    else if (clock.minute < 10 && clock.second < 10) {
+        printf(""%d:0%d:0%d "", clock.hour, clock.minute, clock.second);
+
+    else if (clock.minute < 10)
+        printf(""%d:0%d:%d "", clock.hour, clock.minute, clock.second);
+    else if (clock.second < 10)
+        printf(""%d:%d:0%d "", clock.hour, clock.minute, clock.second);
+    else
+        printf(""%d:%d:%d "", clock.hour, clock.minute, clock.second);
+}",,2026-08-30,,writer13
+green_writer13_B3_2,images/greenbook/green_writer13_B3_2.jpg,"b.) void displayMilitaryTime(myTime clock);
+
+void displayMilitaryTime(myTime clock) {
+    if (clock.hour < 10 && clock.minute < 10)
+        printf(""0%d0%d"", clock.hour, clock.minute);
+    else if (clock.hour < 10)
+        printf(""0%d %d "", clock.hour, clock.minute);
+    else if (clock.minute < 10)
+        printf(""%d0%d "", clock.hour, clock.minute);
+    else
+        printf(""%d %d "", clock.hour, clock.minute);
+}
+
+2.
+#include <stdio.h>
+#include <string.h>
+#define size 20
+
+int main() {
+    char text[size];
+    printf(""Enter text: "");
+    scanf(""%s"", &text);
+    int count = strlen(text);
+    for (int i = 0; i < count; i++) {
+        if (text[i] != 'a' || text[i] != 'e' || text[i] != 'i' || text[i]
+            != 'o' || text[i] != 'u') {
+            printf(""%c"", text[i]); }
+        if (text[i] == 'a' || text[i] == 'e' || text[i] == 'i' || text[i]
+            == 'o' || text[i] == 'u') {
+            printf(""*\n"");
+        }
+    }
+    return 0;
+}",,2026-08-30,,writer13
+green_writer13_B3_3,images/greenbook/green_writer13_B3_3.jpg,"3.
+#include <stdio.h>
+#define row 3
+#define column 3
+
+void printMatrix(int m[][column], int rows) {
+    for (int i = 0; i < row; i++) {
+        for (int j = 0; j < column; j++) {
+            printf(""%d "", m[i][j]);
+        }
+        printf(""\n"");
+    }",,2026-08-30,,writer13
+green_writer14_B3_1,images/greenbook/green_writer14_B3_1.jpg,"int
+void Even(int m[][5]) {
+    int e, o; int count = 0;
+    for (int i = 0; i < 5; i++) {
+        for (int j = 0; j < 5; j++) {
+            if (m[i][j] % 2 == 0 &&
+                m[i][j] > 10) {
+                printf(""\n Even %d "", m[i][j]);
+                printf(""\n Position: ""
+                    ""row %d \t column %d"", i, j);
+                count += 1;
+            }
+        }
+    return
+    return count;
+}",,2026-08-30,,writer14
+green_writer14_B3_2,images/greenbook/green_writer14_B3_2.jpg,"#include <stdio.h>
+#include <string.h>
+
+int main() {
+    char mess[100]; int len; char result[100];
+
+    printf(""Enter message: "");
+    scanf(""%[^\n]s"", mess);
+
+    len = strlen(mess);
+    strcpy(result, mess); for (int i = 0; i < len; i++) {
+    if (mess[ten-i] == 'a' ||
+        mess[len-i] == 'e' ||
+        mess[len-i] == 'i' ||
+        mess[len-i] == 'o' ||
+        mess[len-i] == 'u' ||
+        mess[len-i] == 'A' ||
+        mess[len-i] == 'E' ||
+        mess[len-i] == 'I' ||
+        mess[len-i] == 'O' ||
+        mess[len-i] == 'U') {
+        printf(""* "");
+    else
+        printf(""\n"");
+}",,2026-08-30,,writer14
+green_writer15_B2_1,images/greenbook/green_writer15_B2_1.jpg,"2) int main() {
+    printf(""Enter starting number: "");
+    scanf(""%d"", &start, star[]);
+
+    if (start >= 1) {
+        printf(""Starting Number must be at least 1"");
+    }
+
+    if
+    printf(""Enter ending number: "");
+    scanf(""%d"", &end[]);
+
+    if (start <= 1) {
+        printf(""Starting Number must be atleast 1"");
+    }
+    if (end >= 50) {
+        printf(""Ending Number must not exceed 50"");
+    }
+
+    for (int i = in; in <= end; int++)
+        if (in % 2 == 1) {
+        }
+}",,2026-08-30,,writer15
+green_writer16_B3_1,images/greenbook/green_writer16_B3_1.jpg,"#include <stdio.h>
+
+typedef float Meters;
+
+Meters sum_distances(Meters route[], int length) {
+    Meters total = 0.0f;
+    for (int i = 0; i < length; i++) {
+        total += route[i];
+    }
+    return total;
+}
+
+int main(void) {
+    Meters legs[] = {120.5f, 450.0f, 89.2f, 310.8f};
+    Meters total_dist = sum_distances(legs, 4);
+    printf(""Total distance: %.2fm\n"", total_dist);
+    return 0;
+}",,2026-08-30,,writer16
+green_writer16_B3_2,images/greenbook/green_writer16_B3_2.jpg,"#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct Node {
+    int id;
+    struct Node *next;
+} Node;
+
+void clear_list(Node *head) {
+    Node *current = head;
+    while (current != NULL) {
+        Node *temp = current;
+        printf(""Releasing Node ID: %d \n"", current->id);
+        current = current->next;
+        free(temp);
+    }
+}
+
+int main(void) {
+    Node *head = malloc(sizeof(Node));
+    head->id = 1;
+    head->next = malloc(sizeof(Node));
+    head->next->id = 2;
+    head->next->next = NULL;
+
+    clear_list(head);
+    return 0;
+}",,2026-08-30,,writer16
+green_writer16_B3_3,images/greenbook/green_writer16_B3_3.jpg,"#include <stdio.h>
+
+typedef int (*Predicate)(int number);
+
+int count_matches(int array[], int size, Predicate test) {
+    int matches = 0;
+    for (int i = 0; i < size; i++) {
+        if (test(array[i])) {
+            matches++;
+        }
+    }
+    return matches
+}
+
+int is_even(int val) {return val % 2 == 0;}
+
+int main(void) {
+    int nums[] = {12, 7, 9, 14, 22, 5};
+    int even_count = count_matches(nums, 6, is_even);
+    printf(""Even numbers found: %d\n"", even_count);
+    return 0;
+}",,2026-08-30,,writer16
+green_writer17_B1_1,images/greenbook/green_writer17_B1_1.jpg,"#1
+#include <stdio.h>
+int main() {
+    int n
+    printf(""Enter a 5 digit numbers: "");
+    scanf(""%d"", &n);
+}
+
+void display(int A[]) {
+    printf(""Indisplaying the input 5 digit numbers: "");
+    for (int i = 0; i < 5; i++) {
+        printf(""%d\n"", i);
+        if (int a[i] == 01) {
+            printf(""Invalid input program terminated"");
+        }
+    }
+}
+
+int main() {
+    int A[5];
+    for (int i = 1; i < 5; i++) {
+        printf(""---%d---"", arr[i]);
+    }
+    display(arr);
+    return 0;
+}",,2026-08-30,,writer17
+green_writer17_B1_2,images/greenbook/green_writer17_B1_2.jpg,"#2
+#include <stdio.h>
+int main() {
+    int n;
+
+    printf(""Enter a starting number and
+        the ending number"");
+    scanf(""%d"", &n);
+
+    if (n%2==0) {
+        printf(""Even"");
+    }
+    else printf(""Odd"");
+
+    sum += odd;
+    printf(""sum of odd are: %d"", sum);
+    if (n<1 || n>50) {
+        printf(""Invalid Entry: must atleast
+            less than or equal to the ending
+            number"");
+    }
+    return 0;
+}",,2026-08-30,,writer17
+green_writer17_B1_3,images/greenbook/green_writer17_B1_3.jpg,"sum odd
+
+Enter a starting number
+
+Enter an ending number
+sum += %2;
+printf(""Sum of odd number: %d"", sum);
+if (n<1 || n>n)
+""Invalid input; starting number less than or
+equal to ending number:""
+
+int main() {
+    int ng, j, sum;
+
+    printf(""Enter a starting number"");
+    scanf(""Enter ending"", n)
+    printf(""Enter an ending number"");
+    scanf(""%d"", &j);
+    if (n%2==0)
+        printf(""Even"");
+    else printf(""%d odd"");
+
+    sum += %d odd . %d;
+    printf(""all odd %d"", sum);",,2026-08-30,,writer17
+green_writer17_B1_4,images/greenbook/green_writer17_B1_4.jpg,"int display(int A[]) {
+    for (int i=1; i<5; i++) {
+        print(""%d\n"");
+    }
+    return A[i];
+}
+
+int main() {
+    int A[5];
+    printf(""Enter a 5 digit number:\n"");
+    for (int i=1; i<5; i++) {
+        printf(""%d\n"", arr[i]);
+    }
+    if (int i==1) {
+        display(arr); printf(""Invalid
+    }
+    input program terminated"");
+    return 0;
+}
+
+int main() {
+    int i;
+}
+
+1-3-5-7-9-11-13-17-19-23-29-
+2-4-6-8-10-12-14-20-22-28-24-26-
+30",,2026-08-30,,writer17
+green_writer17_B3_1,images/greenbook/green_writer17_B3_1.jpg,"1.) #include <stdio.h>
+    int main() {
+    int n;
+    printf(""Enter 5 digits: "");
+    scanf(""%d"", &n);
+
+    if (n >= 10000) {
+        printf(
+    if (
+    int n;
+
+6  #include <stdio.h>
+   int main() {
+int n;
+printf(""Enter 5 digit number."");
+scanf(""%d"", &n);
+
+if (n % 2 != 0 && n % 3 != 0 && n > 10000) {
+    printf(""%2d %n"", n);
+                       spaces
+} else {
+    printf(""please enter 5 digit number."");
+}
+return 0;
+}",,2026-08-30,,writer17
+green_writer17_B3_2,images/greenbook/green_writer17_B3_2.jpg,"#include <stdio.h>
+
+typedef struct {
+    char name[50];
+    int id;
+    float price;
+} Product;
+
+int main() {
+    Product item1 = {""Laptop"", 101, 899.99};
+
+    printf(""Item: %s, ID: %d, Price: $ %.2f\n"", item1.name, item1.id, item1.price);
+    return 0;
+}",,2026-08-30,,writer17
+green_writer17_B3_3,images/greenbook/green_writer17_B3_3.jpg,"#include <stdio.h>
+
+typedef struct Node {
+    int data;
+    struct Node* next;
+} Node_t;
+
+int main() {
+    Node_t box1 = {10, NULL};
+    Node_t box2 = {20, NULL};
+
+    box1.next = &box2;
+
+    printf(""Box 1 data: %d\n"", box1.data);
+    printf(""Linked Box 2 data: %d\n"", box1.next->data);
+    return 0;
+}",,2026-08-30,,writer17
+green_writer17_B3_4,images/greenbook/green_writer17_B3_4.jpg,"#include <stdio.h>
+
+typedef float Temperature;
+
+int main() {
+    Temperature today = 25.3;
+    Temperature tomorrow = 18.6;
+
+    printf(""Today: %.1f C\n"", today);
+    printf(""Tomorrow: %.1f C\n"", tomorrow);
+
+    return 0;
+}",,2026-08-30,,writer17
+green_writer17_B3_5,images/greenbook/green_writer17_B3_5.jpg,"#include <stdio.h>
+
+typedef struct {
+    char title[30];
+    int pages;
+} Book;
+
+int main() {
+    Book b = {""The C Primer"", 250};
+    printf(""Book: %s, Pages: %d\n"", b.title, b.pages);
+    return 0;
+}",,2026-08-30,,writer17
+green_writer17_B3_6,images/greenbook/green_writer17_B3_6.jpg,"#include <stdio.h>
+
+typedef struct {
+    char model;
+    int year;
+} car;
+
+int main() {
+    car c = {""Civic"", 2022};
+    printf(""Car: %s, Year: %d\n"", c.model, c.year);
+    return 0;
+}",,2026-08-30,,writer17
+green_writer18_B2_1,images/greenbook/green_writer18_B2_1.jpg,"Written programming
+
+1.
+#include <stdio.h>
+
+int main()
+{
+    int a, b, c, d, e;
+
+    printf(""Enter a five-digit number: "");
+    if (scanf(""%d%d%d%d%d"", &a, &b, &c, &d, &e) != 5)
+    {
+        printf("" Please enter a 5 digit number."");
+    }
+    else
+    {
+        printf(""%3d %3d %3d %3d %3d"", a, b, c, d, e);
+    }
+    return 0;
+}",,2026-08-30,,writer18
+green_writer18_B2_2,images/greenbook/green_writer18_B2_2.jpg,"(2)
+#include <stdio.h>
+
+int main()
+{
+    int num1, num2;
+
+    printf(""Enter starting number (>=1):"");
+    scanf(""%d"", &num1);
+    printf(""Enter ending number (<=50): "");
+    scanf(""%d"", &num2);
+
+    if (num1 < 1)
+    {
+        printf(""Starting number must be atleast 1"");
+        break;
+    }
+    else if (num2 > 50)
+    {
+        printf(""Ending number must not exceed 50"");
+        break;
+    }
+    else if (num1 > num2)
+    {
+        printf(""starting number must be less than or equal to the ending number"");
+        break;
+    }
+    else
+    {
+
+    int i;
+    int sum;
+    for (i = num1; i < num2; i++)
+    {
+        if (i % 2 != 0)
+        {
+            sum += i;
+        }
+    }
+    printf(""sum of odd numbers = %d"", sum);
+    }
+    return 0;
+}",,2026-08-30,,writer18
+green_writer19_B1_1,images/greenbook/green_writer19_B1_1.jpg,"FINAL:-
+Question 1 Answer:
+#include <stdio.h>
+int main() {
+int a, b, c, d, e;
+
+    printf(""Enter 5 digits number: "");
+    scanf(""%d %d %d %d %d"", &a, &b, &c, &d, &e);
+
+    if (a&&b&&c&&d&&e != 5) {
+        printf(""Please enter five digit number: "");
+    } else if (a&&b&&c&&d&&e < 1) {
+        printf(""Please enter a 5 digit positive number: "");
+    } else {
+        printf(""%d %d %d %d %d"", a,b,c,d,e);
+        printf(""%d %d %d %d %d"", a,b,c,d,e);
+    }
+    return 0;
+}",,2026-08-30,,writer19
+green_writer19_B1_2,images/greenbook/green_writer19_B1_2.jpg,"Question 2: Answer
+#include <stdio.h>
+int main() {
+    int a, b;
+
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", &a);
+
+    if (a < 1) {
+        printf(""Starting number must be at least 1"");
+    } else {
+        continue;
+    }
+
+    printf(""Enter ending number (<=50): "");
+    scanf(""%d"", &b);
+
+    if (b > 50) {
+        printf(""Ending number must not exceed 50"");
+    } else {
+        continue;
+    }
+
+    if (a >= 1 && b <= 50) {
+        for (i=1; i<=50; i++) {
+            if (i % 2 != 0) {
+                int sum = 0;
+                sum += i;
+            }
+        }
+        printf(""The sum of odd numbers = %d"", sum);
+    }
+    return 0;
+}",,2026-08-30,,writer19
+green_writer1_2,images/greenbook/green_writer1_2.jpg,"#include <stdio.h>
+
+void swap(int *a, int *b) {
+    int temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+int main() {
+    int x = 5, y = 70;
+    swap(&x, &y);
+    printf(""x = %d, y = %d\n"", x, y);
+    return 0;
+}",,2026-08-30,,writer1
+green_writer1_3,images/greenbook/green_writer1_3.jpg,"#include <stdio.h>
+
+int main() {
+    for (int i = 1; i <= 3; i++) {
+        for (int j = 1; j <= 3; j++) {
+            printf(""%d "", i * j);
+        }
+        printf(""\n"");
+    }
+    return 0;
+}",,2026-08-30,,writer1
+green_writer1_B1_1,images/greenbook/green_writer1_B1_1.jpg,"#include <stdio.h>
+int main() {
+    int arr[5];
+    int num;
+printf(""Enter 5 digit numbers: "");
+
+for (int i = 0; i <= arr[i]; i++) {
+    scanf(""%d"", arr[i]);
+}
+if (num != arr[i]) {
+    printf(""Please enter 5 digit number"");
+} else {
+    printf(""Invalid Input"");
+
+    return 0;
+}",,2026-08-30,,writer1
+green_writer1_B1_2,images/greenbook/green_writer1_B1_2.jpg,"#include <stdio.h>
+int main() {
+int num;
+
+printf(""Enter starting number: "");
+scanf(""%d"", &num);
+if (num == 0) {
+    printf(""Starting number must be atleast 1"");
+}
+printf(""Enter ending Number: "");
+scanf(""%d"", &num);
+if (num > 50) {
+    printf(""Ending number must not exceed 50"");
+}
+
+if (num % 2 != 0):
+
+    sum int sum = 0",,2026-08-30,,writer1
+green_writer1_B1_3,images/greenbook/green_writer1_B1_3.jpg,"Case 1
+#include <stdio.h>
+int main() {
+    int n
+
+    printf(""Input: "");
+    printf(""Please enter a 5 digit number: "");
+    scanf(""%d"", &n);
+
+    if (i <= 10000) {                  else {
+        printf(""                      printf(""Please enter a
+    else if (i<20000)                  5 digit number"")
+        printf
+    else if (i<30000)
+
+    else if (i<40000)
+
+    else if (i<50000)
+
+    else if (i<60000)
+
+    else if (i<=70000)
+
+    else if (i<=80000)
+
+    else if (i<=90000)
+
+    else if (i<=99999)",,2026-08-30,,writer1
+green_writer1_B2_1,images/greenbook/green_writer1_B2_1.jpg,"a = 10
+op = &a;
+
+for (int num; num < 4; num++) {",,2026-08-30,,writer1
+green_writer1_B3_1,images/greenbook/green_writer1_B3_1.jpg,"arr[3,7,1,9,4]
+nay = arr[0]
+
+x = 1, arr[5]
+x = *(arr + 2)
+
+void may(int
+int arr[]{3,7,1,9,4}
+int max = arr[0];
+for (int i = 1; i > 5; i++)
+    if (arr[i] > max) max = arr[i]
+
+6 * (4-2)",,2026-08-30,,writer1
+green_writer1_B3_2,images/greenbook/green_writer1_B3_2.jpg,"#include <stdio.h>
+
+typedef struct {
+    int hour;
+    int minute;
+    int second;
+} Timetype;
+
+void displayOrdinaryTime(myTime clock) { int j = 0;
+    for (int i = 0; i < j; i++) { if (j < 1) {
+        printf(""%d:%d:%d"", clock.hour, clock.minute, clock.second);
+    }
+}
+}
+
+void displayMilitaryTime(myTime clock) {
+    j = 0;
+    for (int i = 13; i < j; i++) {
+    if (i > 12) {
+    printf(""00:%d:%d"", clock.minute, clock.second);
+}
+}
+}",,2026-08-30,,writer1
+green_writer20_B1_1,images/greenbook/green_writer20_B1_1.jpg,"1. #include <stdio.h>
+int N, spaces;
+int main() {
+printf(""Please enter a 5 digit number."");
+scanf(""%d  %d  %d  %d  %d"", &N);
+
+if (N != 5) {
+    printf(""Please enter a 5 digit number."");
+    scanf(""%d  %d  %d  %d  %d"", &N);
+}
+
+if (N == 5) {
+    printf(""%d_%d_%d_%d_%d"", num);
+}
+return spaces;
+}",,2026-08-30,,writer20
+green_writer20_B1_2,images/greenbook/green_writer20_B1_2.jpg,"II.
+#include <stdio.h>
+int main() {
+    int num;
+
+    for (num=1; num<=50; num++) {
+        printf(""Enter starting number (>=1): "");
+        scanf(""%d"", &num);
+    }
+             printf(""Enter an ending number (<=50): "");
+             scanf(""%d"", &num);
+    if (num > 50) {
+        printf(""Ending number must not exceed to 50."");
+    }
+    if (num < 1) {
+        printf(""starting number must be at least 1."");
+    }
+
+    if ((num>50) && (num<1)) {
+        if (num % 2 == 0) {
+            num + num;
+            printf(""Sum of odd numbers = <sum>"");
+        }
+    }
+    return num;
+}",,2026-08-30,,writer20
+green_writer20_B2_1,images/greenbook/green_writer20_B2_1.jpg,"II. Written Programming (Answer)
+
+1.) #include <stdio.h>
+int main() {
+    int a, b, c, d, e;
+
+    printf(""Enter a five-digit number: "");
+    scanf(""%d%d%d%d%d"", &a, &b, &c, &d, &e);
+
+    if((a <= 9 && a >= 1) && (b <= 9 && b >= 1) &&
+        (c <= 9 && c >= 1) && (d <= 9 && d >= 1) &&
+        (e <= 9 && e >= 1)) {
+
+        printf(""%d      %d      %d      %d      %d"",
+               a, b, c, d, e);
+    } else {
+        printf(""Please Enter a 5-digit number.\n"");
+    }
+    return 0;
+}",,2026-08-30,,writer20
+green_writer20_B2_2,images/greenbook/green_writer20_B2_2.jpg,"2.) #include <stdio.h>
+int main() {
+    int num1, num2, sum = 0;
+
+    printf(""Enter a starting number (>=1): "");
+    scanf(""%d"", &num1);
+    printf(""Enter an ending number (<=50): "");
+    scanf(""%d"", &num2);
+
+    if (num1 >= 1 && num2 <= 50) {",,2026-08-30,,writer20
+green_writer21_B1_1,images/greenbook/green_writer21_B1_1.jpg,"1.
+#include <stdio.h>
+int main() {
+    int n;
+
+    printf(""Enter 5 digit number: "");
+    for (int i=1; i<=5; i++) {
+        scanf(""%d"", &n);
+    }
+    if ((n<5 || n>5) && (n != i)) {
+        printf(""Please enter a 5 digit number."");
+        n<0
+    } else if ( ) {         positive
+        printf(""Please enter a 5 digit number."");
+    } else {
+        printf(""%d       "", i);
+    }
+    return 0;
+}",,2026-08-30,,writer21
+green_writer21_B1_2,images/greenbook/green_writer21_B1_2.jpg,"2
+#include <stdio.h>
+int main() {
+    int n1, n2;
+    int sum = 0;
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", &n1);
+    if (n1 <= 0) {
+        printf(""Starting number must be at least 1."");
+    }
+    printf(""Enter ending number (<=50): "");
+    scanf(""%d"", &n2);
+    if (n2 > 50) {
+        printf(""Ending number must not exceed 50."");
+    }
+    for (int i = 0; i <50; i++) {
+        if (i % 2 != 0) {
+            sum = sum + i;
+            printf(""Sum of odd number is %d\n"", sum);
+        }
+    }
+    if (n1 > n2) {
+        printf(""Starting number must be less than
+            or equal to the ending number."");
+    } else
+        printf(""Sum of odd number = %d"", sum);
+    return 0;
+}",,2026-08-30,,writer21
+green_writer22_B1_1,images/greenbook/green_writer22_B1_1.jpg,"1
+#include <stdio.h>
+int main() {
+    int n;
+    printf(""Enter a five digit number \n: "");
+    scanf(""%d"", &n);
+
+    if (istoupper(n)) {
+        printf(""Please Enter a 5 digit number \n."");
+    } else
+        printf(""%d %d %d %d %d"", n);
+    return 0;
+}",,2026-08-30,,writer22
+green_writer22_B1_2,images/greenbook/green_writer22_B1_2.jpg,"2
+#include <stdio.h>
+int main() {
+    int n, y, sum;
+
+    printf(""Please enter starting number (>=1): \n"");
+    printf(""Please enter ending number (<=50): \n"");
+    scanf(""%d"", &n);
+    scanf(""%d"", &y);
+
+    if (n < 1)
+        printf(""Starting number must be at least 1\n"");
+    else if (y > 50)
+        printf(""Ending number must exceed 50\n"");
+    else (n >= 1 && y <= 50) {
+        if (n % 2 == 1 && y % 2 == 1)
+            sum = n + y;
+    }
+
+    return 0;
+}",,2026-08-30,,writer22
+green_writer23_B1_1,images/greenbook/green_writer23_B1_1.jpg,"Part II
+1. #include <stdio.h>
+int main() {
+    int num;
+    count = 5;
+    printf(""Five-digit number"");
+    scanf(""%d"", &num);
+
+    if (num != 5) {
+        printf(""Please enter a 5 digit number"");
+    } else if (num == 5)
+        printf(""%3d
+    num  if (num > 0; num >= 5; num++) {
+        if (num == count) {
+            printf(""%3d"", num);
+        } else {
+            printf(""please enter or 5 digit number"");
+    }
+    return 0;
+}",,2026-08-30,,writer23
+green_writer23_B1_2,images/greenbook/green_writer23_B1_2.jpg,"2.) #include <stdio.h>
+int main() {
+    int start;
+    int end;
+    int sum;
+    printf(""Enter a starting number"");
+    scanf(""%d"", &start);
+    printf(""Enter a ending number:"");
+    scanf(""%d"", &end);
+    if (start = 1; start >= 1; start++) {
+        printf(""%d"", start);
+    } else
+        printf(""starting number must be at least 1"");
+    }
+    if (End = 1; End <= 50; End++) {
+        printf(""%d"", End);
+    } else else {
+        printf(""Ending number must not exceed 50"");
+    }
+
+    if (start >= 1 && End <= 50) {
+        sum = start + End;
+        if (sum % 2 != 0) {
+            printf(""Sum of odd numbers = %d"", sum);
+        }
+    }
+    return 0;
+}",,2026-08-30,,writer23
+green_writer24_B1_1,images/greenbook/green_writer24_B1_1.jpg,"#include <stdio.h>
+int main() {
+    int num;
+
+    printf(""Enter a five-digit number"");
+    scanf(""%d"", &num);
+
+    if (num <= 5) {
+        printf(""%d\n"", num);
+    } else {
+        printf(""Please enter a 5 digit number"", num);
+    }
+    return 0;
+}",,2026-08-30,,writer24
+green_writer24_B1_2,images/greenbook/green_writer24_B1_2.jpg,"#include <stdio.h>
+int main() {
+    int a, b;
+    int sum = 0;
+
+    printf(""Enter a starting number"");
+    scanf(""%d"", &a);
+
+    printf(""Enter an Ending number"");
+    scanf(""%d"", &b);
+
+    if (a != 1) {
+        printf(""Starting number must be at least 1."", a);
+    } else if (b > 50) {
+        printf(""Ending number must not exceed 50"", b);
+    } else if (a == 1 || b <= 50) {
+        sum % 2 != 0;
+        sum = a + b;
+        sum++;
+        printf(""Sum of odd numbers = "", a, b);
+    }
+    return 0;
+}",,2026-08-30,,writer24
+green_writer25_B1_1,images/greenbook/green_writer25_B1_1.jpg,"2.)
+#include <stdio.h>
+int main() {
+int num;
+
+printf(""Enter starting number (>=1):\n"");
+scanf(""%d"", &num);
+
+printf(""Enter ending number (<=50):\n"");
+scanf(""%d"", &num);
+
+if (num != >=1) {
+printf(""Starting number must be at least 1\n"");
+return 0;
+}
+
+if (num != <=50) {
+printf(""Ending number must not exceed 50\n"");
+return 0;
+}",,2026-08-30,,writer25
+green_writer25_B1_2,images/greenbook/green_writer25_B1_2.jpg,"2.)
+#include <stdio.h>
+int main()
+int num;
+
+printf(""Enter starting number (>=1):\n"");
+scanf(""%d"", &num);
+
+printf(""Enter ending number (<=50):\n"");
+scanf(""%d"", &num);
+
+if (num != >= 1 || num != <= 50) {
+printf(""Starting number must be at least 1 or
+    Ending number must not exceed 50\n"");
+} else if (num % 1 == 0) {
+    printf(""sum o podd numbers = %d"", &num);
+}
+return 0;
+}",,2026-08-30,,writer25
+green_writer26_B1_1,images/greenbook/green_writer26_B1_1.jpg,"1.
+#include <stdio.h>
+int main() {
+    int num1, num2, num3, num4, num5;
+    printf(""Enter 5 integers\n"");
+    scanf(""%d"", &num1, &num2, &num3, &num4, &num5());
+    scanf(""%d %d %d %d %d"", &num1, &num2, &num3, &num4, &num5);
+
+    if (num == 5) {
+        printf(""%d\n%d\n\n"");
+    } else {
+        printf(""Invalid "");
+    }
+    return 0;
+}",,2026-08-30,,writer26
+green_writer26_B1_2,images/greenbook/green_writer26_B1_2.jpg,"2.
+#include <stdio.h>
+int main() {
+    int num1;
+    int num2;
+
+    printf(""give an starting number \n"");
+    scanf(""%d"", &num1);
+    if (num1 >= 1) {
+        printf(""Starting number must be at least 1"", num1);
+    } else {
+        printf(""enter Enter again for the starting number"", num1);
+    }
+
+    printf(""give an ending number"");
+    scanf(""%d"", &num2);
+    if (num2 <= 50) {
+        printf(""%d, Ending number must not exceed 50\n"", num2);
+    } else {
+        printf(""enter another again for the ending number"", num2);
+    }
+
+    printf
+    int odd;
+    scanf(""%d %d"", &num1, &num2);
+    for (int odd = 0; odd % 2 == 0; odd++);
+        printf(""%d the it is a even number"");
+        scanf(""%d"", &odd%2);",,2026-08-30,,writer26
+green_writer27_B1_1,images/greenbook/green_writer27_B1_1.jpg,"test Case 1
+int a, b, c, d, e;
+printf(""Enter an integer: \n"");
+scanf(""%d %d %d %d %d"", &a, &b, &c, &d, &e);
+
+test Case 2
+int a, b, c, d, e;
+printf(""Enter an integer: \n"");
+scanf(""%d %d %d %d %d"", &a, &b, &c, &d, &e);
+
+test Case 3
+int a, b, c, d, e;               5 digit number
+printf(""Enter an integer: \n"");
+scanf(""%d %d %d %d %d"", &a, &b, &c, &d, &e);
+
+test Case 4
+int a, e, i, o, u;
+printf(""Please enter a 5 digit number."");
+scanf(""%d %d
+if (num they Enter a 5 digit number) {
+    scanf(""%d %d %d %d %d"", &a, &e, &i, &o, &u);
+} else {
+    printf(""Enter a 5 digit number again."");
+} else {
+    printf(""invalid digit"");
+}",,2026-08-30,,writer27
+green_writer27_B1_2,images/greenbook/green_writer27_B1_2.jpg,"test Case 5
+int a, b, i, o, u
+printf(""Please enter a 5 digit number."");
+scanf(""%d %d %d %d %d"", &a, &b, &i, &o, &u);
+
+test Case 6
+int a, b, c, d, e
+printf(""Please enter a 5 digit number."");
+scanf(""%d %d %c %d %d"", &a, &b, &c, &d, &e);
+
+test Case 7
+int a, b, c, d, e
+printf(""Please Enter a 5 digit number: \n"");
+scanf(""%d %d %d %d %d"", &a, &b, &c, &d, &e);
+test Case 8
+
+test Case 8
+int '', '', '', '', '',
+printf(""Please Enter a 5 digit number: \n"");
+scanf(""%d"")
+
+test Case 9
+float a, e, i
+printf(""Please Enter a 5 digit number: \n"");
+scanf(""%f %f %f"", &a, &e, &i);",,2026-08-30,,writer27
+green_writer27_B1_3,images/greenbook/green_writer27_B1_3.jpg,"test case 10                                   number)
+int a, b, c, d, e                              5 digit positive
+if a number is positive) printf(""Please Enter a
+scanf(              if (not Positive)
+                       scanf(""%d %d %d %d %d, Positive
+} else {
+    printf(""Invalid"");
+}",,2026-08-30,,writer27
+green_writer27_B1_4,images/greenbook/green_writer27_B1_4.jpg,"test Case 1
+int a;
+printf(""Enter an Integer:\n"");
+for (int a = 1; a <= 30; a++);
+
+test Case 2
+int b;
+printf(""Enter an integer:\n"");
+for (int b = 13; b <= 4);
+
+test Case 3
+int a;
+printf(""Enter an integer:\n"");
+for (int a >= 1)
+
+test Case 4
+printf(""Enter an integer"");
+int a;
+int b;
+for (a >= 1 || 50 <= b) {
+    scanf(""%d %d"", &a & b);
+} else {
+    printf(""Invalid"");
+}",,2026-08-30,,writer27
+green_writer28_B1_1,images/greenbook/green_writer28_B1_1.jpg,"Case 3
+#include <stdio.h>
+int main() {
+case 3
+
+#include <stdio.h>
+
+int main() {
+    void myCase1[] = {4, 2, 1, 3, 9};
+    int i;
+
+    for (int i = 0; i < 5; i++) {
+        printf(""%d"", myCase1[i]);
+    }
+    if (i < 5) {
+        printf(""Please enter a 5 digit number"");
+    } else if (i <= 5)
+        printf(""\n",,2026-08-30,,writer28
+green_writer28_B1_2,images/greenbook/green_writer28_B1_2.jpg,"#include <stdio.h>
+
+int main() {
+    int start = (>=1): ?
+    int end = (<=50): 30
+
+    if (start <> end) {
+        printf(""starting number must be at least 1."");
+
+    } else {
+        printf(""",,2026-08-30,,writer28
+green_writer29_B1_1,images/greenbook/green_writer29_B1_1.jpg,"I
+
+#include <stdio.h>
+
+int main() {
+    int num, result;
+
+    printf(""Enter 5-digits number: "");
+    scanf(""%d"", &num);
+
+    switch (num) {
+    case 1:
+        printf(""%dt %dt %dt %dt %dt"");
+        printf(""%dt"", num);
+        break;
+
+    case 2:
+        if (num == 0) {
+            printf(""please enter a 5 digit number"");
+        } else if (num >= 5) {
+            printf(""please enter a 5-digit number"");
+        } else if (num != 0) {
+            printf(""please enter a 5-digit number"");
+        } else if (num <= 5) {
+            printf(""%d\ttt"", num);
+        } else if (num <= -1) {
+            printf(""please enter a 5 digit positive number"");
+        } else
+            printf(""please enter a 5-digit number."");
+    }
+    return 0;
+}",,2026-08-30,,writer29
+green_writer29_B1_2,images/greenbook/green_writer29_B1_2.jpg,"II
+#include <stdio.h>
+int main() {
+    int num1, num2, sum = 0;
+
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", &num1);
+
+    printf(""Enter ending number (<=50): "");
+    scanf(""%d"", &num2);
+
+    if (num1 <= -1 || num2 <= 50) {
+        printf(""Starting number must be atleast 1."");
+    } else if (num1 >= 1 || num2 >= 50) {
+        printf(""Ending number must not exceed 50."");
+    } else if (num1 <= -1 || num2 >= 50) {
+        printf(""Starting number must be less than
+            or equal to the ending number"");
+    } else if (num1 >= 1 || num2 <= 50) {
+        sum = num1 + num % 1;
+        printf(""Sum of Odd numbers = %d"", sum);
+    }
+    return 0;
+}",,2026-08-30,,writer29
+green_writer2_1,images/greenbook/green_writer2_1.jpg,"#include <studio.h>
+int main() {
+    int age = 20;
+    int hasID = 1;
+    int isVIP = 0;
+
+    if ((age >= 18 && hasID == 1) || isVIP == 1) {
+        printf(""Access Granted!\n"");
+
+    }
+    else if (age < 18 && !hasID) {
+        printf(""Access Denied: Minor without ID.\n"");
+
+    }
+    else {
+        printf(""Access Denied.\n"");
+
+    }
+    return 0;
+}",,2026-08-30,,writer2
+green_writer2_B2_1,images/greenbook/green_writer2_B2_1.jpg,"#include <stdio.h>
+void n() {
+printf(""
+
+int foo(int x) {
+if (x <= 0) return 0;
+
+return x + foo(x - 2);
+}
+
+int a = 5, int b = 10;
+
+a < b
+
+5 / 2 x 2 = 4 r.1 x 2",,2026-08-30,,writer2
+green_writer2_B3_1,images/greenbook/green_writer2_B3_1.jpg,"PART 2
+
+1.) #include <stdio.h>  #include <string.h>
+typedef struct {
+    int hour, minute, second;
+} timeType;
+
+void displayOrdinaryTime(myTime clock) {
+    if (myTime.hour < 0 || myTime.hour > 23 ||
+        myTime.minute < 0 || myTime.minute > 59 ||
+        myTime.second < 0 || myTime.second > 59) {
+        printf(""Invalid time.\n"");
+        return;
+    }
+
+    int displayHour;
+    char period;
+
+    if (myTime.hour == 0) {
+        displayHour = 12;
+        period = ""AM"";
+    } else if (myTime.hour == 12) {
+        displayHour = 12;
+        period = ""PM""
+    } else if (myTime.hour < 12) {
+        displayHour = myTime.hour;
+        period = ""AM"";
+    } else {
+        displayHour = myTime.hour - 12;
+        period = ""PM"";
+    }",,2026-08-30,,writer2
+green_writer2_B3_2,images/greenbook/green_writer2_B3_2.jpg,"printf(""%02d:%02d:%02d %s\n"",
+    displayHour, myTime.minute, myTime.second,
+    period);
+}
+
+void displayMilitaryTime(myTime clock) {
+    if (myTime.hour < 0 || myTime.hour > 23 ||
+        myTime.minute < 0 || myTime.minute > 59 ||
+        myTime.second < 0 || myTime.second > 59) {
+        printf(""Invalid time.\n"");
+        return;
+    }
+    printf(""%02d:%02d:%02d\n"", myTime.hour,
+        myTime.minute, myTime.second, period);
+}
+
+int main() {
+    timeType clock1 = {12, 35, 15};
+    timeType clock2 = {12, 30, 0};
+
+    printf(""Clock 1 (12:35 AM):\n"");
+    printf("" Ordinary: "");
+    displayOrdinaryTime(clock1);
+    printf("" Military: "");
+    displayMilitaryTime(clock1);
+
+    printf("" Clock 2 (12:30 AM); \n"");
+    printf("" Ordinary: "");
+    displayOrdinaryTime(clock2);",,2026-08-30,,writer2
+green_writer2_B3_3,images/greenbook/green_writer2_B3_3.jpg,"printf(""Military: "");
+displayMilitaryTime(clock2);
+
+return 0;
+}
+
+2.) #include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+
+bool isVowel(char ch) {
+    char lowerCh = tolower(ch);
+    return (lowerCh == 'a' || lowerCh == 'e' ||
+            lowerCh == 'i' || lowerCh == 'o' ||
+            lowerCh == 'u');
+}
+
+void F1(char str[]) {
+    int i;
+    char modif[50];
+    int modifIndex = 0;
+    int vowelCount = 0;
+
+    printf("" Output:\n"");
+    for (i = 0; i < strlen(str); i++) {
+        char ch = str[i];
+        if (isVowel(ch)) {
+            modif[modifIndex] = '*';",,2026-08-30,,writer2
+green_writer2_B3_4,images/greenbook/green_writer2_B3_4.jpg,"if (length > 20) {
+    printf(""Invalid. No more than 20.\n"");
+    return 1;
+}
+F1(input);
+
+return 0;
+}
+
+3.) #include <stdio.h>
+
+int Even(int m[][3], int rows) {
+    int count = 0;
+    int i, j;
+
+    printf(""\n Even numbers greater than 10 \n"");
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < 3; j++) {
+            if (m[i][j] > 10 && m[i][j] % 2 == 0)
+                printf(""%d found at [%d][%d]\n"", m[i][j], i, j);
+                count++;
+        }
+    }
+}",,2026-08-30,,writer2
+green_writer2_B3_5,images/greenbook/green_writer2_B3_5.jpg,"if (count == 0) {
+    printf(""No even numbers."");
+}
+return count;
+}
+
+void printMatrix(int m[][3], int rows) {
+int i, j;
+
+printf(""Matrix (%d x %d)\n"", rows, 3);
+
+for (i = 0; i < rows; i++) {
+    for (j = 0; j < 3; j++) {
+        printf(""%3d "", m[i][j]);
+    }
+    printf(""\n"");
+}
+}
+
+int main() {
+int matrix[3][3] = {{5, 12, 8}, {6, 7, 9},
+                     {2, 4, 18}},
+int count;
+
+printf("" 3x3 Matrix\n"");
+printMatrix(matrix, 3);
+count = Even(matrix, 3);
+return 0;
+}",,2026-08-30,,writer2
+green_writer30_B1_1,images/greenbook/green_writer30_B1_1.jpg,"II WRITTEN PROGRAMMING
+
+Test I  int num1, num2, num3, num4, num5;
+printf(""Enter five digit number:"");
+scanf(""%d %d %d %d %d"", &num1, &num2, &num3, &num4,
+    &num5);
+printf("" %3d %3d %3d %3d %3d"", num1, num2, num3,
+    num4, num5);
+return 0;
+}
+
+Test II
+
+test 1
+#include <stdio.h>
+int main() {
+    int num1, num2, num3, num4, num5;
+    printf(""Enter five digit numbers: "");
+    scanf(""%d %d %d %d %d"", &num1, &num2, &num3, &num4,
+        &num5);
+    if (num1 >= 0 && num2 >= 0 && num3 >= 0 && num4 >= 0 && num5 >= 0) {
+        printf(""%3d %3d %3d %3d %3d"", num1, num2, num3, num4, num5);
+    } else {
+        printf(""Please enter 5 digit number"");
+    }
+    return 0;
+}",,2026-08-30,,writer30
+green_writer30_B1_2,images/greenbook/green_writer30_B1_2.jpg,"II.
+#include <stdio.h>
+
+int main() {
+    int num1, num2, result;
+    printf(""Enter starting number (>=1);
+    scanf(""%d"", &num1);
+    if (num1 < 1) {
+        printf(""Starting number must be at least 1"");
+    }
+    printf(""Enter ending number (<=50): "");
+    scanf(""%d"", &num2);
+    if (num2 > 50) {
+        printf(""Ending number must not exceed 50"");
+    }
+    for (num1 >= 1; num1++) {
+        for (num2 < num1; num < 50) {
+            result = num1 % num2;
+            result += num1 + num2;
+            printf(""Result of odd numbers = %d"", result);
+        }
+    return 0;
+}",,2026-08-30,,writer30
+green_writer31_B1_1,images/greenbook/green_writer31_B1_1.jpg,"#include <stdio.h>
+
+int n;
+int main() {
+    printf(""Enter a five-digit number: \n"");
+    scanf(""%d"", &n);
+        }
+    if (n > 9999 && n < 999999) {
+        printf(""\n%d\n"", n);
+    } else {
+        printf(""Please enter a 5-digit number.\n"");
+    }
+    return 0;
+}",,2026-08-30,,writer31
+green_writer31_B1_2,images/greenbook/green_writer31_B1_2.jpg,"#include <stdio.h>
+
+int num1, num2;
+int result;
+int i;
+int main() {
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", &num1);
+    } if (num1 >= 1) {
+        printf(""%d"", num1);
+        }
+    { printf(""Enter ending number (<=50): "");
+      scanf(""%d"", &num2);
+    } if (num2 <= 50) {
+        printf(""%d"", num1);
+    }",,2026-08-30,,writer31
+green_writer32_B1_1,images/greenbook/green_writer32_B1_1.jpg,"1.
+#include <stdio.h>
+
+int main() {
+    int num1, num2, num3, num4, num5;
+    printf(""Enter a five digit number:"");
+    scanf(""%d %d %d %d %d"", &num1, &num2, &num3, &num4, &num5);
+    if (num1 < 1 || num2 < 1 || num3 < 1 || num4 < 1 || num5 < 1) {
+        printf(""Please enter a 5 positive number"");
+    } else if (num1 > 9 || num2 > 9 || num3 > 9 || num4 > 9 || num5 > 9) {
+        printf(""Please enter a 5 digit number"");
+    } else {
+        printf(""%d %d %d %d %d"", num1, num2, num3, num4, num5);
+    }
+    return 0;
+}",,2026-08-30,,writer32
+green_writer32_B1_2,images/greenbook/green_writer32_B1_2.jpg,"2.)
+#include <stdio.h>
+
+int main() {
+    int startnum, endnum, sum;
+    printf(""Enter starting number: "");
+    scanf(""%d"", &startnum);
+    printf(""Enter ending number: "");
+    scanf(""%d"", &endnum);
+    if (startnum < 1) {
+        printf(""starting number must be at least 1"");
+        end;
+    }
+    if (endnum",,2026-08-30,,writer32
+green_writer32_B1_3,images/greenbook/green_writer32_B1_3.jpg,"int main() {
+    int startnum, endnum;
+    printf(""Enter a starting number and an ending number: "");
+    scanf(""%d %d"", &startnum, &endnum",,2026-08-30,,writer32
+green_writer33_B1_1,images/greenbook/green_writer33_B1_1.jpg,"WRITTEN PROGRAMMING
+1.)
+#include <stdio.h>
+
+int main() {
+    int fdn, dig[5], count;
+    printf(""Input a 5 digit positive number: \n"");
+    scanf(""%d"", &fdn);
+    if ((fdn < 10000 && fdn >= 0) || fdn > 99999) {
+        printf(""\nPlease enter a 5 digit number"");
+        return 0;
+    }
+    if (fdn < 0) {
+        printf(""\nPlease enter a 5 digit positive number"");
+        return 0;
+    }
+    dig[0] = fdn / 10000;
+    dig[1] = (fdn % 10000) / 1000;
+    dig[2] = (fdn % 1000) / 100;
+    dig[3] = (fdn % 100) / 10;
+    dig[4] = (fdn % 10);
+    printf(""\n"");
+    for (count = 0; count < 5; count++) {
+        printf(""%d"", dig[count]);
+        printf("" "");
+    }
+}",,2026-08-30,,writer33
+green_writer33_B1_2,images/greenbook/green_writer33_B1_2.jpg,"2.)
+#include <stdio.h>
+
+int main() {
+    int start, end, sum = 0, count;
+    printf(""Input starting number: \n"");
+    scanf(""%d"", &start);
+    printf(""Input ending number: \n"");
+    scanf(""%d"", &end);
+    if (start < 0) {
+        printf(""Starting number should be atleast 1."");
+        return 0;
+    }
+    if (end > 50) {
+        printf(""Ending number should not exceed 50"");
+        return 0;
+    }
+    for (count = start; count >= 50; count++) {
+        if (count % 2 != 0) {
+            sum += count;
+        }
+    }
+    printf(""Sum of odd numbers = %d "", sum);
+}",,2026-08-30,,writer33
+green_writer34_B1_1,images/greenbook/green_writer34_B1_1.jpg,"2
+page 2
+
+#include <stdio.h>
+int main() {
+    int stan, endn, i, sum = 0;
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", &stan);
+    if (stan < 1) {
+        printf(""Starting number must be at least 1. "");
+        return 0;
+    }
+    printf(""Enter ending number (<=50): "");
+    scanf(""%d"", &endn);
+    if (endn > 50) {
+        printf(""Ending number must not exceed 50. "");
+        return 0;
+    }
+    else if (endn < stan) {
+        printf(""Starting number must be less than or equal to the ending number. "");
+        return 0;
+    }
+    for (i = stan; i <= endn; i++) {
+        if (i % 2 != 0) {
+            sum += i;
+        }
+    }
+    printf(""Sum of odd numbers = %d"", sum);
+    return 0;
+}",,2026-08-30,,writer34
+green_writer34_B1_2,images/greenbook/green_writer34_B1_2.jpg,"1
+Page: 3
+
+#include <stdio.h>
+int main() {
+    int input, temp, i, place = 10000;
+    printf(""Input: "");
+    scanf(""%d"", &input);
+    printf(""Output: "");
+    if (input < 0) {
+        printf(""Please enter a 5-digit positive number."");
+    }
+    else if (input < 10000) {
+        printf(""Please enter a 5-digit number."");
+    }
+    else {
+        temp = input / place;
+        for (i = 0; i < 4; i++) {
+            printf(""%d\t"", temp);
+            place /= 10;
+            temp = (input / place) % 10;
+        }
+        printf(""%d"", temp);
+    }
+    return 0;
+}",,2026-08-30,,writer34
+green_writer35_B1_1,images/greenbook/green_writer35_B1_1.jpg,"1.) #include <stdio.h>
+int main() {
+    int num, ones, tens, huns, thou, tenthou;
+    printf(""Input: "");
+    scanf(""%d"", &num);
+    ones = (num % 100) / 10;
+    tens = (num % 100) / 100;
+    huns = (num % 1000) / 100;
+    thou = (num % 1000) / 10;
+    tenthou = num / 10000;
+    if (num < 0) {
+        printf(""Please enter a 5-digit positive number."");
+        return 0;
+    } else if (num < 10000) {
+        printf(""Please enter a 5-digit number."");
+        return 0;
+    } else {
+        printf(""%d\t%d\t%d\t%d\t%d\t"", tenthou, thou, huns, tens, ones);
+    }
+    return 0;
+}",,2026-08-30,,writer35
+green_writer35_B1_2,images/greenbook/green_writer35_B1_2.jpg,"2. #include <stdio.h>
+int main() {
+    int sn, ln, i, odd, sum = 0;
+    printf(""Enter starting number: "");
+    scanf(""%d"", &sn);
+    printf(""Enter ending number: "");
+    scanf(""%d"", &ln);
+    if (sn < 1)
+        printf(""Starting number must be at least 1."");
+    else if (ln > 50)
+        printf(""Ending number must not exceed 50."");
+    else {
+        for (i = sn; i <= ln; i++) {
+            if (i % 2 != 0) {
+                oddi;
+                sum += oddi;
+            }
+        }
+        printf(""Sum of odd numbers: %d "", sum);
+    }
+    return 0;
+}",,2026-08-30,,writer35
+green_writer36_B1_1,images/greenbook/green_writer36_B1_1.jpg,"Programming
+#include <stdio.h>
+
+int main() {
+    int num, tk, t, hun, tens, ones;
+    printf(""Please enter a 5 digit number: "");
+    scanf(""%d "", &num);
+
+    if (num > 9999) {
+    tk = num / 10000;
+    t = num % 10000 / 1000;
+    hun = num % 10000 % 1000 / 100;
+    tens = num % 10000 % 1000 % 100 / 10;
+    ones = num % 10000 % 1000 % 100 % 10;
+
+    printf(""%d \t %d \t %d \t %d \t %d \n"", tk, t, hun, tens, ones);
+    } else if (num < 0) {
+        return
+        printf(""Please enter a 5-digit positive number"");
+    } else
+        printf(""Please enter a 5-digit number"");
+    return 0;
+}",,2026-08-30,,writer36
+green_writer36_B1_2,images/greenbook/green_writer36_B1_2.jpg,"#include <stdio.h>
+int main() {
+    int start, end, i, sum = 0;
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", &start);
+
+    if (start < 1) {
+        printf(""Starting number must be at least 1."");
+        return 0;
+    else if (start > end) {
+        printf(""Starting number must be less than or equal to the ending number."");
+        return 0;
+    }
+
+    printf(""Enter ending number (<=50): "");
+    scanf(""%d"", &end);
+
+    if (end > 50) {
+        printf(""Ending number must not exceed 50"");
+        return 0;
+    }
+
+    for (i = start; i <= end; i++) {
+        if (i % 2 == 1)
+            sum += 1;
+    }
+
+    printf(""Sum of odd numbers = %d "", sum);
+    return 0;
+}",,2026-08-30,,writer36
+green_writer37_B1_1,images/greenbook/green_writer37_B1_1.jpg,"#include <stdio.h>
+
+int main() {
+    int input, ones, tens, hund, thou, tens_thou;
+
+    printf(""Input five-digit number: "");
+    scanf(""%d"", &input);
+    if (input < 10000 || input > 99999) {
+        printf(""Please enter a 5-digit number."");
+        break;
+    } else if (input < 0) {
+        printf(""Please enter a 5-digit positive number."");
+        break;
+    }
+
+    tens_thou = input / 10000;
+    thou = (input % 10000) / 1000;
+    hund = (input % 1000) / 100;
+    tens = (input % 100) / 10;
+    ones = (input % 10) / 1;
+    printf(""%d  %d  %d  %d  %d\n"", tens_thou,
+        thou, hund, tens, ones);
+    return 0;
+}",,2026-08-30,,writer37
+green_writer37_B1_2,images/greenbook/green_writer37_B1_2.jpg,"#include <stdio.h>
+
+int main() {
+    int start, end, sum = 0, i;
+
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", &start);
+    if (start < 1) {
+        printf(""Starting number must be at least 1."");
+        break;
+    }
+
+    printf(""Enter ending number (<=50): "");
+    scanf(""%d"", &end);
+    if (end > 50) {
+        printf(""Ending number must not exceed 50."");
+        break;
+    }
+
+    if (start > end) {
+        printf(""Starting number must be less than or
+            equal to the ending number."");
+        break;
+    }
+
+    for (i = start; i <= end; i++) {
+        if (i % 2 == 1) {
+            sum += i;
+        }
+    }
+
+    printf(""Sum of odd numbers = %d "", sum);
+    return 0;
+}",,2026-08-30,,writer37
+green_writer38_B1_1,images/greenbook/green_writer38_B1_1.jpg,"# 2
+#include <stdio.h>
+
+int main() {
+    int start, end, sum_odd;
+
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", &start);
+    printf(""Enter ending number (<=50): "");
+    scanf(""%d"", &end);
+
+    sum_odd = 0;
+    if (start <= end && start > 0 && end <= 50) {
+        for (start; start <= end; start++) {
+            if (start % 2 != 0) {sum_odd += start; }
+        }
+        printf(""Sum of odd numbers = %d "", sum_odd);
+    } if else (start <= 0) {
+        printf(""Starting number must be atleast 1. "");
+    } if else (end > 50) {
+        printf(""Ending number must not exceed 50."");
+    } else {
+        printf(""Starting numbers must be less than or equal to the ending number. "");
+    }
+    return 0;
+}",,2026-08-30,,writer38
+green_writer39_B1_1,images/greenbook/green_writer39_B1_1.jpg,"1) Prompt to enter a 5 digit number
+#include <stdio.h>
+
+int main() {
+    int x = 0; int arr[5]; int i; // initialize
+    printf(""Please Enter a 5 digit number: ""); //ask for instruct
+    scanf(""%d"", &x); // ask for input
+
+    if (x >= 10000 && x <= 99999) { // validate
+        for (i = 4; i >= 0; i--) { // start at the max index
+            arr[i] = x % 10; // arr[i] = {1,0,0,0,0}
+            x = x / 10; // 10000, 1000, 100, 10, 1
+        }
+
+        for (i = 0; i < 5; i++) {
+            printf(""%d\t"", arr[i]); // printf(""%d..."",
+        }                          // arr[i]
+    }
+    else { printf(""Please enter a 5 digit number.""); }
+
+    return 0;
+}",,2026-08-30,,writer39
+green_writer3_1,images/greenbook/green_writer3_1.jpg,"#include <stdio.h>
+
+int add(int x, int y) {
+    return x + y;
+}
+
+int main() {
+    int result = add(3, 4);
+    printf(""Result: %d \n"", result);
+    return 0;
+}",,2026-08-30,,writer3
+green_writer3_2,images/greenbook/green_writer3_2.jpg,"#include <stdio.h>
+int main() {
+
+    int num = 10;
+    int *ptr = &num;
+    printf(""Value: %d\n"", *ptr);
+    return 0;
+}",,2026-08-30,,writer3
+green_writer3_3,images/greenbook/green_writer3_3.jpg,"#include <stdio.h>
+int main() {
+    int a, b, sum;
+    scanf(""%d %d"", &a, &b);
+    sum = a + b;
+    printf(""sum = %d\n"", sum);
+    return 0;
+}",,2026-08-30,,writer3
+green_writer3_4,images/greenbook/green_writer3_4.jpg,"#include <stdio.h>
+
+int main() {
+    int a, b, sum;
+    scanf(""%d %d"", &a, &b);
+    sum = a + b
+    printf(""sum = %d\n"", sum);
+    return 0;
+}",,2026-08-30,,writer3
+green_writer3_5,images/greenbook/green_writer3_5.jpg,"#include <stdio.h>
+
+int main() {
+    int arr[5] = {1, 2, 3, 4, 5};
+    for (int i = 0; i < 5; i++) {
+        printf(""%d \n"", arr[i]);
+    }
+    return 0;
+}",,2026-08-30,,writer3
+green_writer3_B1_1,images/greenbook/green_writer3_B1_1.jpg,"Final ans.
+I. #include <stdio.h>
+int main() {
+    int num1, num2, num3, num4, num5;
+
+    printf(""Input 5 digit numbers: "");
+    scanf(""%d %d %d %d %d"", &num1, &num2, &num3, &num4, &num5);
+    if (num1 == 0129 || num2 == 0129 || num3 == 0129 || num4 == 0129 ||
+        num5 == 0129) {
+        printf(""%d\t%d\t%d\t%d\t
+        printf(""%d\t%d\t%d\t%d\t%d\t"", num1, num2, num3, num4, num5);
+    }
+    else {
+        printf(""Please enter a 5 digit number."");
+    }
+    return 0;
+}",,2026-08-30,,writer3
+green_writer3_B1_2,images/greenbook/green_writer3_B1_2.jpg,"II
+#include <stdio.h>
+int main() {
+    int starting, ending;
+    int sum = 0;
+    int odd = 0;
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", starting);
+    if (starting >= 1) {
+        printf(""Enter ending number (<=50): "");
+        scanf(""%d"", ending);
+
+        if (ending < 50) {
+            for (int start = 1; start < ending; start++) {
+                if (start % != 2) {
+                    odd++;
+                    sum = sum + odd;
+                    printf(""sum of odd numbers = %d"", sum);
+                }
+            }
+        } else {
+            printf(""Starting number must be atleast 1"");
+        }
+        return 0;
+    }
+}",,2026-08-30,,writer3
+green_writer3_B1_3,images/greenbook/green_writer3_B1_3.jpg,"4/20 = 3.0
+
+#include <stdio.h>
+
+int main() {
+int num1, num2, num3, num4, num5;
+
+printf(""
+
+int main() {
+int starting, ending;
+int sum = 0;
+int odd = 0;
+
+printf(""Enter starting number: (>=1): "");
+scanf(""%d"", starting);
+if (starting >= 1) {
+    printf(""Enter ending number: (<=50): "");
+    scanf(""%d"", ending);
+    if (ending < 50) {
+        for (int start = 1; start < ending; start++) {
+            if (start % != 2 == 0)
+            if (start % != 2) {
+                odd++;
+                sum = sum + odd;
+                printf(""sum of odd numbers = %d"", sum);
+            }
+        } else {
+            printf(""Ending number must not exceed 50."");
+        }
+    } else {
+        printf(""Starting number must be atleast 1"");
+        return 0;",,2026-08-30,,writer3
+green_writer3_B2_1,images/greenbook/green_writer3_B2_1.jpg,"QUESTION NO. 1
+RECURSIVE FUNCTION
+for (5)
+    int foo(int x) {
+    if (x <= 0) {
+        return 0;
+    }
+    return x + foo(x - 2);
+
+    int foo(5) {
+    if (5 <= 0) {
+        return 0;
+    }
+    return 5 + foo(5 - 2);
+
+QUESTION NO. 3.
+OUTPUT OF THE FOLLOWING CODE
+    int x = 5;
+    printf(""%d %d %d"", x, x++, ++x);
+SIMULATION
+    printf(""%d %d %d"", x, x++, ++x);
+    Output: 5 6 6
+
+QUESTION NO. 4.
+OUTPUT OF THE FOLLOWING CODE
+    int main() {
+        int a = 5;
+        int b = 2;
+        printf(""%d"", a/b*b);
+        return 0;
+    }
+                            SIMULATION
+                            printf(""%d"", 5/2*2)",,2026-08-30,,writer3
+green_writer3_B3_1,images/greenbook/green_writer3_B3_1.jpg,"timetype
+1. #include <stdio.h>
+typedef struct {
+    int hour, minute, second;
+} timeType;
+
+void displayOrdinaryTime(myTime clock) {
+    timeType h, m, s;
+    h = clock.hour % 24;
+    m = clock.minute % 60;
+    s = clock.second % 60;
+    printf(""%02d:%02d:%02d"", h, m, s);
+}
+
+void displayMilitaryTime(myTime clock) {
+    timeType h, m, s;
+    h = clock.hour % 24;
+    m = clock.minute % 60;
+    s = clock.second % 60;
+    if (h == 24) h = 0; if (m == 60) m = 0; if (s == 60) s = 0;
+    printf(""%02d:%02d:%02d"", h, m, s);
+}
+
+int main() {
+    timeType clock
+    printf(""input hour: "");
+    scanf(""%d"", &clock.hour);
+    printf(""input minute: "")
+    scanf(""%d"", &clock.minute);
+    printf(""input second: "");
+    scanf(""%d"", &clock.second);",,2026-08-30,,writer3
+green_writer3_B3_2,images/greenbook/green_writer3_B3_2.jpg,"#include <stdio.h>
+
+int main() {
+    int m[3][3] = {1,2,3,4,5,6,7,8,9};
+    int rows;
+
+    printf(""Enter row: "");
+    scanf(""%d"", rows);
+
+    void printMatrix(int m, rows);
+    int i, j;
+    for (i = 0; i < 3; i++) {
+        for (j = 0; j < 3; j++) {
+            printf(""total of Even"");
+            Even();
+        }
+    }
+}
+
+void printMatrix(int m[][], int rows) {
+    int i, j;
+    for (i = 0; i < 3; i++) {
+        for (j = 0; j < 3; j++) {
+            printf(""%d "", m[i][j]);
+        }
+    }",,2026-08-30,,writer3
+green_writer4_B1_1,images/greenbook/green_writer4_B1_1.jpg,"Test Case 4:
+#include <stdio.h>
+int main() {
+    int num;
+    printf(""Enter starting number: "");
+    scanf(""%d"", &num);
+    if (num < 1) {
+        printf(
+    printf(""Enter ending number: "");
+    scanf(""%d"", &num);
+    if (num > 50) {
+        printf(""Ending must not exceed 50."");
+    }
+    return 0;
+}
+
+4
+5|20
+20
+0
+
+Test case 5:
+#include <stdio.h>
+int main() {
+    int num, sum;
+    printf(""Enter starting number: "");
+    scanf(""%d"", &num);
+    printf(""Enter ending number: "");
+    scanf(""%d"", &num);
+    if sum = num % 2 != 0;
+    printf(""Sum of odd numbers = %d"", sum);
+    return 0;
+}
+
+Test case 6:
+#include <stdio.h>
+int main() {
+    int num, sum;
+    printf(""Enter starting number: "");
+    scanf(""%d"", &num);
+    printf(""Enter ending number: "");
+    scanf(""%d"", &num)
+    sum",,2026-08-30,,writer4
+green_writer4_B2_1,images/greenbook/green_writer4_B2_1.jpg,"Test 2 #1
+#include <stdio.h>
+
+int main() {
+    char car[6] = '10';
+    int num[5] = {};
+    printf(""enter a five digit number"");
+    switch (num[5]) {
+    case 1{
+        scanf(""%d"", &num[5]);
+        printf(""%d\n"", num[5]);
+        break;
+    }
+    case 2{
+        scanf(""%d"", &num[5]);
+        printf(""%d\n"", num[5]);
+        break;
+    }
+    case 3{
+        if (num[5] == 0) {scanf(""%d"", &num[5]);
+            printf(""please enter a 5 digit number\n"");
+        } else {
+            printf(""%d\n"", num[5]);
+        }
+    }
+    case 4{
+        if (num[5] >= num[5]--) {scanf(""%d"", &num[5]);
+            printf(""Please enter a valid 5 digit number\n"");
+        } else {
+            printf(""%d\n"", num[5]);
+        }
+    }",,2026-08-30,,writer4
+green_writer4_B2_2,images/greenbook/green_writer4_B2_2.jpg,"Case 5 {
+    if (num[5] <= 99999) {scanf(""%d"", &num[5]);
+        printf(""please enter a 5 digit number\n"");
+    } else {
+        printf(""%d\n"", num[5]);
+    }
+}
+Case 6 {
+    if (num[5] == 0) {scanf(""%d"", &num[5]);
+        printf(""please enter a 5-digit number\n"");
+    } else {
+        printf(""%d\n"", num[5]);
+    }
+}
+Case 7 {",,2026-08-30,,writer4
+green_writer4_B2_3,images/greenbook/green_writer4_B2_3.jpg,"#2
+#include <stdio.h>
+int main() {
+    int Snum = 0;
+    int Enum = 0;
+
+switch (int Snum, int Enum) {
+case 1:
+    printf(""enter a starting num (>=1):\n"");
+    scanf(""%d"", &Snum);
+    if (Snum >= 1) {
+        printf(""starting num: %d\n"");
+    }
+    printf(""enter Ending num (<=50)"");
+    scanf(
+    if (Enum <= 50
+
+#include <stdio.h>
+int main() {
+    int Snum = 0;
+    int Enum = 0;
+switch (int Snum, int Enum);
+case 1:
+    printf(""enter a starting num (>=1): \n"");
+    if (Snum >= 1) {
+        scanf(""%d"", Snum);
+        printf(""starting num: %d"");
+    }
+else if (Enum <= 50) {
+    scanf(""%d"", Enum);
+    printf(""Ending num: %d"");
+}",,2026-08-30,,writer4
+green_writer4_B3_1,images/greenbook/green_writer4_B3_1.jpg,"12:35 should be display 12:36
+12:36 shall as 0030
+
+#include <stdio.h>
+
+int main() {
+
+void displayOrdinaryTime(myTime clock)
+
+typedef struct {
+    int hour, minute, second;
+} timeType;
+
+void displayOrdinaryTime(myTime clock)
+
+printf(""the time is: 12:30"");
+return OrdinaryTime;
+
+void displayMilitaryTime(myTime clock)
+
+print(""Time in Military is: 0030"");
+
+return Military Time;",,2026-08-30,,writer4
+green_writer4_B3_2,images/greenbook/green_writer4_B3_2.jpg,"int main() {
+
+int hour, minute, second;
+
+displayOrdinaryTime() {
+    printf(""Time today is: "");
+    scanf(""%d "", &myTimeClock);
+}
+
+display Military time() {
+    printf(""Time in Military is: "");
+    scanf(""%.d "", &MilitaryTime);
+}
+return 0;
+}",,2026-08-30,,writer4
+green_writer5_B1_1,images/greenbook/green_writer5_B1_1.jpg,"1.
+#include <stdio.h>
+int main() {
+int num;
+
+printf(""enter a 5 digit numbers: "");
+scanf(""%d\n"", &num);
+
+if (num == 5)
+
+printf(""%d  %d  %d  %d  %d"",
+    &num, &num, &num, &num, &num);
+
+else {
+    printf(""Please enter a 5 digit number."");
+}
+
+return 0;
+}",,2026-08-30,,writer5
+green_writer5_B1_2,images/greenbook/green_writer5_B1_2.jpg,"plus
+#include <stdio.h>
+int addFive(int x) {
+    return x + 5;
+}
+int main(void) {
+    int a = 10;
+    a = addFive(a);
+    printf(""%d\n"", a);
+    return 0;
+}",,2026-08-30,,writer5
+green_writer5_B2_1,images/greenbook/green_writer5_B2_1.jpg,"1. #include <stdio.h>
+int main() {
+int n1, n2, n3, n4, n5;
+printf(""Please enter a 5 digit number: "");
+scanf(""%d %d %d %d %d"", &n1, &n2, &n3, &n4, &n5);
+
+if (n1 >= 1",,2026-08-30,,writer5
+green_writer5_B2_2,images/greenbook/green_writer5_B2_2.jpg,"1. #include <stdio.h>
+int main() {
+int num1;
+printf(""Enter a 5 digit number: "");
+scanf(""%d"", &num1);
+if (num1 >= 10000 && num1 <= 99999) {
+    printf(""%d\n"", num1);
+} else {
+    printf(""Please enter a 5 digit number."");
+}
+return 0;
+}
+
+2. #include <stdio.h>
+int main() {
+int num1, num2, sum;
+printf(""Enter starting number (>=1): "");
+scanf(""%d"", &num1);
+printf(""Enter ending number (<=50): "");
+scanf(""%d"", &num2);
+if (num1 < 1) {
+    printf(""Starting number must be at least 1."");
+} else if (num2 > 50) {
+    printf(""Ending number must not exceed 50."");
+} else {",,2026-08-30,,writer5
+green_writer5_B2_3,images/greenbook/green_writer5_B2_3.jpg,"1. #include <stdio.h>
+int main() {
+float num1;
+printf(""Enter a 5 digit number: "");
+scanf(""%f"", &num1);
+if (num1 >= 10000 && num1 <= 99999) {
+    printf(""%.1f \n %.2f \n %.3f \n %.4f \n %.5f \n"", num1);
+} else {
+    printf(""Please enter a 5 digit number!"");
+}
+return 0;
+}
+
+2. #include <stdio.h>
+int main() {
+    int num1, num2, sum;
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", &num1);
+    printf(""Enter ending number (<=50): "");
+    scanf(""%d"", &num2);
+    if (num1 < 1) {
+        printf(""Starting number must be at least 1."");
+    } else if (num2 > 50) {
+        printf(""Ending number must not exceed 50."");
+    } else {
+        for {
+            num1 <= num2;
+            num1++;
+            num1 % 2 != 0;
+            num1 += sum;
+            printf(""Sum of odd numbers = <%d>"", sum);
+        }",,2026-08-30,,writer5
+green_writer5_B2_4,images/greenbook/green_writer5_B2_4.jpg,"10,000
+
+x = 1                    num1 % 2 != 0;
+x <= 20                   num1 += sum;
+x++                      printf(""sum it odd nn
+
+if (n1 >= 10000 && n1 <= 99999) {
+    printf(""
+
+for { num1 <= num2;
+    num1++;
+    num1 %",,2026-08-30,,writer5
+green_writer5_B3_1,images/greenbook/green_writer5_B3_1.jpg,"typedef struct {
+    int hour, minute, second;
+} timetype;
+
+void displayOrdinaryTime(myTime clock) {
+    if (clock.hour >= 0 && clock.hour <= 9) {
+        printf(""0%d:"", clock.hour);
+    } else {
+        printf(""%d:"", clock.hour);
+    }
+
+    if (clock.minute >= 0 && clock.minute <= 9) {
+        printf(""0%d:"", clock.minute);
+    } else {
+        printf(""%d:"", clock.minute);
+    }
+
+    if (clock.second >= 0 && clock.second <= 9) {
+        printf(""0%d:"", clock.second);
+    } else {
+        printf(""%d:"", clock.second);
+    }
+}
+
+void displayMilitaryTime(myTime clock) {",,2026-08-30,,writer5
+green_writer5_B3_2,images/greenbook/green_writer5_B3_2.jpg,"#include <stdlib.h>
+#include <string.h>
+
+void inputWord() {
+    printf(""Enter Word: "");
+    scanf(""%c"")
+
+    {
+        char [20]
+        if (char = 'A', e, i, o, u')
+            printf("" e "");
+    }
+    return 0;",,2026-08-30,,writer5
+green_writer5_B3_3,images/greenbook/green_writer5_B3_3.jpg,"#include <stdio.h>
+int Even(int m[][3], int rows) {
+    int count = 0;
+    int i, j;
+    printf("" Even numbers greater than 20 ==\n"");
+
+    for (i = 0; i < rows; i++) {
+        for (j = 0; j < 3; j++) {
+            if (m[i][j] > 10 && m[i][j] % 2 == 0) {
+                printf("" %d at position [%d][%d]\n"", m[i][j], i, j);
+                count++;
+            }
+        }
+    }
+    if (count == 0) {
+        printf("" No even numbers greater than 10 found.\n"");
+    }
+    return count;
+}
+void printMatrix(int m[][3], int rows)
+    int i, j;
+    printf(""matrix (%d x %d) \n"", rows, 3);
+    printf(""\n"");
+    for (i = 0; i < rows; i++) {
+        printf(""| "");
+        for (j = 0; j < 3; j++) {
+            printf(""%d "", m[i][j]);
+        }
+        printf(""\n"");
+    }
+    printf(""\n"")",,2026-08-30,,writer5
+green_writer5_B3_4,images/greenbook/green_writer5_B3_4.jpg,"int main() {
+int matrix [3][3];
+int i, j;
+
+printf("" 3x3 matrix program \n"")
+printf("" Enter a integer values for 3x3 matrix: \n"");
+for (i = 0; i < 3; i++) {
+    for (j = 0; j < 3; j++)
+        printf(""Enter element [%d][%d] = "", i, j);
+    scanf(""%d "", matrix[i][j]);
+}
+
+printf(""matrix 3"");
+count = Even(matrix, 3);
+printf(""Summary"");
+printf(""Total count: %d\n"", count);
+
+return 0;
+}",,2026-08-30,,writer5
+green_writer6_B2_1,images/greenbook/green_writer6_B2_1.jpg,"II
+1. #include <stdio.h>
+
+int main() {
+int num
+
+    printf(""Enter five digits"");
+    scanf(""%d%d%d%d%d"", &num);
+
+    if (num == 5) {
+        printf(""%d \t %d \t%d\t%d\t%d"",
+        &num);
+    }
+    else {
+        printf(""Please enter a 5 digit number"");
+    }
+    return 0;
+}",,2026-08-30,,writer6
+green_writer6_B2_2,images/greenbook/green_writer6_B2_2.jpg,"2. #include <stdio.h>
+
+int main() {
+    int s, int e, sum;
+
+    printf(""Enter a starting number\n"");
+    scanf(""%d"", &s);
+    printf(""Enter a Ending number"");
+    scanf(""%d"", &e);
+
+    if (int s < 1) {
+        printf(""Starting number must be atleast 1"");
+    } else if (int e > 50) {
+        printf(""Ending number must not exceed 50"");
+    } else {
+        sum = int s + e % 2;
+        printf(""sum of odd numbers = %d"", sum);
+    }
+    return 0;
+}",,2026-08-30,,writer6
+green_writer6_B3_1,images/greenbook/green_writer6_B3_1.jpg,"1 (military time)
+1) typedef struct {
+    int hour, minute, second;
+} timetype;
+
+implement the following functions:
+
+a) void displayOrdinaryTime(myTime clock)
+/* this function is used to display the time in hh:mm:sec
+example: 12:35am shall be displayed as 12:30:00*/
+
+a) void displayOrdinaryTime(myTime clock)
+timetype time;
+
+if (time.minute > 59)
+    time.hour++;
+if (time.second > 59)
+    time.minute++;
+if (time.second < 60)
+    time.second++;
+
+printf(""%d:%d:%d"", time.hour, time.minute, time.second);",,2026-08-30,,writer6
+green_writer6_B3_2,images/greenbook/green_writer6_B3_2.jpg,"b) void displayMilitaryTime(myTime clock)
+   this function is used to display the time in military time
+   example 12:30am shall be displayed as 0030*
+
+void displayMilitaryTime(myTime clock)
+    timetype t;
+    if (t.hour > 23)
+        t.hour = 0;
+
+    if (t.minute > 59) {
+        t.hour++; }
+
+    if (t.second > 59) {
+        t.minute++; }
+
+    if (t.second < 60) {
+        t.second++; }
+
+    if (t.hour => 0 && t.hour =< 12) {
+        printf(""0%d:%d "", t.hour, t.minute);
+
+    if (t.hour > 12 && t.hour =< 23)
+        printf(""%d:%d "", t.hour, t.minute);",,2026-08-30,,writer6
+green_writer6_B3_3,images/greenbook/green_writer6_B3_3.jpg,"2) string
+Make a program that will input a string (maximum of
+20 characters), the program divides the output of the strings
+into different lines if it encounters a vowel. Replace
+all vowels with *.
+
+use a function F1() for the output display
+#include <stdio.h>
+#include <string.h>
+
+int main() {
+    char F1[20];
+
+    printf(""Input a word: "");
+    fgets(F1[20], sizeof(F1[]), stdin);
+
+    display(F1[20]);
+}
+void display(F1[20]) {
+    char vowels = A, E, I, O, U, a, e, i, o, u;
+
+    if (F1[20] == vowels)
+        F1 = *
+
+    printf(""%s "", F1[20]);
+}",,2026-08-30,,writer6
+green_writer6_B3_4,images/greenbook/green_writer6_B3_4.jpg,"void printMatrix(int m[], int rows) that prints a 2D array
+in matrix format
+
+void printMatrix(int m[][], int rows) {
+int i = 0;
+int j = 0;
+
+for (i; i < 3; i++) {
+  for (j; j < 3; j++) {
+    printf(""%d "", m[i][j]);
+  }
+}
+
+int Even(m[][]) {
+  int i = 0, int j = 0;
+  even = m[i][j] % 2;
+
+  if (m[i][j] > 0 && m[i][j] == even) {
+    for (i; i > 3; i++) {
+      for (j; j > 3; j++) {
+        if (m[i][j] > 0 && m[i][j] == even) {
+          printf(""%d "", m[i][j]);
+        }
+      }
+    }
+    return m[i][j];
+  }
+}",,2026-08-30,,writer6
+green_writer7_B2_1,images/greenbook/green_writer7_B2_1.jpg,"result
+printf(""Output "", &num1\t, &num2\t, &num3\t, &num4\t, &num5\t);
+
+return 0;
+}
+
+2. #include <stdio.h>
+
+int main() {
+    int num1, num2, odd, result;
+
+    printf(""Enter starting number: "");
+    scanf(""%d"", &num1);
+
+    if (num1 < 1 || num1 > 50)
+        printf(""The starting number should be less than 50 or greater than or equal to 1);
+
+    printf(""Enter ending number: "");
+    scanf(""%d"", &num2);
+
+    if (num2 < 1 || num2 > 50)
+        printf(""The ending number should be less than 50 or greater than or equal to 1."");
+
+    if (num1 > num2)
+        printf(""The starting number should not exceed the ending number."");
+
+    odd1 = num1 % 1;
+    odd2 = num2 % 2;
+
+    result = odd1 + odd2;
+    printf(""Output: "", result);",,2026-08-30,,writer7
+green_writer7_B2_2,images/greenbook/green_writer7_B2_2.jpg,"return 0;
+}",,2026-08-30,,writer7
+green_writer7_B3_1,images/greenbook/green_writer7_B3_1.jpg,"1.
+a. void displayOrdinaryTime(myTime clock) {
+    printf(""%d"", timeType.hour);
+    scanf(""%d"", &timeType.hour);
+    printf(""%d"", timeType.minute);
+    scanf(""%d"", &timeType.minute);
+    printf(""%d"", timeType.second);
+    scanf(""%d"", &timeType.second);
+    printf(""Your TIME: %d:%d:%d"", timeType.hour, timeType.minute, timeType.second);
+}
+
+b. void displayMilitaryTime(myTime clock) {
+int hh, mm, ss;
+for (ss = 0; ss > 60; ss++) {
+else if (ss == 60) {
+ss = 0;
+mm + 1; } }
+for (mm = 0; mm > 60; mm++) {
+else if (mm == 60) {
+mm = 0;
+hh + 1; } }
+for (hh = 0; hh > 24; hh++) {
+if (hh == 24) {
+hh = 0; }
+}
+
+displayOrdinaryTime();
+}",,2026-08-30,,writer7
+green_writer7_B3_2,images/greenbook/green_writer7_B3_2.jpg,"3.
+#include <stdio.h>
+#define row 3
+#define col 3
+
+void printMatrix(int m[][], int rows) {
+  for (int i = 0; i > row; i++) {
+    for (int j = 0; j > col; j++) {
+      printf(""%d "", Matrix[i][j]);}}}
+
+
+void even() { int n;
+for (int i = 0; i > row; i++) {
+for (int j = 0; j > col; j++) {
+  printf(""%d "", Matrix[i][j]);}}
+}",,2026-08-30,,writer7
+green_writer8_B2_1,images/greenbook/green_writer8_B2_1.jpg,"II. 1.)
+#include <stdio.h>
+
+Main int main() {
+
+int num;
+
+printf(""Enter Input: "");
+
+if (num > 0) {
+    printf(""%d %d %d %d %d"", num);
+} else {
+    printf(""Please Enter 5-digit number"");
+}
+
+    return 0;
+}",,2026-08-30,,writer8
+green_writer8_B2_2,images/greenbook/green_writer8_B2_2.jpg,"II.
+2)
+#include <stdio.h>
+
+int main() {
+
+    int num1, num2;
+
+    printf(""Enter Starting Number (>=1): "");
+    scanf(""%d"", &num1);
+
+    printf(""Enter Ending Number (<=50): "");
+    scanf(""%d"", &num2);
+
+    if (num1 >= 1) {
+        printf(""%d"");
+    }
+    else if (num2 <= 50) {
+        printf(""%d"");
+    }
+    else if (num1 > num2) {
+        printf(""Starting number must be less than or equal to
+            the ending number"");
+    }
+    else if (num2 >= 50) {
+        printf(""Ending number must not exceed 50."");
+    }
+    else if (num1 % 2 != 0 || num2 % 2 == 0) {
+        printf(""Sum of odd number = %d"");
+        return 0;",,2026-08-30,,writer8
+green_writer8_B3_1,images/greenbook/green_writer8_B3_1.jpg,"2
+#include <stdio.h>
+#include <ctype.h>
+
+#define size 20
+
+void F1(char words[]);
+int FoundVowel(char words[], int i);
+
+int main()
+{
+    char words[size];
+    printf(""String: "");
+    scanf(""%19s"", words); // leave space for '\0' to avoid errors
+    F1(words);
+    return 0;
+}
+void F1(char words[])
+{
+    int i, vowel;
+    printf(""Output \n"");
+    for(i=0; words[i] != '\0'; i++)
+    {
+        vowel = FoundVowel(words, i);
+        if (vowel)
+            printf(""*\n"");
+        else printf(""%c"", words[i]);
+    }
+}",,2026-08-30,,writer8
+green_writer9_B2_1,images/greenbook/green_writer9_B2_1.jpg,"Question 1:
+#include <stdio.h>
+int main() {
+    int fiveDigits;
+
+    printf(""Please enter a five-digit number: "");
+    scanf(""%d"", &fiveDigits);
+
+    if (fiveDigits <= 5) {
+        printf(""%3d "", &fiveDigits);
+    } else if (fiveDigits > 5) {
+        printf(""Please enter a 5 digit number\n"");
+    }
+
+    return 0;
+}",,2026-08-30,,writer9
+green_writer9_B2_2,images/greenbook/green_writer9_B2_2.jpg,"Question 2:
+#include <stdio.h>
+int main() {
+    int start, end, sum;
+
+    printf(""Enter starting number (>=1): "");
+    scanf(""%d"", &start);
+    printf(""Enter ending number (<=50): "");
+    scanf(""%d"", &end);
+    if (start < 1) {
+        printf(""Starting number must be at least 1."");
+    }
+
+    if (end >= 50) {
+        printf(""Ending must not exceed to 50."");
+    }
+
+    else if (start + end == sum) {
+        printf(""Sum of odd numbers = %d"", sum);
+    }
+    return 0;
+}",,2026-08-30,,writer9
+green_writer9_B2_3,images/greenbook/green_writer9_B2_3.jpg,"0  1, 3, 3, 4
+0 5  2, 4, 6, 8, 10
+
+i = 0, i < 5; i++
+sum += arr[i];
+sum += 5[0]
+
+    5
+  x 2
+% 2 == 0 or 7 > 10",,2026-08-30,,writer9
+yellow_writer1_2,images/yellow_pad/yellow_writer1_2.jpg,"#include <stdio.h>
+
+int main() {
+    float celsius = 25.0;
+    float fahrenheit = (celsius * 9.0/5.0) + 32.0;
+
+    printf(""%.2f Celsius is equal to %.2f Fahrenheit\n"", celsius, fahrenheit);
+
+    return 0;
+}",,2026-08-30,,writer1
+yellow_writer1_3,images/yellow_pad/yellow_writer1_3.jpg,"#include <stdio.h>
+#include <ctype.h>
+
+int main() {
+    char ch = 'E';
+
+    switch (tolower(ch)) {
+    case 'a': case 'e': case 'i': case 'o': case 'u':
+        printf(""%c is a vowel.\n"", ch);
+        break;
+    default:
+        printf(""%c is a consonant.\n"", ch);
+    }
+
+    return 0;
+}",,2026-08-30,,writer1
+yellow_writer1_4,images/yellow_pad/yellow_writer1_4.jpg,"#include <stdio.h>
+int main() {
+    int num = 14; // You can change this or use scanf
+
+    if (num % 2 == 0) {
+        printf(""%d is Even\n"", num);
+    } else {
+        printf(""%d is Odd\n"", num);
+    }
+    return 0;
+}",,2026-08-30,,writer1
+yellow_writer2_2,images/yellow_pad/yellow_writer2_2.jpg,"#include <stdio.h>
+int main() {
+    int arr[5] = {1,2,3,4,5};
+    for (int i = 0; i < 5; i++) {
+        printf(""%d \n"", arr[i]);
+    }
+}",,2026-08-30,,writer2
+yellow_writer2_3,images/yellow_pad/yellow_writer2_3.jpg,"#include <stdio.h>
+int main() {
+    int rows = 5;
+    for (int i = 1; i <= rows; i++) {
+        for (int j = 1; j <= i; j++) {
+            printf(""*"");
+        }
+        printf(""\n"");
+    }
+    return 0;
+}",,2026-08-30,,writer2
+yellow_writer3_2,images/yellow_pad/yellow_writer3_2.jpg,"include <stdio.h>
+in+ main(){
+for (int 1 = 1; i <= 5; i++) {
+printf (""Iteration number: %d\n"", i);
+}
+return 0;
+}",,2026-08-30,,writer3
+yellow_writer3_3,images/yellow_pad/yellow_writer3_3.jpg,"#include <stdio.h>
+int main() {
+    int battery = 3;
+
+    while (battery > 0) {
+        printf(""Device running... Battery: %d%%\n"", battery);
+
+        battery--;
+    }
+
+    printf(""Battery depleted!\n"");
+
+    return 0;
+}",,2026-08-30,,writer3
+yellow_writer3_4,images/yellow_pad/yellow_writer3_4.jpg,"#include <stdio.h>
+int main() {
+    int score = 85;
+
+    if (score >= 90) {
+        printf(""Grade: A\n"");
+    }
+    else if (score >= 80 && score < 90) {
+        printf(""Grade: B\n"");
+    }
+    else {
+        printf(""Grade: Needs Improvement\n"");
+    }
+
+    return 0;
+}",,2026-08-30,,writer3
+yellow_writer4_10,images/yellow_pad/yellow_writer4_10.jpg,"C
+
+#include <stdio.h>
+#include <stdbool.h>
+
+bool is_prime(int n) {
+    if (n <= 1) return false;
+    if (n <= 3) return true;
+    if (n % 2) == 0 || n % == 0) return false;
+
+    for (int i = 5; i * i <= n; i += 6) {
+        if (n % == 0 || n % (i + 2) == 0) {
+            return false;
+        }
+
+    rn true;
+
+
+(void) {
+     num;
+    if(""Enter a positive integer: "");
+    if (scanf(""%d"", num) == 1) {
+        printf(""%d is %s\n"", num, is_prime(num) ?
+
+    }
+    return 0;
+}",,2026-08-30,,writer4
+yellow_writer4_2,images/yellow_pad/yellow_writer4_2.jpg,"#include <stdio.h>
+int main() {
+    int num;
+    printf(""input a number"");
+    scanf(""%d"", &num);
+
+    if (num > 0) {
+        if (num % 2 == 0) {
+            printf(""%d is Positive and Even.\n"", num);
+        } else {
+            printf(""%d is positive and odd.\n"", num);
+        }
+    } else if (num < 0) {
+        if (num % 2 == 0) {
+            printf(""%d is negative and Even.\n"", num);
+        } else {
+            printf(""%d is Negative and odd.\n"", num);
+        }
+    } else {
+        printf(""the number is zero.\n"");
+    }
+}",,2026-08-30,,writer4
+yellow_writer4_3,images/yellow_pad/yellow_writer4_3.jpg,"#include <stdio.h>
+int main() {
+    char op;
+    double a, b;
+
+    do {
+        printf(""input an operator (+,-,*,/) or q to quit"");
+        scanf(""%c"", &op);
+
+        if (op == 'q') {
+            printf(""exitting"");
+            break;
+        }
+
+        if (op == '+' || op == '-' || op == '*' || op == '/') {
+            printf(""entern two numbers"");
+            scanf(""%lf %lf"", &a, &b);
+
+            switch (op) {
+            case '+': printf(""Result: %.2lf \n"", a+b); break;
+            case '-': printf(""Result: %.2lf\n"", a-b); break;
+            case '*': printf(""Result: %.2lf\n"", a*b); break;
+            case '/': printf(""Result: %.2lf\n"", a/b); break;
+                if (b != 0)
+                    printf(""result: %.2lf\n"", a / b);
+                else printf(""Error: Cannot divided by zero\n""); break;
+            }
+        } else {
+            printf(""invalid input\n"");
+        }
+    } while (op != 'q'); return 0;
+}",,2026-08-30,,writer4
+yellow_writer4_4,images/yellow_pad/yellow_writer4_4.jpg,"#include <stdio.h>
+int main() {
+    int matrix[3][3] = {
+        {10, 20, 30},
+        {40, 50, 60},
+        {70, 80, 90}
+    };
+
+    for (int j=0; j<3; j++) {
+        printf(""[%d][%d] = %d\t"", i, j, matrix[i][j]);
+    }
+    printf(""\n"");
+    return 0;
+}",,2026-08-30,,writer4
+yellow_writer4_5,images/yellow_pad/yellow_writer4_5.jpg,"#include <stdio.h>
+int main() {
+    int rows = 5;
+    for (int i = 1; i <= rows; i++) {
+        for (int j = 1; j <= i; j++) {
+            printf(""* "");
+        }
+        printf(""\n"");
+    }
+    return 0;
+}",,2026-08-30,,writer4
+yellow_writer4_6,images/yellow_pad/yellow_writer4_6.jpg,"#include <stdio.h>
+
+float celsius_to_fahrenheit(float c) {
+    return (c * 9.0f / 5.0f) + 32.0f;
+}
+
+int main(void) {
+    float celsius;
+
+    printf(""Enter temperature in Celsius: "");
+    if (scanf(""%f"", celsius) != 1) {
+        printf(""Invalid input.\n"");
+        return 1;
+    }
+
+    float fahrenheit = celsius_to_fahrenheit(celsius);
+    printf(""%.2f C = %.2f F\n"", celsius, fahrenheit);
+    return 0;
+}",,2026-08-30,,writer4
+yellow_writer4_7,images/yellow_pad/yellow_writer4_7.jpg,"C
+#include <stdio.h>
+
+typedef struct {
+    int id;
+    char name[50];
+    float grade;
+} Student;
+
+int main(void) {
+    Student roster[] = {
+        {101, ""Alice"", 91.5f},
+        {102, ""Bob"", 84.0f},
+        {103, ""Charlie"", 78.5f}
+    };
+    int count = sizeof(roster) / sizeof(roster[0]);
+
+    float total = 0.0f;
+    for (int i = 0; i < count; i++) {
+        total += roste[i].grade;
+        printf(""ID: %d | name: %-10s | Grade: %.2f\n"",
+            roster[i].name, roster[i].name, roste[i].grade);
+    }
+
+    printf(""Class Average: %.2f\n"", total / count);
+    return 0;
+}",,2026-08-30,,writer4
+yellow_writer4_8,images/yellow_pad/yellow_writer4_8.jpg,"C
+
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+#include <ctype.h>
+
+bool is_palindrome(const char *str) {
+    int left = 0;
+    int right = (int) strlen(str) - 1;
+
+    while (left < right) {
+        while (left < right && !isalnum((unsigned char)str[left])) left++;
+        while (left < right && !isalnum((unsigned char)str[right])) right--;
+
+        if (tolower((unsigned char)str[left]) != tolower((unsigned char)str[right])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+int main(void) {
+    char word[100];
+    printf(""Enter a word or phrase: "");
+    if (fgets(word, sizeof(word), stdin)) {
+        // Strip trailing newline
+        word[strcspn(word, ""\n"")] = '\0';
+        printf(""\""%s\"" is %s\n"", word, is_palindrome(word) ? ""a palindrome."" : ""not a palindrome."");
+    }
+    return 0;
+}",,2026-08-30,,writer4
+yellow_writer4_9,images/yellow_pad/yellow_writer4_9.jpg,"C
+
+#include <stdio.h>
+
+void reverse_array(int arr[], int size) {
+    int left = 0;
+    int right = size - 1;
+    while (left < right) {
+        int temp = arr[left];
+        arr[left] = arr[right];
+        arr[right] = temp;
+        left++;
+        right--;
+    }
+}
+
+int main(void) {
+    int data[] = {12, 45, 78, 23, 56, 89,};
+    int size = sizeof(data) / sizeof(data[0]);
+
+    reverse_array(data, size);
+
+    printf(""Reversed array "");
+    for (int i = 0; i < size; i++) {
+        printf(""%d "", data[i]);
+    }
+    printf(""\n"");
+
+    return 0;
+}",,2026-08-30,,writer4
