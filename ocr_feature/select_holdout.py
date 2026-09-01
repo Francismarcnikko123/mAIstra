@@ -124,10 +124,15 @@ def main() -> int:
     for r in holdout_rows:
         paper_type = r["image_path"].split("/")[1]
         src = VERIFIED_IMAGES / paper_type / Path(r["image_path"]).name
-        dest = SAMPLES_DIR / Path(r["image_path"]).name
+        dest_dir = SAMPLES_DIR / paper_type
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / Path(r["image_path"]).name
         shutil.move(str(src), str(dest))
         new_sample_rows.append({
-            "filename": Path(r["image_path"]).name,
+            # keep the paper-type subfolder in the label so samples/ mirrors
+            # datasets/verified/images/<paper_type>/; evaluate_cer resolves
+            # each image as samples/<filename>, so this path just works.
+            "filename": f"{paper_type}/{Path(r['image_path']).name}",
             "ground_truth_text": r["verified_text"],
             "writer": r["student_name"],
             "paper_type": paper_type,
