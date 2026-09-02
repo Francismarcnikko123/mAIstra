@@ -18,7 +18,8 @@ class QualityResult {
 // Heavy image processing should never run on the main thread
 QualityResult _analyzeInIsolate(List<int> bytes) {
   final image = img.decodeImage(Uint8List.fromList(bytes));
-  if (image == null) return QualityResult(passed: false, issues: ['Could not read image']);
+  if (image == null)
+    return QualityResult(passed: false, issues: ['Could not read image']);
 
   // Resize to 200x200 for speed — we don't need full resolution to check quality
   final small = img.copyResize(image, width: 200, height: 200);
@@ -37,10 +38,10 @@ QualityResult _analyzeInIsolate(List<int> bytes) {
 
       // Blur detection using Laplacian operator
       // It measures how much edges exist — blurry images have weak edges
-      final top    = grayscale.getPixel(x, y - 1).r.toDouble();
+      final top = grayscale.getPixel(x, y - 1).r.toDouble();
       final bottom = grayscale.getPixel(x, y + 1).r.toDouble();
-      final left   = grayscale.getPixel(x - 1, y).r.toDouble();
-      final right  = grayscale.getPixel(x + 1, y).r.toDouble();
+      final left = grayscale.getPixel(x - 1, y).r.toDouble();
+      final right = grayscale.getPixel(x + 1, y).r.toDouble();
 
       final laplacian = 4 * center - top - bottom - left - right;
       laplacianSum += laplacian;
@@ -58,12 +59,17 @@ QualityResult _analyzeInIsolate(List<int> bytes) {
 
   final List<String> issues = [];
 
- // Check for uneven lighting by comparing brightest vs darkest quadrant
+  // Check for uneven lighting by comparing brightest vs darkest quadrant
   final regions = [
     [0, 0, grayscale.width ~/ 2, grayscale.height ~/ 2],
     [grayscale.width ~/ 2, 0, grayscale.width, grayscale.height ~/ 2],
     [0, grayscale.height ~/ 2, grayscale.width ~/ 2, grayscale.height],
-    [grayscale.width ~/ 2, grayscale.height ~/ 2, grayscale.width, grayscale.height],
+    [
+      grayscale.width ~/ 2,
+      grayscale.height ~/ 2,
+      grayscale.width,
+      grayscale.height,
+    ],
   ];
 
   double minRegion = 255;
@@ -86,15 +92,17 @@ QualityResult _analyzeInIsolate(List<int> bytes) {
   if (maxRegion - minRegion > 50) {
     issues.add('Uneven lighting or shadow detected — ensure even lighting');
   }
-  if (avgBrightness < 60)  issues.add('Too dark — find better lighting');
+  if (avgBrightness < 60) issues.add('Too dark — find better lighting');
   if (avgBrightness > 220) issues.add('Too bright / overexposed');
-  if (blurScore < 1300)    issues.add('Image is blurry — hold camera steady');
+  if (blurScore < 1300) issues.add('Image is blurry — hold camera steady');
 
   return QualityResult(passed: issues.isEmpty, issues: issues);
 }
 
 class CaptureScreen extends StatefulWidget {
-  const CaptureScreen({super.key});
+  final String questionId;
+
+  const CaptureScreen({super.key, required this.questionId});
 
   @override
   State<CaptureScreen> createState() => _CaptureScreenState();
@@ -110,34 +118,34 @@ class _CaptureScreenState extends State<CaptureScreen> {
   final supabase = Supabase.instance.client;
 
   Future<void> _captureImage() async {
-  final XFile? photo = await _picker.pickImage(
-    source: ImageSource.camera,
-    imageQuality: 90,
-  );
+    final XFile? photo = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 90,
+    );
 
-  if (photo == null) return;
+    if (photo == null) return;
 
-  setState(() {
-    _capturedImage = File(photo.path);
-    _isCheckingQuality = true;
-    _qualityResult = null;
-  });
-
-  try {
-    final bytes = await _capturedImage!.readAsBytes();
-    final result = _analyzeInIsolate(bytes); // run directly, no isolate
     setState(() {
-      _qualityResult = result;
-      _isCheckingQuality = false;
+      _capturedImage = File(photo.path);
+      _isCheckingQuality = true;
+      _qualityResult = null;
     });
-  } catch (e) {
-    // if analysis fails, just let the user proceed
-    setState(() {
-      _qualityResult = QualityResult(passed: true, issues: []);
-      _isCheckingQuality = false;
-    });
+
+    try {
+      final bytes = await _capturedImage!.readAsBytes();
+      final result = _analyzeInIsolate(bytes); // run directly, no isolate
+      setState(() {
+        _qualityResult = result;
+        _isCheckingQuality = false;
+      });
+    } catch (e) {
+      // if analysis fails, just let the user proceed
+      setState(() {
+        _qualityResult = QualityResult(passed: true, issues: []);
+        _isCheckingQuality = false;
+      });
+    }
   }
-}
 
   Future<void> _saveToDatabase() async {
     if (_capturedImage == null) return;
@@ -145,7 +153,8 @@ class _CaptureScreenState extends State<CaptureScreen> {
     setState(() => _isUploading = true);
 
     try {
-      final fileName = 'submission_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final fileName =
+          'submission_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
       await supabase.storage
           .from('handwritten-submissions')
@@ -157,6 +166,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
       await supabase.from('submissions').insert({
         'image_url': imageUrl,
+        'question_id': widget.questionId,
         'status': 'pending',
       });
 
@@ -211,23 +221,35 @@ class _CaptureScreenState extends State<CaptureScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.document_scanner, size: 100, color: Color(0xFFB71C1C)),
+          const Icon(
+            Icons.document_scanner,
+            size: 100,
+            color: Color(0xFFB71C1C),
+          ),
           const SizedBox(height: 24),
-          const Text('Capture Handwritten C Code',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'Capture Handwritten C Code',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
-          const Text('Take a photo of the student\'s paper',
-              style: TextStyle(fontSize: 14, color: Colors.grey)),
+          const Text(
+            'Take a photo of the student\'s paper',
+            style: TextStyle(fontSize: 14, color: Colors.grey),
+          ),
           const SizedBox(height: 40),
           ElevatedButton.icon(
             onPressed: _captureImage,
             icon: const Icon(Icons.camera_alt, color: Colors.white),
-            label: const Text('Open Camera',
-                style: TextStyle(color: Colors.white, fontSize: 16)),
+            label: const Text(
+              'Open Camera',
+              style: TextStyle(color: Colors.white, fontSize: 16),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFB71C1C),
               padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
         ],
@@ -260,8 +282,11 @@ class _CaptureScreenState extends State<CaptureScreen> {
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                SizedBox(width: 16, height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
                 SizedBox(width: 8),
                 Text('Checking image quality...'),
               ],
@@ -289,25 +314,36 @@ class _CaptureScreenState extends State<CaptureScreen> {
                 Row(
                   children: [
                     Icon(
-                      _qualityResult!.passed ? Icons.check_circle : Icons.warning,
+                      _qualityResult!.passed
+                          ? Icons.check_circle
+                          : Icons.warning,
                       color: _qualityResult!.passed ? Colors.green : Colors.red,
                       size: 18,
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      _qualityResult!.passed ? 'Image quality is good' : 'Quality issues detected',
+                      _qualityResult!.passed
+                          ? 'Image quality is good'
+                          : 'Quality issues detected',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: _qualityResult!.passed ? Colors.green : Colors.red,
+                        color: _qualityResult!.passed
+                            ? Colors.green
+                            : Colors.red,
                       ),
                     ),
                   ],
                 ),
                 // List each issue found
-                ..._qualityResult!.issues.map((issue) => Padding(
-                  padding: const EdgeInsets.only(top: 4, left: 26),
-                  child: Text('• $issue', style: const TextStyle(fontSize: 13)),
-                )),
+                ..._qualityResult!.issues.map(
+                  (issue) => Padding(
+                    padding: const EdgeInsets.only(top: 4, left: 26),
+                    child: Text(
+                      '• $issue',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -321,27 +357,41 @@ class _CaptureScreenState extends State<CaptureScreen> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _isUploading || _isCheckingQuality ? null : _discard,
+                  onPressed: _isUploading || _isCheckingQuality
+                      ? null
+                      : _discard,
                   icon: const Icon(Icons.close, color: Colors.red),
-                  label: const Text('Discard',
-                      style: TextStyle(color: Colors.red, fontSize: 16)),
+                  label: const Text(
+                    'Discard',
+                    style: TextStyle(color: Colors.red, fontSize: 16),
+                  ),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     side: const BorderSide(color: Colors.red),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: _isUploading || _isCheckingQuality || (_qualityResult != null && !_qualityResult!.passed) ? null : _saveToDatabase,
+                  onPressed:
+                      _isUploading ||
+                          _isCheckingQuality ||
+                          (_qualityResult != null && !_qualityResult!.passed)
+                      ? null
+                      : _saveToDatabase,
                   icon: _isUploading
                       ? const SizedBox(
-                          width: 20, height: 20,
+                          width: 20,
+                          height: 20,
                           child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
                       : const Icon(Icons.check, color: Colors.white),
                   label: Text(
                     _isUploading ? 'Saving...' : 'Accept',
@@ -351,7 +401,8 @@ class _CaptureScreenState extends State<CaptureScreen> {
                     backgroundColor: const Color(0xFFB71C1C),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),

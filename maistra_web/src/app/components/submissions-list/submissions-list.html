@@ -1,124 +1,324 @@
-<div class="submissions-panel">
-  <div class="panel-header">
-    <h2>Submissions</h2>
+<section class="submissions-panel">
+  <header class="panel-header">
+    <div>
+      <p class="eyebrow">Teacher workspace</p>
+      <h2>Submissions</h2>
+    </div>
     <span class="total-count">{{ submissions.length }} total</span>
+  </header>
+
+  <div class="submission-toolbar">
+    <label class="search-field">
+      <span class="sr-only">Search submissions</span>
+      <input
+        type="search"
+        [(ngModel)]="searchQuery"
+        (ngModelChange)="onFiltersChanged()"
+        placeholder="Search student, topic, or question"
+      />
+    </label>
+
+    <label class="filter-field">
+      <span>Status</span>
+      <select
+        [(ngModel)]="statusFilter"
+        (ngModelChange)="onFiltersChanged()"
+      >
+        <option value="all">All statuses</option>
+        <option value="new">Needs OCR</option>
+        <option value="extracted">Needs review</option>
+        <option value="verified">Ready to grade</option>
+        <option value="graded">Graded</option>
+      </select>
+    </label>
+
+    <button
+      type="button"
+      class="btn-quiet"
+      (click)="clearFilters()"
+      *ngIf="searchQuery || statusFilter !== 'all'"
+    >
+      Clear filters
+    </button>
   </div>
 
-  <div class="folders-container" *ngIf="groupedSubmissions.length > 0; else empty">
-    <div class="folder" *ngFor="let group of groupedSubmissions">
-      <div class="folder-header" (click)="toggleFolder(group.topic)">
+  <div class="folders-container" *ngIf="groupedSubmissions.length; else empty">
+    <section class="folder" *ngFor="let group of groupedSubmissions">
+      <button
+        type="button"
+        class="folder-header"
+        (click)="toggleFolder(group.topic)"
+        [attr.aria-expanded]="!collapsedFolders[group.topic]"
+      >
         <span class="folder-arrow" [class.collapsed]="collapsedFolders[group.topic]">▾</span>
-        <span class="folder-icon">📁</span>
         <span class="folder-name">{{ group.topic }}</span>
         <span class="folder-count">{{ group.submissions.length }}</span>
-      </div>
+      </button>
 
       <div class="folder-content" [class.hidden]="collapsedFolders[group.topic]">
-        <div class="thumbnails-grid">
-          <div
-            class="thumbnail-card"
-            *ngFor="let s of group.submissions"
-            (click)="openModal(s)"
+        <div class="submission-grid">
+          <button
+            type="button"
+            class="submission-card"
+            *ngFor="let submission of group.submissions"
+            (click)="openModal(submission)"
           >
-            <img [src]="s.image_url" alt="Submission" />
-            <div class="thumb-badge" *ngIf="s.verified_text || s.extracted_text">✓</div>
-          </div>
+            <div class="card-image-wrap">
+              <img [src]="submission.image_url" alt="Handwritten submission" />
+              <span
+                class="status-badge"
+                [attr.data-status]="getSubmissionStatus(submission)"
+              >
+                {{ getSubmissionStatusLabel(submission) }}
+              </span>
+            </div>
+            <div class="card-content">
+              <strong>{{ submission.student_name || 'Unnamed student' }}</strong>
+              <span>{{ getQuestionName(submission) }}</span>
+              <time>{{ submission.captured_at | date:'mediumDate' }}</time>
+            </div>
+          </button>
         </div>
       </div>
-    </div>
+    </section>
   </div>
 
   <ng-template #empty>
-    <div class="empty-state">No submissions yet.</div>
+    <div class="empty-state">
+      <strong>{{ submissions.length ? 'No matching submissions' : 'No submissions yet' }}</strong>
+      <span *ngIf="submissions.length">Try changing or clearing the filters.</span>
+    </div>
   </ng-template>
-</div>
+</section>
 
-<!-- Modal Overlay -->
-<div class="modal-overlay" *ngIf="selectedSubmission" (click)="closeModal()">
-  <div class="modal-box" (click)="$event.stopPropagation()">
-    <button class="modal-close" (click)="closeModal()">✕</button>
-
-    <div class="modal-body">
-      <!-- Left: Image -->
-      <div class="modal-image-section">
-        <a [href]="selectedSubmission.image_url" target="_blank">
-          <img [src]="selectedSubmission.image_url" alt="Submission" class="modal-image" />
-        </a>
-        <p class="modal-date">{{ selectedSubmission.captured_at | date:'medium' }}</p>
+<div class="review-overlay" *ngIf="selectedSubmission" (click)="closeModal()">
+  <section
+    class="review-workspace"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="review-title"
+    (click)="$event.stopPropagation()"
+  >
+    <header class="review-header">
+      <div>
+        <p class="eyebrow">Review submission</p>
+        <h2 id="review-title">
+          {{ selectedSubmission.student_name || 'Unnamed student' }}
+        </h2>
+        <p class="review-meta">
+          {{ selectedSubmission.captured_at | date:'medium' }}
+          <span>·</span>
+          {{ getQuestionName(selectedSubmission) }}
+        </p>
       </div>
+      <button type="button" class="review-close" (click)="closeModal()" aria-label="Close review">✕</button>
+    </header>
 
-      <!-- Right: Controls -->
-      <div class="modal-controls">
+    <nav class="review-steps" aria-label="Submission review progress">
+      <button type="button" [class.active]="reviewStep === 1" [class.complete]="reviewStep > 1" (click)="setReviewStep(1)">
+        <span>1</span>
+        <strong>Details</strong>
+        <small>Organize submission</small>
+      </button>
+      <button type="button" [class.active]="reviewStep === 2" [class.complete]="reviewStep > 2" (click)="setReviewStep(2)">
+        <span>2</span>
+        <strong>Review code</strong>
+        <small>Extract and verify</small>
+      </button>
+      <button
+        type="button"
+        [class.active]="reviewStep === 3"
+        [disabled]="!canOpenGradingStep()"
+        (click)="setReviewStep(3)"
+      >
+        <span>3</span>
+        <strong>Run &amp; grade</strong>
+        <small>{{ canOpenGradingStep() ? 'Check test cases' : 'Verify code and question first' }}</small>
+      </button>
+    </nav>
 
-        <!-- Topic Assignment -->
-        <div class="control-group">
-          <label>Topic / Folder</label>
-          <div class="topic-row">
-            <input
-              class="topic-input"
-              [(ngModel)]="editableTopic"
-              placeholder="e.g. Algebra, Chapter 3"
-            />
-            <button class="btn-save-topic" (click)="saveTopic()" [disabled]="savingTopic">
-              {{ savingTopic ? 'Saving…' : 'Assign' }}
-            </button>
+    <div class="review-content">
+      <ng-container *ngIf="reviewStep === 1">
+        <div class="details-layout">
+          <div class="submission-preview">
+            <a [href]="selectedSubmission.image_url" target="_blank" rel="noopener">
+              <img [src]="selectedSubmission.image_url" alt="Full handwritten submission" />
+            </a>
+            <span>Click the image to open the original.</span>
+          </div>
+
+          <div class="details-form">
+            <div class="stage-heading">
+              <p class="eyebrow">Step 1</p>
+              <h3>Submission details</h3>
+              <p>Assign the submission before reviewing the extracted code.</p>
+            </div>
+
+            <label class="field-group">
+              <span>Topic or folder</span>
+              <input [(ngModel)]="editableTopic" placeholder="For example: Loops or Chapter 3" />
+            </label>
+
+            <label class="field-group">
+              <span>Question</span>
+              <select
+                [ngModel]="selectedQuestionId"
+                (ngModelChange)="onSelectedQuestionChange($event)"
+                [class.invalid]="!selectedQuestionId"
+                required
+              >
+                <option value="">Select a question</option>
+                <option *ngFor="let question of questions" [value]="question.id">
+                  {{ question.question_name }}
+                </option>
+              </select>
+              <small class="field-error" *ngIf="!selectedQuestionId">
+                Select a question before continuing to code review.
+              </small>
+              <small *ngIf="selectedQuestionId">
+                This question will supply the grading test cases.
+              </small>
+            </label>
+
+            <div class="status-summary">
+              <span>Status</span>
+              <strong>{{ getSubmissionStatusLabel(selectedSubmission) }}</strong>
+            </div>
           </div>
         </div>
+      </ng-container>
 
-        <!-- Extract Text -->
-        <div class="control-group">
-          <label>Extracted Text</label>
+      <ng-container *ngIf="reviewStep === 2">
+        <div class="stage-heading stage-heading-row">
+          <div>
+            <p class="eyebrow">Step 2</p>
+            <h3>Review extracted code</h3>
+            <p>Compare the submission image with the OCR result, then correct and verify it.</p>
+          </div>
           <button
-            class="btn-extract"
+            type="button"
+            class="btn-secondary btn-extract"
             (click)="extractText()"
             [disabled]="isExtracting(selectedSubmission.id)"
           >
-            {{ isExtracting(selectedSubmission.id) ? 'Extracting…' : 'Extract Text' }}
+            {{ isExtracting(selectedSubmission.id) ? 'Extracting…' : (hasExtractedText(selectedSubmission.id) ? 'Re-extract code' : 'Extract code') }}
           </button>
-
-          <div class="extract-error" *ngIf="extractionError[selectedSubmission.id]">
-            {{ extractionError[selectedSubmission.id] }}
         </div>
 
-          <ng-container *ngIf="hasExtractedText(selectedSubmission.id)">
+        <div class="ocr-layout">
+          <div class="submission-preview compact">
+            <a [href]="selectedSubmission.image_url" target="_blank" rel="noopener">
+              <img [src]="selectedSubmission.image_url" alt="Handwritten submission for comparison" />
+            </a>
+          </div>
+
+          <div class="editor-panel">
+            <div class="editor-panel-header">
+              <div>
+                <strong>Verified code</strong>
+                <span>Edit OCR mistakes before continuing.</span>
+              </div>
+              <button
+                *ngIf="hasExtractedText(selectedSubmission.id)"
+                type="button"
+                class="btn-quiet"
+                (click)="formatCode()"
+                title="Re-indent code without changing its characters"
+              >
+                Format code
+              </button>
+            </div>
+
+            <div class="extract-placeholder" *ngIf="!hasExtractedText(selectedSubmission.id)">
+              <strong>No code extracted yet</strong>
+              <span>Choose “Extract code” to create an editable OCR result.</span>
+            </div>
+
             <app-code-editor
+              *ngIf="hasExtractedText(selectedSubmission.id)"
               #codeEditor
               class="text-editor"
               [(value)]="editableText[selectedSubmission.id]"
             ></app-code-editor>
 
-            <div class="editor-actions">
-              <button
-                type="button"
-                class="btn-format"
-                (click)="codeEditor.format()"
-                title="Re-indent the code by brace depth (Shift+Alt+F). Editing aid only — does not change any characters."
-              >
-                Format
-              </button>
+            <p class="extract-error" *ngIf="extractionError[selectedSubmission.id]">
+              {{ extractionError[selectedSubmission.id] }}
+            </p>
+            <p class="save-status" *ngIf="saveStatus[selectedSubmission.id]" [ngClass]="saveStatus[selectedSubmission.id]">
+              {{ saveStatus[selectedSubmission.id] === 'saved' ? '✓ Verified code saved' : '✕ Save failed—please try again' }}
+            </p>
+          </div>
+        </div>
+      </ng-container>
 
-              <button
-                class="btn-save-text"
-                (click)="saveVerifiedText()"
-                [disabled]="isSaving(selectedSubmission.id)"
-              >
-                {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save Verified Text' }}
-              </button>
-
-              <span
-                class="save-status"
-                *ngIf="saveStatus[selectedSubmission.id]"
-                [ngClass]="saveStatus[selectedSubmission.id]"
-              >
-                {{ saveStatus[selectedSubmission.id] === 'saved'
-                  ? '✓ Saved successfully'
-                  : '✕ Save failed — please try again' }}
-              </span>
-            </div>
-          </ng-container>
+      <ng-container *ngIf="reviewStep === 3">
+        <div class="stage-heading">
+          <p class="eyebrow">Step 3</p>
+          <h3>Run and grade</h3>
+          <p>Run a sample first, then submit against every test case.</p>
         </div>
 
-      </div>
+        <div class="grading-context">
+          <span>Question</span>
+          <strong>{{ getSelectedQuestion()?.question_name || getQuestionName(selectedSubmission) }}</strong>
+        </div>
+
+        <app-judge0
+          [initialCode]="editableText[selectedSubmission.id]"
+          [runCode]="getExecutionSourceCode(selectedSubmission)"
+          [stdin]="getExecutionStdin(selectedSubmission)"
+          [expectedOutput]="getExecutionExpectedOutput(selectedSubmission)"
+          [hasQuestion]="hasExecutionQuestion(selectedSubmission)"
+          [requiresQuestion]="true"
+          [submittedOutput]="submissionRunOutput[selectedSubmission.id] || ''"
+          [submitStatus]="submissionCheckStatus[selectedSubmission.id] || ''"
+          [isSubmitting]="isChecking"
+          [testCaseResults]="submissionTestResults[selectedSubmission.id] || []"
+          [logicAnalysisResults]="submissionLogicResults[selectedSubmission.id] || []"
+          (codeChange)="updateSubmissionCode(selectedSubmission.id, $event)"
+          (submitCode)="checkSubmission(selectedSubmission)"
+        ></app-judge0>
+
+        <div class="grading-error" *ngIf="checkError">{{ checkError }}</div>
+      </ng-container>
     </div>
-  </div>
+
+    <footer class="review-footer">
+      <button type="button" class="btn-secondary" (click)="reviewStep === 1 ? closeModal() : setReviewStep(reviewStep === 3 ? 2 : 1)">
+        {{ reviewStep === 1 ? 'Cancel' : 'Back' }}
+      </button>
+
+      <div class="footer-guidance" *ngIf="reviewStep === 2 && !hasExtractedText(selectedSubmission.id)">
+        Extract code to continue.
+      </div>
+      <div class="footer-guidance" *ngIf="reviewStep === 2 && hasExtractedText(selectedSubmission.id) && !selectedQuestionId && !selectedSubmission.questions">
+        Go back to Details and select a question before grading.
+      </div>
+
+      <button
+        *ngIf="reviewStep === 1"
+        type="button"
+        class="btn-primary"
+        (click)="continueFromDetails()"
+        [disabled]="savingTopic || !selectedQuestionId"
+      >
+        <span class="button-spinner" *ngIf="savingTopic" aria-hidden="true"></span>
+        {{ savingTopic ? 'Saving assignment…' : 'Save and review code' }}
+      </button>
+
+      <button
+        *ngIf="reviewStep === 2"
+        type="button"
+        class="btn-primary"
+        (click)="saveCodeAndContinue()"
+        [disabled]="!hasExtractedText(selectedSubmission.id) || isSaving(selectedSubmission.id) || !canOpenGradingStep()"
+      >
+        {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save and continue to grading' }}
+      </button>
+
+      <button *ngIf="reviewStep === 3" type="button" class="btn-primary" (click)="closeModal()">
+        Finish review
+      </button>
+    </footer>
+  </section>
 </div>

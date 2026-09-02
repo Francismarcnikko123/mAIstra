@@ -24,11 +24,16 @@ import 'ace-builds/src-noconflict/theme-monokai';
   standalone: true,
   template: `<div #host class="ace-host"></div>`,
   styles: [
-    `.ace-host {
+    `:host {
+      display: block;
+    }
+
+    .ace-host {
       width: 100%;
-      height: 300px;
+      height: var(--code-editor-height, 300px);
       border: 1px solid #ccc;
       border-radius: 6px;
+      box-sizing: border-box;
     }`,
   ],
 })

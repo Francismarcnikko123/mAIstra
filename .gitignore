@@ -1,2 +1,5 @@
-# Local-only documentation/notes, not tracked or pushed
-docs/
+# Local environment and generated Python files
+.env
+*.pyc
+__pycache__/
+.pytest_cache/
