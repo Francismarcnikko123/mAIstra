@@ -3,3 +3,5 @@ uvicorn[standard]
 httpx
 python-dotenv
 pydantic
+tree-sitter==0.26.0
+tree-sitter-c==0.24.2
