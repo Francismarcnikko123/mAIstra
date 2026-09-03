@@ -123,6 +123,12 @@
   border-radius: 6px;
 }
 
+.save-hint {
+  color: #8a6d1a;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
 .success-message {
   color: #2e7d32;
   font-size: 13px;

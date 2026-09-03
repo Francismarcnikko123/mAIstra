@@ -8,6 +8,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import re
+
+try:
+    from .logic_checker import compare_logic
+except ImportError:
+    from logic_checker import compare_logic
+
 load_dotenv()
 
 app = FastAPI()
@@ -20,8 +26,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-JUDGE0_BASE_URL = os.getenv("JUDGE0_BASE_URL", "https://ce.judge0.com")
+JUDGE0_BASE_URL = os.getenv("JUDGE0_BASE_URL")
 JUDGE0_API_KEY = os.getenv("JUDGE0_API_KEY")
+
+if not JUDGE0_BASE_URL:
+    raise RuntimeError(
+        "JUDGE0_BASE_URL is not set. Create a .env file with JUDGE0_BASE_URL=http://<host>:<port>"
+    )
 
 
 class RunCodeRequest(BaseModel):
@@ -56,54 +67,63 @@ async def run_code(payload: RunCodeRequest):
     "stdin": encode_base64(payload.stdin or ""),
     }
 
-    async with httpx.AsyncClient(timeout=20) as client:
-        create_response = await client.post(
-            f"{JUDGE0_BASE_URL}/submissions",
-            params={
-                "base64_encoded": "true",
-                "wait": "false",
-            },
-            json=submission_payload,
-            headers=headers,
-        )
-
-        if create_response.status_code >= 400:
-            raise HTTPException(
-                status_code=create_response.status_code,
-                detail=create_response.text,
-            )
-
-        token = create_response.json().get("token")
-
-        if not token:
-            raise HTTPException(status_code=500, detail="Judge0 did not return a token")
-
-        for _ in range(20):
-            result_response = await client.get(
-                f"{JUDGE0_BASE_URL}/submissions/{token}",
+    try:  # catches httpx.RequestError for both POST and polling GETs
+        async with httpx.AsyncClient(timeout=20) as client:
+            create_response = await client.post(
+                f"{JUDGE0_BASE_URL}/submissions",
                 params={
                     "base64_encoded": "true",
-                    "fields": "stdout,stderr,compile_output,message,status,time,memory",
+                    "wait": "false",
                 },
+                json=submission_payload,
                 headers=headers,
             )
 
-            if result_response.status_code >= 400:
+            if create_response.status_code >= 400:
                 raise HTTPException(
-                    status_code=result_response.status_code,
-                    detail=result_response.text,
+                    status_code=create_response.status_code,
+                    detail=create_response.text,
                 )
 
-            result = result_response.json()
-            
-            status_id = result.get("status", {}).get("id")
-            for field in ["stdout", "stderr", "compile_output", "message"]:
-                result[field] = decode_base64(result.get(field))
+            token = create_response.json().get("token")
 
-            if status_id not in [1, 2]:
-                return result
+            if not token:
+                raise HTTPException(status_code=500, detail="Judge0 did not return a token")
 
-            await asyncio.sleep(0.5)
+            for _ in range(20):
+                result_response = await client.get(
+                    f"{JUDGE0_BASE_URL}/submissions/{token}",
+                    params={
+                        "base64_encoded": "true",
+                        "fields": "stdout,stderr,compile_output,message,status,time,memory",
+                    },
+                    headers=headers,
+                )
+
+                if result_response.status_code >= 400:
+                    raise HTTPException(
+                        status_code=result_response.status_code,
+                        detail=result_response.text,
+                    )
+
+                result = result_response.json()
+
+                status_id = result.get("status", {}).get("id")
+                for field in ["stdout", "stderr", "compile_output", "message"]:
+                    result[field] = decode_base64(result.get(field))
+
+                if status_id not in [1, 2]:
+                    return result
+
+                await asyncio.sleep(0.5)
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"Judge0 is unreachable at {JUDGE0_BASE_URL}. "
+                "Start Judge0 or update JUDGE0_BASE_URL."
+            ),
+        ) from exc
 
     raise HTTPException(status_code=504, detail="Judge0 execution timed out")
 
@@ -137,83 +157,6 @@ def normalize_output(output: str) -> str:
 
     return output
 
-
-def remove_comments(code: str) -> str:
-    code = re.sub(r"//.*", "", code)
-    code = re.sub(r"/\*.*?\*/", "", code, flags=re.DOTALL)
-    return code
-
-
-def normalize_code(code: str) -> str:
-    code = remove_comments(code or "")
-    code = code.lower()
-    code = re.sub(r"\s+", " ", code)
-    return code.strip()
-
-
-def extract_logic_features(code: str) -> dict:
-    normalized = normalize_code(code)
-    numbers = re.findall(r"\b\d+\b", normalized)
-
-    return {
-        "has_main": "main" in normalized,
-        "has_printf": "printf" in normalized,
-        "has_scanf": "scanf" in normalized,
-        "has_assignment": "=" in normalized,
-        "uses_addition": "+" in normalized,
-        "uses_subtraction": "-" in normalized,
-        "uses_multiplication": "*" in normalized,
-        "uses_division": "/" in normalized,
-        "has_return": "return" in normalized,
-        "numbers": set(numbers),
-    }
-
-
-def compare_logic(model_code: str, student_code: str) -> dict:
-    model = extract_logic_features(model_code)
-    student = extract_logic_features(student_code)
-
-    checks = []
-
-    def add_check(name: str, passed: bool, weight: int):
-        checks.append({
-            "name": name,
-            "passed": passed,
-            "weight": weight,
-            "score": weight if passed else 0,
-        })
-
-    add_check("Has main function", student["has_main"], 10)
-    add_check("Has output statement", student["has_printf"], 10)
-    add_check("Uses assignment", student["has_assignment"], 15)
-
-    if model["uses_addition"]:
-        add_check("Uses addition operator", student["uses_addition"], 25)
-
-    if model["uses_subtraction"]:
-        add_check("Uses subtraction operator", student["uses_subtraction"], 25)
-
-    if model["uses_multiplication"]:
-        add_check("Uses multiplication operator", student["uses_multiplication"], 25)
-
-    if model["uses_division"]:
-        add_check("Uses division operator", student["uses_division"], 25)
-
-    if model["numbers"]:
-        add_check(
-            "Uses required numeric values",
-            model["numbers"].issubset(student["numbers"]),
-            25,
-        )
-
-    total_weight = sum(check["weight"] for check in checks)
-    earned_score = sum(check["score"] for check in checks)
-    score = round((earned_score / total_weight) * 100, 2) if total_weight else 0
-
-    return {
-        "score": score,
-        "checks": checks,
-    }
 
 @app.post("/api/judge0/grade-submission")
 async def grade_submission(payload: GradeSubmissionRequest):

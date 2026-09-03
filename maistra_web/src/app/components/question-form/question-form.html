@@ -175,7 +175,19 @@
     {{ isValidating ? 'Validating...' : 'Validate Test Cases' }}
   </button>
   <!-- Save -->
-  <button class="btn-save" (click)="save()" [disabled]="isSaving">
+  <button
+    class="btn-save"
+    (click)="save()"
+    [disabled]="isSaving || !canPublish"
+    [title]="
+      !canPublish
+        ? 'Validate every test case first so the expected output is confirmed by Judge0.'
+        : ''
+    "
+  >
     {{ isSaving ? 'Saving...' : 'Save Question' }}
   </button>
+  <div class="save-hint" *ngIf="!canPublish && !isSaving">
+    Validate all test cases before saving.
+  </div>
 </div>

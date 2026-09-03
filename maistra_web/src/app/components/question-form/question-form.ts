@@ -39,6 +39,8 @@ const DEFAULT_TEST_CASE: TestCase = {
   styleUrls: ['./question-form.css'],
 })
 export class QuestionFormComponent {
+  private readonly saveTimeoutMs = 15000;
+
   testRunStatuses: TestRunStatus[] = [];
   collapsedTestCases: Record<number, boolean> = {};
   questionName = '';
@@ -111,12 +113,28 @@ ${tc.test_code}
           );
 
           const actual = (result.stdout || '').trim();
-          const expected = tc.expected_output.trim();
-          const passed = actual === expected;
+          // status.id === 3 ("Accepted") already means Judge0 compiled and
+          // ran the program without a compile error or runtime crash — a
+          // real compile error would be status.id === 6, and runtime errors
+          // are 7-12. Don't additionally require stderr/compile_output to be
+          // empty: a program can compile with only warnings (e.g. a missing
+          // #include triggering an implicit-declaration warning) and still
+          // run correctly — that shouldn't be treated as a failure.
+          const compiledCleanly = result.status?.id === 3;
+
+          // The model answer's Judge0 output IS the expected output — write
+          // it back onto the test case so grading later compares against
+          // what Judge0 actually produced, not a hand-typed guess that could
+          // drift out of sync with the model answer.
+          if (compiledCleanly) {
+            tc.expected_output = actual;
+          }
+
+          const passed = compiledCleanly;
 
           this.validationResults[i] = {
             passed,
-            expected,
+            expected: tc.expected_output.trim(),
             actual,
             status: result.status?.description,
             stderr: result.stderr,
@@ -208,34 +226,48 @@ ${tc.test_code}
       return;
     }
 
+    if (!this.canPublish) {
+      this.errorMessage =
+        'Click "Validate Test Cases" and make sure every test case passes before saving. ' +
+        'This confirms the expected output actually comes from running the model answer in Judge0.';
+      this.cdr.detectChanges();
+      return;
+    }
+
     this.isSaving = true;
     this.errorMessage = '';
     this.successMessage = '';
     this.cdr.detectChanges();
 
-    const { data, error } = await this.supabase.saveQuestion({
-      question_name: this.questionName,
-      question_text: this.questionText,
-      question_type: this.questionType,
-      model_answer: this.modelAnswer,
-      test_cases: this.testCases,
-    });
+    try {
+      const { error } = await this.saveQuestionWithTimeout({
+        question_name: this.questionName,
+        question_text: this.questionText,
+        question_type: this.questionType,
+        model_answer: this.modelAnswer,
+        test_cases: this.testCases,
+      });
 
-    if (error) {
-      this.errorMessage = 'Error: ' + error.message;
-    } else {
-      this.successMessage = 'Question saved!';
-      this.questionName = '';
-      this.questionText = '';
-      this.questionType = 'program';
-      this.modelAnswer = '';
-      this.testCases = [this.createDefaultTestCase()];
-      this.collapsedTestCases = {};
-      this.clearValidationResults();
+      if (error) {
+        this.errorMessage = 'Error: ' + error.message;
+      } else {
+        this.successMessage = 'Question saved!';
+        this.questionName = '';
+        this.questionText = '';
+        this.questionType = 'program';
+        this.modelAnswer = '';
+        this.testCases = [this.createDefaultTestCase()];
+        this.collapsedTestCases = {};
+        this.clearValidationResults();
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to save question.';
+      this.errorMessage = 'Error: ' + message;
+    } finally {
+      this.isSaving = false;
+      this.cdr.detectChanges();
     }
-
-    this.isSaving = false;
-    this.cdr.detectChanges();
   }
 
   failedTestCount(): number {
@@ -262,5 +294,34 @@ ${tc.test_code}
 
   private createDefaultTestCase(): TestCase {
     return { ...DEFAULT_TEST_CASE };
+  }
+
+  private async saveQuestionWithTimeout(question: {
+    question_name: string;
+    question_text: string;
+    question_type: string;
+    model_answer: string;
+    test_cases: TestCase[];
+  }) {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(
+          new Error('Saving question timed out. Check Supabase connection.'),
+        );
+      }, this.saveTimeoutMs);
+    });
+
+    try {
+      return await Promise.race([
+        this.supabase.saveQuestion(question),
+        timeout,
+      ]);
+    } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    }
   }
 }

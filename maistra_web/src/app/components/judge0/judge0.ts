@@ -51,6 +51,12 @@ export class Judge0 implements OnChanges {
   stderr = '';
   compileOutput = '';
   statusDescription = '';
+  // Judge0's own status id — 3 means Accepted (compiled + ran with no
+  // compile error or runtime crash). This is the real success/failure
+  // signal; compileOutput/stderr being non-empty does NOT by itself mean
+  // failure (a program can compile with warnings, e.g. a missing include,
+  // and still run correctly).
+  statusId: number | null = null;
   runNotification = '';
   firstRunTestCasePassed: boolean | null = null;
   isRunning = false;
@@ -86,6 +92,7 @@ export class Judge0 implements OnChanges {
     this.stderr = '';
     this.compileOutput = '';
     this.statusDescription = '';
+    this.statusId = null;
     this.firstRunTestCasePassed = null;
 
     this.cdr.detectChanges();
@@ -103,6 +110,7 @@ export class Judge0 implements OnChanges {
           this.stderr = result.stderr || '';
           this.compileOutput = result.compile_output || '';
           this.statusDescription = result.status?.description || '';
+          this.statusId = result.status?.id ?? null;
           this.firstRunTestCasePassed = this.evaluateFirstRunTestCase();
           this.isRunning = false;
 
@@ -183,8 +191,7 @@ export class Judge0 implements OnChanges {
 
   get hasErrorStatus(): boolean {
     return (
-      !!this.compileOutput ||
-      !!this.stderr ||
+      (this.statusId !== null && this.statusId !== 3) ||
       this.displayedStatus === 'Wrong Answer' ||
       this.displayedStatus === 'Error' ||
       this.firstRunTestCasePassed === false
@@ -222,8 +229,11 @@ export class Judge0 implements OnChanges {
   }
 
   private evaluateFirstRunTestCase(): boolean | null {
-    if (this.stderr || this.compileOutput || !this.expectedOutput.trim()) {
-      return null;
+    if (!this.expectedOutput.trim()) {
+      return null; // nothing configured to compare against
+    }
+    if (this.statusId !== 3) {
+      return false; // real compile error or runtime crash
     }
 
     return this.normalizeOutput(this.stdout) === this.normalizeOutput(this.expectedOutput);

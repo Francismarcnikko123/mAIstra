@@ -71,6 +71,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   reviewStep: ReviewStep = 1;
   editableTopic: string = '';
   savingTopic = false;
+  detailsSaveStatus: '' | 'saved' | 'error' = '';
 
   // OCR state
   extractingId: string | null = null;
@@ -88,9 +89,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   submissionTestResults: Record<string, TestCaseResult[]> = {};
   submissionLogicResults: Record<string, LogicAnalysisResult[]> = {};
 
-  private subscription?: ReturnType<
-    SupabaseService['subscribeToSubmissions']
-  >;
+  private subscription?: ReturnType<SupabaseService['subscribeToSubmissions']>;
   private saveStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private saveGenerations = new Map<string, number>();
   private destroyed = false;
@@ -210,8 +209,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.selectedSubmission = { ...submission };
     this.editableTopic = submission.topic || 'Uncategorized';
     const linkedQuestion = this.getLinkedQuestion(submission);
-    this.selectedQuestionId = submission.question_id || linkedQuestion?.id || '';
+    this.selectedQuestionId =
+      submission.question_id || linkedQuestion?.id || '';
     this.reviewStep = 1;
+    this.detailsSaveStatus = '';
 
     this.checkError = '';
     this.isChecking = false;
@@ -239,14 +240,20 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (!this.selectedQuestionId) return;
 
     const saved = await this.saveSubmissionDetails();
-    if (saved) this.reviewStep = 2;
+    if (saved) {
+      await this.waitForDetailsSavedMessage();
+      if (!this.destroyed) this.reviewStep = 2;
+    }
   }
 
   async saveCodeAndContinue() {
     if (!this.canOpenGradingStep()) return;
 
     await this.saveVerifiedText();
-    if (this.selectedSubmission && this.saveStatus[this.selectedSubmission.id] === 'saved') {
+    if (
+      this.selectedSubmission &&
+      this.saveStatus[this.selectedSubmission.id] === 'saved'
+    ) {
       this.reviewStep = 3;
     }
   }
@@ -254,6 +261,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   async saveSubmissionDetails(): Promise<boolean> {
     if (!this.selectedSubmission) return false;
     this.savingTopic = true;
+    this.detailsSaveStatus = '';
     try {
       await this.supabase.updateSubmissionDetails(
         this.selectedSubmission.id,
@@ -268,15 +276,19 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         s.question_id = this.selectedQuestionId || undefined;
       }
       this.selectedSubmission.topic = this.editableTopic;
-      this.selectedSubmission.question_id = this.selectedQuestionId || undefined;
+      this.selectedSubmission.question_id =
+        this.selectedQuestionId || undefined;
       this.groupSubmissions();
+      this.detailsSaveStatus = 'saved';
       this.cdr.detectChanges();
       return true;
     } catch (err) {
       console.error('Failed to save submission details:', err);
+      this.detailsSaveStatus = 'error';
       return false;
     } finally {
       this.savingTopic = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -362,18 +374,24 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   canOpenGradingStep(): boolean {
     if (!this.selectedSubmission) return false;
+    const question = this.getSubmissionQuestion(this.selectedSubmission);
     return (
       !!this.getStudentCode(this.selectedSubmission).trim() &&
-      !!this.getSubmissionQuestion(this.selectedSubmission)
+      !!question &&
+      (question.test_cases?.length ?? 0) > 0
     );
   }
 
-  getSubmissionStatus(submission: Submission): Exclude<SubmissionFilter, 'all'> {
+  getSubmissionStatus(
+    submission: Submission,
+  ): Exclude<SubmissionFilter, 'all'> {
     const persistedStatus = submission.status?.trim().toLowerCase();
+    const checkStatus = this.submissionCheckStatus[submission.id];
     if (
       persistedStatus === 'graded' ||
       this.submissionTestResults[submission.id]?.length ||
-      this.submissionCheckStatus[submission.id]
+      checkStatus === 'Accepted' ||
+      checkStatus === 'Wrong Answer'
     ) {
       return 'graded';
     }
@@ -483,7 +501,22 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       }
 
       const testResults: TestCaseResult[] = [];
-      let logicResults: LogicAnalysisResult[] | null = null;
+
+      // Logic analysis only depends on model vs student code, not on any
+      // single test case's I/O — run it once up front instead of once per
+      // test case. Output comparison still happens per test case below,
+      // using normalizeOutput() (an exact mirror of the backend's
+      // normalize_output) so whitespace/case differences are still forgiven.
+      const logicGrade = await firstValueFrom(
+        this.judge0Service.gradeSubmission({
+          model_code: question.model_answer,
+          student_code: studentCode,
+          expected_output: '',
+          actual_output: '',
+          compilation_passed: false,
+        }),
+      );
+      const logicResults: LogicAnalysisResult[] = logicGrade.logic_details;
 
       for (const [index, testCase] of testCases.entries()) {
         const sourceCode =
@@ -499,8 +532,7 @@ ${testCase.test_code}
 }`
             : studentCode;
 
-        const stdin =
-          question.question_type === 'program' ? testCase.test_input || '' : '';
+        const stdin = testCase.test_input || '';
 
         const runResult = await firstValueFrom(
           this.judge0Service.runCCode(sourceCode, stdin),
@@ -509,29 +541,23 @@ ${testCase.test_code}
         const actualOutput = (runResult.stdout || '').trim();
         const expectedOutput = (testCase.expected_output || '').trim();
 
-        const compilationPassed =
-          !runResult.stderr &&
-          !runResult.compile_output &&
-          runResult.status?.id === 3;
+        // status.id === 3 ("Accepted") already means Judge0 compiled and ran
+        // the code without a compile error (status 6) or runtime crash
+        // (status 7-12). Don't additionally require stderr/compile_output to
+        // be empty — a program can compile with only warnings (e.g. a
+        // missing #include) and still run correctly.
+        const compilationPassed = runResult.status?.id === 3;
 
-        const result = await firstValueFrom(
-          this.judge0Service.gradeSubmission({
-            model_code: question.model_answer,
-            student_code: studentCode,
-            expected_output: expectedOutput,
-            actual_output: actualOutput,
-            compilation_passed: compilationPassed,
-          }),
-        );
-
-        const passed = result.output_details.passed && compilationPassed;
-        logicResults ??= result.logic_details;
+        const normalizedExpected = this.normalizeOutput(expectedOutput);
+        const normalizedActual = this.normalizeOutput(actualOutput);
+        const outputPassed = normalizedExpected === normalizedActual;
+        const passed = outputPassed && compilationPassed;
 
         testResults.push({
           caseNumber: index + 1,
           stdin,
-          expectedOutput: result.output_details.expected_normalized,
-          actualOutput: result.output_details.actual_normalized || actualOutput,
+          expectedOutput: normalizedExpected,
+          actualOutput: normalizedActual || actualOutput,
           status: passed
             ? 'Accepted'
             : compilationPassed
@@ -542,7 +568,7 @@ ${testCase.test_code}
       }
 
       this.submissionTestResults[submission.id] = testResults;
-      this.submissionLogicResults[submission.id] = logicResults ?? [];
+      this.submissionLogicResults[submission.id] = logicResults;
       this.submissionRunOutput[submission.id] =
         testResults.at(-1)?.actualOutput || '';
       this.submissionCheckStatus[submission.id] = testResults.every(
@@ -600,9 +626,7 @@ ${firstTestCase.test_code}
     const question = submission ? this.getSubmissionQuestion(submission) : null;
     const firstTestCase = question?.test_cases?.[0];
 
-    return question?.question_type === 'program'
-      ? firstTestCase?.test_input || ''
-      : '';
+    return firstTestCase?.test_input || '';
   }
 
   getExecutionExpectedOutput(submission: Submission | null): string {
@@ -613,6 +637,17 @@ ${firstTestCase.test_code}
 
   hasExecutionQuestion(submission: Submission | null): boolean {
     return !!(submission && this.getSubmissionQuestion(submission));
+  }
+
+  // Exact mirror of judge0_api/main.py's normalize_output — keep these two
+  // in sync if either one changes.
+  private normalizeOutput(value: string | null | undefined): string {
+    if (value == null) return '';
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/\s*:\s*/g, ':')
+      .replace(/\s+/g, ' ');
   }
 
   private clearExecutionResults(id: string) {
@@ -634,9 +669,7 @@ ${firstTestCase.test_code}
     return linkedQuestion || null;
   }
 
-  private getLinkedQuestion(
-    submission: Submission,
-  ): SubmissionQuestion | null {
+  private getLinkedQuestion(submission: Submission): SubmissionQuestion | null {
     if (Array.isArray(submission.questions)) {
       return submission.questions[0] || null;
     }
@@ -650,5 +683,9 @@ ${firstTestCase.test_code}
       submission.extracted_text ||
       ''
     );
+  }
+
+  private async waitForDetailsSavedMessage(): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, 900));
   }
 }
