@@ -79,6 +79,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   editableText: Record<string, string> = {};
   extractionError: Record<string, string> = {};
   saveStatus: Record<string, string> = {}; // '' | 'saved' | 'error'
+  // Submission id whose re-extract confirmation dialog is open, or null.
+  reextractConfirmId: string | null = null;
 
   // code checking state
   isChecking = false;
@@ -283,6 +285,40 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   async extractText() {
     if (!this.selectedSubmission) return;
     const id = this.selectedSubmission.id;
+
+    // Guard against silently discarding the teacher's work. Re-extracting
+    // overwrites the editor with a fresh OCR result; if the current editor
+    // content differs from the last extraction (the teacher has made
+    // corrections, or a previously-saved verified text was loaded), ask for
+    // confirmation via the in-app dialog first. A first extraction (no editor
+    // content yet) or a re-extract with no edits since the last one runs
+    // straight through without prompting.
+    const current = this.editableText[id];
+    const lastExtraction = this.extractedText[id];
+    const hasEdits = !!current && current !== lastExtraction;
+    if (hasEdits) {
+      this.reextractConfirmId = id;
+      this.cdr.detectChanges();
+      return;
+    }
+
+    await this.performExtract(id);
+  }
+
+  /** Confirm handler for the re-extract dialog: proceed with the extraction. */
+  confirmReextract() {
+    const id = this.reextractConfirmId;
+    this.reextractConfirmId = null;
+    if (id) this.performExtract(id);
+  }
+
+  /** Cancel handler for the re-extract dialog: keep the teacher's edits. */
+  cancelReextract() {
+    this.reextractConfirmId = null;
+  }
+
+  private async performExtract(id: string) {
+    if (!this.selectedSubmission) return;
     this.extractingId = id;
     this.extractionError[id] = '';
     try {
