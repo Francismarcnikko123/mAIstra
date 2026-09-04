@@ -60,7 +60,8 @@ describe('SubmissionsListComponent save feedback', () => {
     const updateSubmissionText =
       options?.updateSubmissionText ?? vi.fn().mockResolvedValue(undefined);
     const post =
-      options?.post ?? vi.fn().mockReturnValue(of({ cleaned_text: 'int main() {}' }));
+      options?.post ??
+      vi.fn().mockReturnValue(of({ cleaned_text: 'int main() {}' }));
     const supabase = {
       updateSubmissionDetails,
       updateSubmissionText,
@@ -541,13 +542,15 @@ describe('SubmissionsListComponent save feedback', () => {
 
     expect(component.canOpenGradingStep()).toBe(false);
 
-    component.questions = [{
-      id: 'question-1',
-      question_name: 'Addition',
-      question_type: 'program',
-      model_answer: 'int main(void) { return 0; }',
-      test_cases: [],
-    }];
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'Addition',
+        question_type: 'program',
+        model_answer: 'int main(void) { return 0; }',
+        test_cases: [],
+      },
+    ];
     component.selectedQuestionId = 'question-1';
 
     expect(component.canOpenGradingStep()).toBe(true);
@@ -571,12 +574,13 @@ describe('SubmissionsListComponent save feedback', () => {
   });
 
   it('keeps the user in code review and displays an OCR error on failure', async () => {
-    const post = vi.fn().mockReturnValue(
-      throwError(() => new Error('OCR unavailable')),
-    );
+    const post = vi
+      .fn()
+      .mockReturnValue(throwError(() => new Error('OCR unavailable')));
     const { component } = createWorkflowComponent({ post });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     selectSubmission(component, 'submission-1');
+    component.editableText['submission-1'] = '';
     component.reviewStep = 2;
 
     await component.extractText();
@@ -588,17 +592,134 @@ describe('SubmissionsListComponent save feedback', () => {
     expect(component.extractingId).toBeNull();
   });
 
+  it('builds prioritized OCR flags from a successful extraction', async () => {
+    const post = vi.fn().mockReturnValue(
+      of({
+        cleaned_text: 'case 1 {\nprinte("Hi");',
+        line_details: [{ min_confidence: 0.2 }, { min_confidence: 0.8 }],
+        review_suggestions: [
+          { line: 2, original: 'printe', candidate: 'printf' },
+        ],
+      }),
+    );
+    const { component } = createWorkflowComponent({ post });
+    selectSubmission(component, 'submission-1');
+    component.editableText['submission-1'] = '';
+
+    await component.extractText();
+
+    expect(component.lineReviewFlags['submission-1']).toEqual([
+      expect.objectContaining({
+        line: 1,
+        strength: 'strong',
+        primarySource: 'anomaly',
+      }),
+      expect.objectContaining({
+        line: 2,
+        strength: 'soft',
+        primarySource: 'suggestion',
+      }),
+    ]);
+  });
+
+  it('dismisses extraction evidence on an edited row but recomputes anomalies', () => {
+    const { component } = createWorkflowComponent();
+    selectSubmission(component, 'submission-1');
+    component.lineConfidence['submission-1'] = [0.2];
+    component.reviewSuggestions['submission-1'] = [
+      { line: 1, original: 'printe', candidate: 'printf' },
+    ];
+    component.updateSubmissionCode('submission-1', 'printe();');
+
+    component.invalidateReviewEvidence('submission-1', {
+      startLine: 1,
+      endLine: 1,
+      lineStructureChanged: false,
+    });
+    component.updateSubmissionCode('submission-1', '3');
+
+    expect(component.lineReviewFlags['submission-1']).toEqual([
+      expect.objectContaining({ line: 1, primarySource: 'anomaly' }),
+    ]);
+  });
+
+  it('clears extraction-era flags after a line insertion or removal', () => {
+    const { component } = createWorkflowComponent();
+    selectSubmission(component, 'submission-1');
+    component.lineConfidence['submission-1'] = [0.2];
+    component.updateSubmissionCode('submission-1', 'valid();');
+
+    component.invalidateReviewEvidence('submission-1', {
+      startLine: 1,
+      endLine: 2,
+      lineStructureChanged: true,
+    });
+
+    expect(component.lineReviewFlags['submission-1']).toEqual([]);
+  });
+
+  it('restores fresh extraction evidence after prior edits dismissed it', async () => {
+    const post = vi
+      .fn()
+      .mockReturnValueOnce(
+        of({
+          cleaned_text: 'first();',
+          line_details: [{ min_confidence: 0.2 }],
+        }),
+      )
+      .mockReturnValueOnce(
+        of({
+          cleaned_text: 'second();',
+          line_details: [{ min_confidence: 0.2 }],
+        }),
+      );
+    const { component } = createWorkflowComponent({ post });
+    selectSubmission(component, 'submission-1');
+    component.editableText['submission-1'] = '';
+
+    await component.extractText();
+    component.invalidateReviewEvidence('submission-1', {
+      startLine: 1,
+      endLine: 1,
+      lineStructureChanged: false,
+    });
+    expect(component.lineReviewFlags['submission-1']).toEqual([]);
+
+    await component.extractText();
+
+    expect(component.lineReviewFlags['submission-1']).toEqual([
+      expect.objectContaining({
+        line: 1,
+        primarySource: 'confidence-low',
+      }),
+    ]);
+  });
+
+  it('keeps derived review flags isolated by submission id', () => {
+    const { component } = createWorkflowComponent();
+
+    component.updateSubmissionCode('submission-a', '3');
+    component.updateSubmissionCode('submission-b', 'valid();');
+
+    expect(component.lineReviewFlags['submission-a']).toEqual([
+      expect.objectContaining({ line: 1, primarySource: 'anomaly' }),
+    ]);
+    expect(component.lineReviewFlags['submission-b']).toEqual([]);
+  });
+
   it('advances to grading only after verified code saves successfully', async () => {
     const updateSubmissionText = vi.fn().mockResolvedValue(undefined);
     const { component } = createWorkflowComponent({ updateSubmissionText });
     selectSubmission(component, 'submission-1');
-    component.questions = [{
-      id: 'question-1',
-      question_name: 'Addition',
-      question_type: 'program',
-      model_answer: 'int main(void) { return 0; }',
-      test_cases: [],
-    }];
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'Addition',
+        question_type: 'program',
+        model_answer: 'int main(void) { return 0; }',
+        test_cases: [],
+      },
+    ];
     component.selectedQuestionId = 'question-1';
     component.reviewStep = 2;
 
@@ -615,13 +736,15 @@ describe('SubmissionsListComponent save feedback', () => {
     const { component } = createWorkflowComponent({ updateSubmissionText });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     selectSubmission(component, 'submission-1');
-    component.questions = [{
-      id: 'question-1',
-      question_name: 'Addition',
-      question_type: 'program',
-      model_answer: 'int main(void) { return 0; }',
-      test_cases: [],
-    }];
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'Addition',
+        question_type: 'program',
+        model_answer: 'int main(void) { return 0; }',
+        test_cases: [],
+      },
+    ];
     component.selectedQuestionId = 'question-1';
     component.reviewStep = 2;
 

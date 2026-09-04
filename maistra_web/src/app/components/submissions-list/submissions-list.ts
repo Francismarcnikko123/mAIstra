@@ -9,10 +9,20 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { SupabaseService } from '../../services/supabase';
-import { CodeEditorComponent } from '../code-editor/code-editor';
+import {
+  CodeEditorComponent,
+  type OcrReviewEdit,
+} from '../code-editor/code-editor';
 import { Judge0, LogicAnalysisResult, TestCaseResult } from '../judge0/judge0';
 import { Judge0Service } from '../../services/judge0.service';
 import { firstValueFrom } from 'rxjs';
+import {
+  buildOcrReviewFlags,
+  detectOcrLineIssues,
+  type OcrLineIssue,
+  type OcrReviewFlag,
+  type OcrReviewSuggestion,
+} from './ocr-review-flags';
 
 interface TestCase {
   test_code: string;
@@ -81,16 +91,13 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   saveStatus: Record<string, string> = {}; // '' | 'saved' | 'error'
   // Submission id whose re-extract confirmation dialog is open, or null.
   reextractConfirmId: string | null = null;
-  // Per-line OCR confidence (min_confidence per line), by submission id.
-  // Passed to <app-code-editor> to tint low-confidence lines.
+  // Extraction-era evidence remains associated with its submission. The
+  // normalized flags combine it with current-text anomalies for the editor.
   lineConfidence: Record<string, (number | null)[]> = {};
-  // Spelling suggestions from the backend (e.g. sizcof -> sizeof) by submission
-  // id. A non-confidence signal, so it catches confident misreads the color
-  // tint misses. Advisory only -- the teacher applies them by hand.
-  reviewSuggestions: Record<
-    string,
-    { line: number; original: string; candidate: string }[]
-  > = {};
+  reviewSuggestions: Record<string, OcrReviewSuggestion[]> = {};
+  lineReviewFlags: Record<string, OcrReviewFlag[]> = {};
+  private dismissedExtractionLines: Record<string, Set<number>> = {};
+  private extractionMappingValid: Record<string, boolean> = {};
 
   // code checking state
   isChecking = false;
@@ -100,9 +107,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   submissionTestResults: Record<string, TestCaseResult[]> = {};
   submissionLogicResults: Record<string, LogicAnalysisResult[]> = {};
 
-  private subscription?: ReturnType<
-    SupabaseService['subscribeToSubmissions']
-  >;
+  private subscription?: ReturnType<SupabaseService['subscribeToSubmissions']>;
   private saveStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private saveGenerations = new Map<string, number>();
   private destroyed = false;
@@ -165,7 +170,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     // reappears when the page reloads or a submission is reopened.
     for (const s of this.submissions) {
       const saved = s.verified_text || s.extracted_text || '';
-      if (saved) this.editableText[s.id] = saved;
+      if (saved) {
+        this.editableText[s.id] = saved;
+        this.refreshReviewFlags(s.id);
+      }
     }
     this.groupSubmissions();
     this.cdr.detectChanges();
@@ -222,7 +230,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.selectedSubmission = { ...submission };
     this.editableTopic = submission.topic || 'Uncategorized';
     const linkedQuestion = this.getLinkedQuestion(submission);
-    this.selectedQuestionId = submission.question_id || linkedQuestion?.id || '';
+    this.selectedQuestionId =
+      submission.question_id || linkedQuestion?.id || '';
     this.reviewStep = 1;
 
     this.checkError = '';
@@ -235,6 +244,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (saved && !this.editableText[submission.id]) {
       this.editableText[submission.id] = saved;
     }
+    this.refreshReviewFlags(submission.id);
   }
 
   closeModal() {
@@ -258,7 +268,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (!this.canOpenGradingStep()) return;
 
     await this.saveVerifiedText();
-    if (this.selectedSubmission && this.saveStatus[this.selectedSubmission.id] === 'saved') {
+    if (
+      this.selectedSubmission &&
+      this.saveStatus[this.selectedSubmission.id] === 'saved'
+    ) {
       this.reviewStep = 3;
     }
   }
@@ -280,7 +293,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         s.question_id = this.selectedQuestionId || undefined;
       }
       this.selectedSubmission.topic = this.editableTopic;
-      this.selectedSubmission.question_id = this.selectedQuestionId || undefined;
+      this.selectedSubmission.question_id =
+        this.selectedQuestionId || undefined;
       this.groupSubmissions();
       this.cdr.detectChanges();
       return true;
@@ -335,9 +349,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
    * printf("}") doesn't skew it. Advisory only -- never edits the code, and
    * recomputes live as the teacher types (reads editableText).
    */
-  structureWarnings(
-    id: string,
-  ): { kind: string; open: number; close: number }[] {
+  structureWarnings(id: string): string[] {
     const text = this.editableText[id];
     if (!text) return [];
     const c: Record<string, number> = {
@@ -380,14 +392,34 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       }
       if (ch in c) c[ch]++;
     }
-    const out: { kind: string; open: number; close: number }[] = [];
+    const out: string[] = [];
     if (c['{'] !== c['}'])
-      out.push({ kind: 'braces { }', open: c['{'], close: c['}'] });
+      out.push(`braces { } don’t balance (${c['{']} open, ${c['}']} close)`);
     if (c['('] !== c[')'])
-      out.push({ kind: 'parentheses ( )', open: c['('], close: c[')'] });
+      out.push(
+        `parentheses ( ) don’t balance (${c['(']} open, ${c[')']} close)`,
+      );
     if (c['['] !== c[']'])
-      out.push({ kind: 'brackets [ ]', open: c['['], close: c[']'] });
+      out.push(`brackets [ ] don’t balance (${c['[']} open, ${c[']']} close)`);
+    // Left mid-literal at end of text = a quote was opened and never closed.
+    if (inString)
+      out.push(
+        inString === '"'
+          ? 'a string quote " is opened but never closed'
+          : "a character quote ' is opened but never closed",
+      );
     return out;
+  }
+
+  lineIssues(id: string): OcrLineIssue[] {
+    return detectOcrLineIssues(this.editableText[id] ?? '');
+  }
+
+  explainedLineFlags(id: string): OcrReviewFlag[] {
+    return (this.lineReviewFlags[id] ?? []).filter(
+      (flag) =>
+        flag.primarySource === 'anomaly' || flag.primarySource === 'suggestion',
+    );
   }
 
   private async performExtract(id: string) {
@@ -399,11 +431,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         this.http.post<{
           cleaned_text?: string;
           line_details?: { min_confidence: number | null }[];
-          review_suggestions?: {
-            line: number;
-            original: string;
-            candidate: string;
-          }[];
+          review_suggestions?: OcrReviewSuggestion[];
         }>('http://localhost:8000/api/ocr/extract-from-url', {
           image_url: this.selectedSubmission.image_url,
           submission_id: id,
@@ -419,6 +447,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         (d) => d?.min_confidence ?? null,
       );
       this.reviewSuggestions[id] = res?.review_suggestions ?? [];
+      this.dismissedExtractionLines[id] = new Set<number>();
+      this.extractionMappingValid[id] = true;
+      this.refreshReviewFlags(id);
       this.extractionError[id] = '';
     } catch (err) {
       console.error('OCR failed:', err);
@@ -489,7 +520,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     );
   }
 
-  getSubmissionStatus(submission: Submission): Exclude<SubmissionFilter, 'all'> {
+  getSubmissionStatus(
+    submission: Submission,
+  ): Exclude<SubmissionFilter, 'all'> {
     const persistedStatus = submission.status?.trim().toLowerCase();
     if (
       persistedStatus === 'graded' ||
@@ -545,6 +578,20 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   updateSubmissionCode(id: string, code: string) {
     this.editableText[id] = code;
+    this.refreshReviewFlags(id);
+  }
+
+  invalidateReviewEvidence(id: string, edit: OcrReviewEdit) {
+    if (edit.lineStructureChanged) {
+      this.extractionMappingValid[id] = false;
+    } else {
+      const dismissed = this.dismissedExtractionLines[id] ?? new Set<number>();
+      for (let line = edit.startLine; line <= edit.endLine; line++) {
+        dismissed.add(line);
+      }
+      this.dismissedExtractionLines[id] = dismissed;
+    }
+    this.refreshReviewFlags(id);
   }
 
   formatCode() {
@@ -744,6 +791,17 @@ ${firstTestCase.test_code}
     this.submissionLogicResults[id] = [];
   }
 
+  private refreshReviewFlags(id: string) {
+    this.lineReviewFlags[id] = buildOcrReviewFlags({
+      text: this.editableText[id] ?? '',
+      confidence: this.lineConfidence[id] ?? [],
+      suggestions: this.reviewSuggestions[id] ?? [],
+      dismissedExtractionLines:
+        this.dismissedExtractionLines[id] ?? new Set<number>(),
+      extractionMappingValid: this.extractionMappingValid[id] ?? false,
+    });
+  }
+
   private getSubmissionQuestion(
     submission: Submission,
   ): SubmissionQuestion | null {
@@ -755,9 +813,7 @@ ${firstTestCase.test_code}
     return linkedQuestion || null;
   }
 
-  private getLinkedQuestion(
-    submission: Submission,
-  ): SubmissionQuestion | null {
+  private getLinkedQuestion(submission: Submission): SubmissionQuestion | null {
     if (Array.isArray(submission.questions)) {
       return submission.questions[0] || null;
     }

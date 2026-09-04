@@ -200,7 +200,10 @@ button:disabled {
   color: inherit;
   background: #fff;
   text-align: left;
-  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .submission-card:hover,
@@ -656,50 +659,40 @@ button:disabled {
   background: transparent;
 }
 
-/* OCR confidence feature: missing-content banner, legend, verify reminder. */
+/* OCR review feature: findings, editor key, and standing verification note. */
 .ocr-warning {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   padding: 10px 12px;
   margin-bottom: 10px;
-  border: 0.5px solid #f0c98a;
-  border-left: 3px solid #ef9f27;
+  border: 1px solid #ddd6fe;
+  border-left: 3px solid #8b5cf6;
   border-radius: 8px;
-  background: #fdf4e3;
+  background: #f7f5ff;
   font-size: 13px;
-  color: #663806;
+  color: #4c3d73;
   line-height: 1.45;
 }
 .ocr-warning-title {
   font-weight: 700;
-  color: #633806;
+  color: #4c1d95;
 }
-.ocr-suggest {
+
+.ocr-review-heading {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px;
-  margin-bottom: 10px;
-  border: 0.5px solid #cbd5e1;
-  border-left: 3px solid #64748b;
-  border-radius: 8px;
-  background: #f8fafc;
-  font-size: 13px;
-  color: #475569;
-  line-height: 1.5;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-bottom: 6px;
+  color: #4c1d95;
 }
-.ocr-suggest-title {
-  font-weight: 700;
-  color: #334155;
-  margin-bottom: 2px;
+
+.ocr-review-heading span {
+  color: #667085;
+  font-size: 12px;
 }
-.ocr-suggest-item code {
-  font-family: var(--font-mono, monospace);
-  background: #eef2f7;
-  padding: 0 4px;
-  border-radius: 3px;
-}
+
 .ocr-legend {
   display: flex;
   flex-wrap: wrap;
@@ -716,12 +709,16 @@ button:disabled {
 .ocr-dot {
   width: 10px;
   height: 10px;
-  border-radius: 50%;
+  border-radius: 3px;
   display: inline-block;
 }
-.ocr-dot-low { background: #e24b4a; }
-.ocr-dot-med { background: #ef9f27; }
-.ocr-dot-ok { background: #cbd5e1; }
+.ocr-dot-strong {
+  background: #8b5cf6;
+}
+.ocr-dot-soft {
+  background: #a78bfa;
+  opacity: 0.55;
+}
 .ocr-verify-note {
   margin: 10px 0 0;
   padding: 10px 12px;

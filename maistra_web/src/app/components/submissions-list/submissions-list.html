@@ -20,10 +20,7 @@
 
     <label class="filter-field">
       <span>Status</span>
-      <select
-        [(ngModel)]="statusFilter"
-        (ngModelChange)="onFiltersChanged()"
-      >
+      <select [(ngModel)]="statusFilter" (ngModelChange)="onFiltersChanged()">
         <option value="all">All statuses</option>
         <option value="new">Needs OCR</option>
         <option value="extracted">Needs review</option>
@@ -50,12 +47,19 @@
         (click)="toggleFolder(group.topic)"
         [attr.aria-expanded]="!collapsedFolders[group.topic]"
       >
-        <span class="folder-arrow" [class.collapsed]="collapsedFolders[group.topic]">▾</span>
+        <span
+          class="folder-arrow"
+          [class.collapsed]="collapsedFolders[group.topic]"
+          >▾</span
+        >
         <span class="folder-name">{{ group.topic }}</span>
         <span class="folder-count">{{ group.submissions.length }}</span>
       </button>
 
-      <div class="folder-content" [class.hidden]="collapsedFolders[group.topic]">
+      <div
+        class="folder-content"
+        [class.hidden]="collapsedFolders[group.topic]"
+      >
         <div class="submission-grid">
           <button
             type="button"
@@ -73,7 +77,9 @@
               </span>
             </div>
             <div class="card-content">
-              <strong>{{ submission.student_name || 'Unnamed student' }}</strong>
+              <strong
+                >{{ submission.student_name || 'Unnamed student' }}</strong
+              >
               <span>{{ getQuestionName(submission) }}</span>
               <time>{{ submission.captured_at | date:'mediumDate' }}</time>
             </div>
@@ -85,8 +91,13 @@
 
   <ng-template #empty>
     <div class="empty-state">
-      <strong>{{ submissions.length ? 'No matching submissions' : 'No submissions yet' }}</strong>
-      <span *ngIf="submissions.length">Try changing or clearing the filters.</span>
+      <strong
+        >{{ submissions.length ? 'No matching submissions' : 'No submissions
+        yet' }}</strong
+      >
+      <span *ngIf="submissions.length"
+        >Try changing or clearing the filters.</span
+      >
     </div>
   </ng-template>
 </section>
@@ -111,16 +122,33 @@
           {{ getQuestionName(selectedSubmission) }}
         </p>
       </div>
-      <button type="button" class="review-close" (click)="closeModal()" aria-label="Close review">✕</button>
+      <button
+        type="button"
+        class="review-close"
+        (click)="closeModal()"
+        aria-label="Close review"
+      >
+        ✕
+      </button>
     </header>
 
     <nav class="review-steps" aria-label="Submission review progress">
-      <button type="button" [class.active]="reviewStep === 1" [class.complete]="reviewStep > 1" (click)="setReviewStep(1)">
+      <button
+        type="button"
+        [class.active]="reviewStep === 1"
+        [class.complete]="reviewStep > 1"
+        (click)="setReviewStep(1)"
+      >
         <span>1</span>
         <strong>Details</strong>
         <small>Organize submission</small>
       </button>
-      <button type="button" [class.active]="reviewStep === 2" [class.complete]="reviewStep > 2" (click)="setReviewStep(2)">
+      <button
+        type="button"
+        [class.active]="reviewStep === 2"
+        [class.complete]="reviewStep > 2"
+        (click)="setReviewStep(2)"
+      >
         <span>2</span>
         <strong>Review code</strong>
         <small>Extract and verify</small>
@@ -133,7 +161,10 @@
       >
         <span>3</span>
         <strong>Run &amp; grade</strong>
-        <small>{{ canOpenGradingStep() ? 'Check test cases' : 'Verify code and question first' }}</small>
+        <small
+          >{{ canOpenGradingStep() ? 'Check test cases' : 'Verify code and
+          question first' }}</small
+        >
       </button>
     </nav>
 
@@ -141,8 +172,15 @@
       <ng-container *ngIf="reviewStep === 1">
         <div class="details-layout">
           <div class="submission-preview">
-            <a [href]="selectedSubmission.image_url" target="_blank" rel="noopener">
-              <img [src]="selectedSubmission.image_url" alt="Full handwritten submission" />
+            <a
+              [href]="selectedSubmission.image_url"
+              target="_blank"
+              rel="noopener"
+            >
+              <img
+                [src]="selectedSubmission.image_url"
+                alt="Full handwritten submission"
+              />
             </a>
             <span>Click the image to open the original.</span>
           </div>
@@ -156,7 +194,10 @@
 
             <label class="field-group">
               <span>Topic or folder</span>
-              <input [(ngModel)]="editableTopic" placeholder="For example: Loops or Chapter 3" />
+              <input
+                [(ngModel)]="editableTopic"
+                placeholder="For example: Loops or Chapter 3"
+              />
             </label>
 
             <label class="field-group">
@@ -168,7 +209,10 @@
                 required
               >
                 <option value="">Select a question</option>
-                <option *ngFor="let question of questions" [value]="question.id">
+                <option
+                  *ngFor="let question of questions"
+                  [value]="question.id"
+                >
                   {{ question.question_name }}
                 </option>
               </select>
@@ -182,7 +226,9 @@
 
             <div class="status-summary">
               <span>Status</span>
-              <strong>{{ getSubmissionStatusLabel(selectedSubmission) }}</strong>
+              <strong
+                >{{ getSubmissionStatusLabel(selectedSubmission) }}</strong
+              >
             </div>
           </div>
         </div>
@@ -193,7 +239,10 @@
           <div>
             <p class="eyebrow">Step 2</p>
             <h3>Review extracted code</h3>
-            <p>Compare the submission image with the OCR result, then correct and verify it.</p>
+            <p>
+              Compare the submission image with the OCR result, then correct and
+              verify it.
+            </p>
           </div>
           <button
             type="button"
@@ -201,14 +250,23 @@
             (click)="extractText()"
             [disabled]="isExtracting(selectedSubmission.id)"
           >
-            {{ isExtracting(selectedSubmission.id) ? 'Extracting…' : (hasExtractedText(selectedSubmission.id) ? 'Re-extract code' : 'Extract code') }}
+            {{ isExtracting(selectedSubmission.id) ? 'Extracting…' :
+            (hasExtractedText(selectedSubmission.id) ? 'Re-extract code' :
+            'Extract code') }}
           </button>
         </div>
 
         <div class="ocr-layout">
           <div class="submission-preview compact">
-            <a [href]="selectedSubmission.image_url" target="_blank" rel="noopener">
-              <img [src]="selectedSubmission.image_url" alt="Handwritten submission for comparison" />
+            <a
+              [href]="selectedSubmission.image_url"
+              target="_blank"
+              rel="noopener"
+            >
+              <img
+                [src]="selectedSubmission.image_url"
+                alt="Handwritten submission for comparison"
+              />
             </a>
           </div>
 
@@ -229,48 +287,95 @@
               </button>
             </div>
 
-            <div class="extract-placeholder" *ngIf="!hasExtractedText(selectedSubmission.id)">
+            <div
+              class="extract-placeholder"
+              *ngIf="!hasExtractedText(selectedSubmission.id)"
+            >
               <strong>No code extracted yet</strong>
-              <span>Choose “Extract code” to create an editable OCR result.</span>
+              <span
+                >Choose “Extract code” to create an editable OCR result.</span
+              >
             </div>
 
             <ng-container *ngIf="hasExtractedText(selectedSubmission.id)">
-              <div class="ocr-warning" *ngIf="structureWarnings(selectedSubmission.id) as sw" [hidden]="!sw.length">
-                <span class="ocr-warning-title">Possible missing content</span>
-                <span *ngFor="let w of sw">{{ w.kind }} don’t balance ({{ w.open }} open, {{ w.close }} close) — something may be missing or misread. Check against the paper.</span>
-              </div>
-
-              <div class="ocr-suggest" *ngIf="reviewSuggestions[selectedSubmission.id]?.length">
-                <span class="ocr-suggest-title">Possible misspellings — verify each against the paper</span>
-                <span class="ocr-suggest-item" *ngFor="let s of reviewSuggestions[selectedSubmission.id]">
-                  Line {{ s.line }}: <code>{{ s.original }}</code> → <code>{{ s.candidate }}</code>?
+              <div
+                class="ocr-warning"
+                data-testid="structure-findings"
+                *ngIf="structureWarnings(selectedSubmission.id).length"
+              >
+                <span class="ocr-warning-title">Check extracted structure</span>
+                <span
+                  *ngFor="let message of structureWarnings(selectedSubmission.id)"
+                >
+                  {{ message }}. Compare the extracted text with the paper; this
+                  may come from OCR or from the handwritten code.
                 </span>
               </div>
 
-              <div class="ocr-legend">
-                <span><span class="ocr-dot ocr-dot-low"></span>Likely wrong (&lt; 0.50)</span>
-                <span><span class="ocr-dot ocr-dot-med"></span>Check (0.50–0.75)</span>
-                <span><span class="ocr-dot ocr-dot-ok"></span>Confident</span>
+              <div
+                class="ocr-warning"
+                data-testid="line-findings"
+                *ngIf="explainedLineFlags(selectedSubmission.id).length"
+              >
+                <span class="ocr-warning-title">Unusual extracted lines</span>
+                <ng-container
+                  *ngFor="let flag of explainedLineFlags(selectedSubmission.id)"
+                >
+                  <span *ngFor="let reason of flag.reasons">
+                    Line {{ flag.line }} — {{ reason }}
+                  </span>
+                </ng-container>
+              </div>
+
+              <div class="ocr-review-heading">
+                <strong>OCR review</strong>
+                <span
+                  >Highlights mark extracted text to compare with the
+                  paper.</span
+                >
+              </div>
+
+              <div class="ocr-legend" aria-label="OCR review highlight legend">
+                <span
+                  ><span class="ocr-dot ocr-dot-strong"></span>Unusual extracted
+                  text</span
+                >
+                <span
+                  ><span class="ocr-dot ocr-dot-soft"></span>Automated review
+                  suggestion</span
+                >
               </div>
 
               <app-code-editor
                 #codeEditor
                 class="text-editor"
-                [(value)]="editableText[selectedSubmission.id]"
-                [lineConfidence]="lineConfidence[selectedSubmission.id] || []"
+                [value]="editableText[selectedSubmission.id]"
+                (valueChange)="updateSubmissionCode(selectedSubmission.id, $event)"
+                [lineReviewFlags]="lineReviewFlags[selectedSubmission.id] || []"
+                (reviewEvidenceEdited)="invalidateReviewEvidence(selectedSubmission.id, $event)"
               ></app-code-editor>
 
               <p class="ocr-verify-note">
                 <strong>Still read the whole page against the paper.</strong>
-                These flags are aids, not a full check — the OCR can misread a character confidently, or drop content that doesn’t unbalance a symbol pair. Nothing here is auto-corrected.
+                These are OCR review aids, not C syntax diagnostics.
+                Unhighlighted lines can still contain transcription mistakes,
+                and nothing here is auto-corrected.
               </p>
             </ng-container>
 
-            <p class="extract-error" *ngIf="extractionError[selectedSubmission.id]">
+            <p
+              class="extract-error"
+              *ngIf="extractionError[selectedSubmission.id]"
+            >
               {{ extractionError[selectedSubmission.id] }}
             </p>
-            <p class="save-status" *ngIf="saveStatus[selectedSubmission.id]" [ngClass]="saveStatus[selectedSubmission.id]">
-              {{ saveStatus[selectedSubmission.id] === 'saved' ? '✓ Verified code saved' : '✕ Save failed—please try again' }}
+            <p
+              class="save-status"
+              *ngIf="saveStatus[selectedSubmission.id]"
+              [ngClass]="saveStatus[selectedSubmission.id]"
+            >
+              {{ saveStatus[selectedSubmission.id] === 'saved' ? '✓ Verified
+              code saved' : '✕ Save failed—please try again' }}
             </p>
           </div>
         </div>
@@ -285,7 +390,10 @@
 
         <div class="grading-context">
           <span>Question</span>
-          <strong>{{ getSelectedQuestion()?.question_name || getQuestionName(selectedSubmission) }}</strong>
+          <strong
+            >{{ getSelectedQuestion()?.question_name ||
+            getQuestionName(selectedSubmission) }}</strong
+          >
         </div>
 
         <app-judge0
@@ -309,14 +417,24 @@
     </div>
 
     <footer class="review-footer">
-      <button type="button" class="btn-secondary" (click)="reviewStep === 1 ? closeModal() : setReviewStep(reviewStep === 3 ? 2 : 1)">
+      <button
+        type="button"
+        class="btn-secondary"
+        (click)="reviewStep === 1 ? closeModal() : setReviewStep(reviewStep === 3 ? 2 : 1)"
+      >
         {{ reviewStep === 1 ? 'Cancel' : 'Back' }}
       </button>
 
-      <div class="footer-guidance" *ngIf="reviewStep === 2 && !hasExtractedText(selectedSubmission.id)">
+      <div
+        class="footer-guidance"
+        *ngIf="reviewStep === 2 && !hasExtractedText(selectedSubmission.id)"
+      >
         Extract code to continue.
       </div>
-      <div class="footer-guidance" *ngIf="reviewStep === 2 && hasExtractedText(selectedSubmission.id) && !selectedQuestionId && !selectedSubmission.questions">
+      <div
+        class="footer-guidance"
+        *ngIf="reviewStep === 2 && hasExtractedText(selectedSubmission.id) && !selectedQuestionId && !selectedSubmission.questions"
+      >
         Go back to Details and select a question before grading.
       </div>
 
@@ -327,7 +445,11 @@
         (click)="continueFromDetails()"
         [disabled]="savingTopic || !selectedQuestionId"
       >
-        <span class="button-spinner" *ngIf="savingTopic" aria-hidden="true"></span>
+        <span
+          class="button-spinner"
+          *ngIf="savingTopic"
+          aria-hidden="true"
+        ></span>
         {{ savingTopic ? 'Saving assignment…' : 'Save and review code' }}
       </button>
 
@@ -338,10 +460,16 @@
         (click)="saveCodeAndContinue()"
         [disabled]="!hasExtractedText(selectedSubmission.id) || isSaving(selectedSubmission.id) || !canOpenGradingStep()"
       >
-        {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save and continue to grading' }}
+        {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save and continue to
+        grading' }}
       </button>
 
-      <button *ngIf="reviewStep === 3" type="button" class="btn-primary" (click)="closeModal()">
+      <button
+        *ngIf="reviewStep === 3"
+        type="button"
+        class="btn-primary"
+        (click)="closeModal()"
+      >
         Finish review
       </button>
     </footer>
@@ -360,7 +488,9 @@
     aria-labelledby="reextract-title"
     (click)="$event.stopPropagation()"
   >
-    <h3 id="reextract-title" class="confirm-title">Re-extract and discard edits?</h3>
+    <h3 id="reextract-title" class="confirm-title">
+      Re-extract and discard edits?
+    </h3>
     <p class="confirm-body">
       Re-extracting replaces the code in the editor with a fresh OCR result.
       Your current corrections will be lost.

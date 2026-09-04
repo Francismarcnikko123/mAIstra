@@ -13,6 +13,13 @@ import {
 import * as ace from 'ace-builds';
 import 'ace-builds/src-noconflict/mode-c_cpp';
 import 'ace-builds/src-noconflict/theme-monokai';
+import type { OcrReviewFlag } from '../submissions-list/ocr-review-flags';
+
+export interface OcrReviewEdit {
+  startLine: number;
+  endLine: number;
+  lineStructureChanged: boolean;
+}
 
 /**
  * Thin wrapper around the Ace editor so the teacher edits the extracted C code
@@ -24,55 +31,56 @@ import 'ace-builds/src-noconflict/theme-monokai';
   standalone: true,
   template: `<div #host class="ace-host"></div>`,
   styles: [
-    `:host {
-      display: block;
-    }
+    `
+      :host {
+        display: block;
+      }
 
-    .ace-host {
-      width: 100%;
-      height: var(--code-editor-height, 300px);
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      box-sizing: border-box;
-    }
+      .ace-host {
+        width: 100%;
+        height: var(--code-editor-height, 300px);
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        box-sizing: border-box;
+      }
 
-    /* Ace builds its marker/gutter DOM at runtime, so Angular's view
+      /* Ace builds its marker/gutter DOM at runtime, so Angular's view
        encapsulation never tags it -- ::ng-deep lets these reach it. */
-    ::ng-deep .oc-med { position: absolute; background: rgba(239, 159, 39, 0.16); }
-    ::ng-deep .oc-low { position: absolute; background: rgba(226, 75, 74, 0.17); }
-    ::ng-deep .oc-med-gutter { border-left: 3px solid #ef9f27; }
-    ::ng-deep .oc-low-gutter { border-left: 3px solid #e24b4a; }`,
+      ::ng-deep .ocr-review-strong {
+        position: absolute;
+        background: rgba(139, 92, 246, 0.22);
+      }
+
+      ::ng-deep .ocr-review-soft {
+        position: absolute;
+        background: rgba(139, 92, 246, 0.1);
+      }
+
+      ::ng-deep .ocr-review-strong-gutter {
+        border-left: 3px solid #8b5cf6;
+      }
+
+      ::ng-deep .ocr-review-soft-gutter {
+        border-left: 3px solid #a78bfa;
+      }
+    `,
   ],
 })
-export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy {
+export class CodeEditorComponent
+  implements AfterViewInit, OnChanges, OnDestroy
+{
   @ViewChild('host', { static: true }) host!: ElementRef<HTMLElement>;
 
   @Input() value = '';
   @Output() valueChange = new EventEmitter<string>();
 
-  /**
-   * Per-editor-line OCR confidence (the backend's `min_confidence` for each
-   * line, aligned 1:1 with the editor's rows). null = no score for that line.
-   * Lines below the thresholds get a background tint + gutter mark so the
-   * teacher's eye goes to the shaky reads first. Display-only: it never
-   * changes the code, and a line's mark clears once the teacher edits it.
-   */
-  @Input() lineConfidence: (number | null)[] = [];
-
-  // Two-tier thresholds, set by the flag-precision study on samples/ (361
-  // lines, 2026-09-04): at <0.70 the flag is ~0.7-0.8 precise (when it fires
-  // it's usually a real error); raising the "check" bound to 0.85 lifts recall
-  // from ~0.07 to ~0.16 while precision stays ~0.71. Confidence is a HIGH-
-  // precision, LOW-recall signal here (it misses ~84% of errors -- the model is
-  // often confidently wrong), so these colors are a "look here first" hint, not
-  // an error detector; the structural + misspelling checks and the verify
-  // reminder are what cover the rest. See docs/ocr/EVALUATION.md.
-  private static readonly LOW = 0.7; // below -> "likely wrong" (red)
-  private static readonly MED = 0.85; // below -> "check" (amber)
+  /** Normalized, one-based line flags supplied by the review workspace. */
+  @Input() lineReviewFlags: OcrReviewFlag[] = [];
+  @Output() reviewEvidenceEdited = new EventEmitter<OcrReviewEdit>();
 
   private editor?: ace.Ace.Editor;
-  // Active confidence markers, so they can be removed on re-render or edit.
-  private confidenceMarkers: { row: number; id: number; cls: string }[] = [];
+  private applyingExternalValue = false;
+  private reviewMarkers: { row: number; id: number; cls: string }[] = [];
 
   ngAfterViewInit(): void {
     this.editor = ace.edit(this.host.nativeElement);
@@ -89,7 +97,7 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
       highlightActiveLine: true,
     });
     this.editor.setValue(this.value ?? '', -1);
-    this.renderConfidence();
+    this.renderReviewFlags();
 
     // Shift-Alt-F is the conventional "format document" chord. Formatting is
     // teacher-triggered on purpose (see format()), never automatic on load.
@@ -100,17 +108,26 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
     });
 
     this.editor.on('change', (delta: any) => {
-      const start = delta?.start?.row;
-      const end = delta?.end?.row;
-      if (start != null && end != null && end !== start) {
-        // A whole line was inserted or removed: every row below shifts, so the
-        // line->confidence mapping is no longer reliable. Clear all marks
-        // rather than leave stale ones pointing at the wrong lines.
-        this.clearAllConfidence();
-      } else {
-        // Inline edit on one line: that line no longer reflects the OCR's
-        // read, so clear just its mark.
-        this.clearConfidenceRows(start, end);
+      const startRow = delta?.start?.row;
+      const endRow = delta?.end?.row;
+      const lineStructureChanged =
+        startRow != null &&
+        endRow != null &&
+        (startRow !== endRow || (delta?.lines?.length ?? 0) > 1);
+
+      if (!this.applyingExternalValue && startRow != null && endRow != null) {
+        if (lineStructureChanged) {
+          // A row-changing edit makes extraction-era line numbers unreliable.
+          this.clearAllReviewMarkers();
+        } else {
+          // Inline edits dismiss the OCR-era evidence for the touched row.
+          this.clearReviewRows(startRow, endRow);
+        }
+        this.reviewEvidenceEdited.emit({
+          startLine: startRow + 1,
+          endLine: endRow + 1,
+          lineStructureChanged,
+        });
       }
 
       const current = this.editor!.getValue();
@@ -121,54 +138,50 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
     });
   }
 
-  private clearAllConfidence(): void {
+  private clearAllReviewMarkers(): void {
     if (!this.editor) return;
     const session = this.editor.session;
-    for (const m of this.confidenceMarkers) {
-      session.removeMarker(m.id);
-      session.removeGutterDecoration(m.row, `${m.cls}-gutter`);
+    for (const marker of this.reviewMarkers) {
+      session.removeMarker(marker.id);
+      session.removeGutterDecoration(marker.row, `${marker.cls}-gutter`);
     }
-    this.confidenceMarkers = [];
+    this.reviewMarkers = [];
   }
 
   /**
-   * Draw a background tint + gutter mark on each line whose confidence is below
-   * threshold. Cleared and redrawn whenever the confidence input or the text
-   * changes. Display-only -- touches no document content.
+   * Draw one OCR-review marker per normalized flag. The marker is display-only
+   * and never changes the editor document.
    */
-  private renderConfidence(): void {
+  private renderReviewFlags(): void {
     if (!this.editor) return;
     const session = this.editor.session;
-    this.clearAllConfidence();
-    if (!this.lineConfidence?.length) return;
+    this.clearAllReviewMarkers();
+    if (!this.lineReviewFlags.length) return;
 
     const { Range } = (ace as any).require('ace/range');
     const rows = session.getLength();
-    for (let row = 0; row < this.lineConfidence.length && row < rows; row++) {
-      const conf = this.lineConfidence[row];
-      if (conf == null) continue;
-      let cls = '';
-      if (conf < CodeEditorComponent.LOW) cls = 'oc-low';
-      else if (conf < CodeEditorComponent.MED) cls = 'oc-med';
-      else continue;
+    for (const flag of this.lineReviewFlags) {
+      const row = flag.line - 1;
+      if (!Number.isInteger(row) || row < 0 || row >= rows) continue;
+      const cls =
+        flag.strength === 'strong' ? 'ocr-review-strong' : 'ocr-review-soft';
       const id = session.addMarker(
         new Range(row, 0, row, Infinity),
         cls,
         'fullLine',
       );
       session.addGutterDecoration(row, `${cls}-gutter`);
-      this.confidenceMarkers.push({ row, id, cls });
+      this.reviewMarkers.push({ row, id, cls });
     }
   }
 
-  private clearConfidenceRows(startRow?: number, endRow?: number): void {
+  private clearReviewRows(startRow: number, endRow: number): void {
     if (!this.editor || startRow == null) return;
     const session = this.editor.session;
-    const last = endRow ?? startRow;
-    this.confidenceMarkers = this.confidenceMarkers.filter((m) => {
-      if (m.row >= startRow && m.row <= last) {
-        session.removeMarker(m.id);
-        session.removeGutterDecoration(m.row, `${m.cls}-gutter`);
+    this.reviewMarkers = this.reviewMarkers.filter((marker) => {
+      if (marker.row >= startRow && marker.row <= endRow) {
+        session.removeMarker(marker.id);
+        session.removeGutterDecoration(marker.row, `${marker.cls}-gutter`);
         return false;
       }
       return true;
@@ -274,12 +287,17 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
       changes['value'] &&
       this.value !== this.editor.getValue()
     ) {
-      this.editor.setValue(this.value ?? '', -1);
+      this.applyingExternalValue = true;
+      try {
+        this.editor.setValue(this.value ?? '', -1);
+      } finally {
+        this.applyingExternalValue = false;
+      }
     }
-    // A fresh extraction updates both value and lineConfidence; redraw the
+    // A fresh extraction updates both value and lineReviewFlags; redraw the
     // marks after the text is in place.
-    if (this.editor && (changes['lineConfidence'] || changes['value'])) {
-      this.renderConfidence();
+    if (this.editor && (changes['lineReviewFlags'] || changes['value'])) {
+      this.renderReviewFlags();
     }
   }
 
