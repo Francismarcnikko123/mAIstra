@@ -656,6 +656,86 @@ button:disabled {
   background: transparent;
 }
 
+/* OCR confidence feature: missing-content banner, legend, verify reminder. */
+.ocr-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border: 0.5px solid #f0c98a;
+  border-left: 3px solid #ef9f27;
+  border-radius: 8px;
+  background: #fdf4e3;
+  font-size: 13px;
+  color: #663806;
+  line-height: 1.45;
+}
+.ocr-warning-title {
+  font-weight: 700;
+  color: #633806;
+}
+.ocr-suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border: 0.5px solid #cbd5e1;
+  border-left: 3px solid #64748b;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.5;
+}
+.ocr-suggest-title {
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 2px;
+}
+.ocr-suggest-item code {
+  font-family: var(--font-mono, monospace);
+  background: #eef2f7;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.ocr-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+.ocr-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ocr-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.ocr-dot-low { background: #e24b4a; }
+.ocr-dot-med { background: #ef9f27; }
+.ocr-dot-ok { background: #cbd5e1; }
+.ocr-verify-note {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 0.5px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #64748b;
+}
+.ocr-verify-note strong {
+  color: #334155;
+}
+
 /* Destructive confirm button (re-extract dialog): red accent, same shape as
    the primary/secondary buttons. */
 .btn-danger {

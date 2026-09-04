@@ -234,12 +234,37 @@
               <span>Choose “Extract code” to create an editable OCR result.</span>
             </div>
 
-            <app-code-editor
-              *ngIf="hasExtractedText(selectedSubmission.id)"
-              #codeEditor
-              class="text-editor"
-              [(value)]="editableText[selectedSubmission.id]"
-            ></app-code-editor>
+            <ng-container *ngIf="hasExtractedText(selectedSubmission.id)">
+              <div class="ocr-warning" *ngIf="structureWarnings(selectedSubmission.id) as sw" [hidden]="!sw.length">
+                <span class="ocr-warning-title">Possible missing content</span>
+                <span *ngFor="let w of sw">{{ w.kind }} don’t balance ({{ w.open }} open, {{ w.close }} close) — something may be missing or misread. Check against the paper.</span>
+              </div>
+
+              <div class="ocr-suggest" *ngIf="reviewSuggestions[selectedSubmission.id]?.length">
+                <span class="ocr-suggest-title">Possible misspellings — verify each against the paper</span>
+                <span class="ocr-suggest-item" *ngFor="let s of reviewSuggestions[selectedSubmission.id]">
+                  Line {{ s.line }}: <code>{{ s.original }}</code> → <code>{{ s.candidate }}</code>?
+                </span>
+              </div>
+
+              <div class="ocr-legend">
+                <span><span class="ocr-dot ocr-dot-low"></span>Likely wrong (&lt; 0.50)</span>
+                <span><span class="ocr-dot ocr-dot-med"></span>Check (0.50–0.75)</span>
+                <span><span class="ocr-dot ocr-dot-ok"></span>Confident</span>
+              </div>
+
+              <app-code-editor
+                #codeEditor
+                class="text-editor"
+                [(value)]="editableText[selectedSubmission.id]"
+                [lineConfidence]="lineConfidence[selectedSubmission.id] || []"
+              ></app-code-editor>
+
+              <p class="ocr-verify-note">
+                <strong>Still read the whole page against the paper.</strong>
+                These flags are aids, not a full check — the OCR can misread a character confidently, or drop content that doesn’t unbalance a symbol pair. Nothing here is auto-corrected.
+              </p>
+            </ng-container>
 
             <p class="extract-error" *ngIf="extractionError[selectedSubmission.id]">
               {{ extractionError[selectedSubmission.id] }}

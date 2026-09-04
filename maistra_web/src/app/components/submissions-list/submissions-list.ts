@@ -81,6 +81,16 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   saveStatus: Record<string, string> = {}; // '' | 'saved' | 'error'
   // Submission id whose re-extract confirmation dialog is open, or null.
   reextractConfirmId: string | null = null;
+  // Per-line OCR confidence (min_confidence per line), by submission id.
+  // Passed to <app-code-editor> to tint low-confidence lines.
+  lineConfidence: Record<string, (number | null)[]> = {};
+  // Spelling suggestions from the backend (e.g. sizcof -> sizeof) by submission
+  // id. A non-confidence signal, so it catches confident misreads the color
+  // tint misses. Advisory only -- the teacher applies them by hand.
+  reviewSuggestions: Record<
+    string,
+    { line: number; original: string; candidate: string }[]
+  > = {};
 
   // code checking state
   isChecking = false;
@@ -317,23 +327,98 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.reextractConfirmId = null;
   }
 
+  /**
+   * Structural-balance check on the current editor text, for the "possible
+   * missing content" banner. Counts {}, (), [] pairs; returns one entry per
+   * pair that doesn't balance (empty array = all balanced, no banner). Symbols
+   * inside string/char literals and //-or-block comments are ignored so a
+   * printf("}") doesn't skew it. Advisory only -- never edits the code, and
+   * recomputes live as the teacher types (reads editableText).
+   */
+  structureWarnings(
+    id: string,
+  ): { kind: string; open: number; close: number }[] {
+    const text = this.editableText[id];
+    if (!text) return [];
+    const c: Record<string, number> = {
+      '{': 0,
+      '}': 0,
+      '(': 0,
+      ')': 0,
+      '[': 0,
+      ']': 0,
+    };
+    let inString: string | null = null;
+    let inBlock = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const next = text[i + 1];
+      if (inBlock) {
+        if (ch === '*' && next === '/') {
+          inBlock = false;
+          i++;
+        }
+        continue;
+      }
+      if (inString) {
+        if (ch === '\\') i++;
+        else if (ch === inString) inString = null;
+        continue;
+      }
+      if (ch === '/' && next === '/') {
+        while (i < text.length && text[i] !== '\n') i++;
+        continue;
+      }
+      if (ch === '/' && next === '*') {
+        inBlock = true;
+        i++;
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        inString = ch;
+        continue;
+      }
+      if (ch in c) c[ch]++;
+    }
+    const out: { kind: string; open: number; close: number }[] = [];
+    if (c['{'] !== c['}'])
+      out.push({ kind: 'braces { }', open: c['{'], close: c['}'] });
+    if (c['('] !== c[')'])
+      out.push({ kind: 'parentheses ( )', open: c['('], close: c[')'] });
+    if (c['['] !== c[']'])
+      out.push({ kind: 'brackets [ ]', open: c['['], close: c[']'] });
+    return out;
+  }
+
   private async performExtract(id: string) {
     if (!this.selectedSubmission) return;
     this.extractingId = id;
     this.extractionError[id] = '';
     try {
       const res = await firstValueFrom(
-        this.http.post<{ cleaned_text?: string }>(
-          'http://localhost:8000/api/ocr/extract-from-url',
-          {
-            image_url: this.selectedSubmission.image_url,
-            submission_id: id,
-          },
-        ),
+        this.http.post<{
+          cleaned_text?: string;
+          line_details?: { min_confidence: number | null }[];
+          review_suggestions?: {
+            line: number;
+            original: string;
+            candidate: string;
+          }[];
+        }>('http://localhost:8000/api/ocr/extract-from-url', {
+          image_url: this.selectedSubmission.image_url,
+          submission_id: id,
+        }),
       );
       const text = res?.cleaned_text ?? '';
       this.extractedText[id] = text;
       this.editableText[id] = text;
+      // Per-line confidence for the editor's line tinting. line_details is
+      // aligned 1:1 with cleaned_text's lines (verified), so this maps directly
+      // to editor rows.
+      this.lineConfidence[id] = (res?.line_details ?? []).map(
+        (d) => d?.min_confidence ?? null,
+      );
+      this.reviewSuggestions[id] = res?.review_suggestions ?? [];
       this.extractionError[id] = '';
     } catch (err) {
       console.error('OCR failed:', err);

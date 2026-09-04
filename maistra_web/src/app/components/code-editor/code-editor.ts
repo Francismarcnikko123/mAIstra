@@ -34,7 +34,14 @@ import 'ace-builds/src-noconflict/theme-monokai';
       border: 1px solid #ccc;
       border-radius: 6px;
       box-sizing: border-box;
-    }`,
+    }
+
+    /* Ace builds its marker/gutter DOM at runtime, so Angular's view
+       encapsulation never tags it -- ::ng-deep lets these reach it. */
+    ::ng-deep .oc-med { position: absolute; background: rgba(239, 159, 39, 0.16); }
+    ::ng-deep .oc-low { position: absolute; background: rgba(226, 75, 74, 0.17); }
+    ::ng-deep .oc-med-gutter { border-left: 3px solid #ef9f27; }
+    ::ng-deep .oc-low-gutter { border-left: 3px solid #e24b4a; }`,
   ],
 })
 export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy {
@@ -43,7 +50,29 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
   @Input() value = '';
   @Output() valueChange = new EventEmitter<string>();
 
+  /**
+   * Per-editor-line OCR confidence (the backend's `min_confidence` for each
+   * line, aligned 1:1 with the editor's rows). null = no score for that line.
+   * Lines below the thresholds get a background tint + gutter mark so the
+   * teacher's eye goes to the shaky reads first. Display-only: it never
+   * changes the code, and a line's mark clears once the teacher edits it.
+   */
+  @Input() lineConfidence: (number | null)[] = [];
+
+  // Two-tier thresholds, set by the flag-precision study on samples/ (361
+  // lines, 2026-09-04): at <0.70 the flag is ~0.7-0.8 precise (when it fires
+  // it's usually a real error); raising the "check" bound to 0.85 lifts recall
+  // from ~0.07 to ~0.16 while precision stays ~0.71. Confidence is a HIGH-
+  // precision, LOW-recall signal here (it misses ~84% of errors -- the model is
+  // often confidently wrong), so these colors are a "look here first" hint, not
+  // an error detector; the structural + misspelling checks and the verify
+  // reminder are what cover the rest. See docs/ocr/EVALUATION.md.
+  private static readonly LOW = 0.7; // below -> "likely wrong" (red)
+  private static readonly MED = 0.85; // below -> "check" (amber)
+
   private editor?: ace.Ace.Editor;
+  // Active confidence markers, so they can be removed on re-render or edit.
+  private confidenceMarkers: { row: number; id: number; cls: string }[] = [];
 
   ngAfterViewInit(): void {
     this.editor = ace.edit(this.host.nativeElement);
@@ -60,6 +89,7 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
       highlightActiveLine: true,
     });
     this.editor.setValue(this.value ?? '', -1);
+    this.renderConfidence();
 
     // Shift-Alt-F is the conventional "format document" chord. Formatting is
     // teacher-triggered on purpose (see format()), never automatic on load.
@@ -69,12 +99,79 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
       exec: () => this.format(),
     });
 
-    this.editor.on('change', () => {
+    this.editor.on('change', (delta: any) => {
+      const start = delta?.start?.row;
+      const end = delta?.end?.row;
+      if (start != null && end != null && end !== start) {
+        // A whole line was inserted or removed: every row below shifts, so the
+        // line->confidence mapping is no longer reliable. Clear all marks
+        // rather than leave stale ones pointing at the wrong lines.
+        this.clearAllConfidence();
+      } else {
+        // Inline edit on one line: that line no longer reflects the OCR's
+        // read, so clear just its mark.
+        this.clearConfidenceRows(start, end);
+      }
+
       const current = this.editor!.getValue();
       if (current !== this.value) {
         this.value = current;
         this.valueChange.emit(current);
       }
+    });
+  }
+
+  private clearAllConfidence(): void {
+    if (!this.editor) return;
+    const session = this.editor.session;
+    for (const m of this.confidenceMarkers) {
+      session.removeMarker(m.id);
+      session.removeGutterDecoration(m.row, `${m.cls}-gutter`);
+    }
+    this.confidenceMarkers = [];
+  }
+
+  /**
+   * Draw a background tint + gutter mark on each line whose confidence is below
+   * threshold. Cleared and redrawn whenever the confidence input or the text
+   * changes. Display-only -- touches no document content.
+   */
+  private renderConfidence(): void {
+    if (!this.editor) return;
+    const session = this.editor.session;
+    this.clearAllConfidence();
+    if (!this.lineConfidence?.length) return;
+
+    const { Range } = (ace as any).require('ace/range');
+    const rows = session.getLength();
+    for (let row = 0; row < this.lineConfidence.length && row < rows; row++) {
+      const conf = this.lineConfidence[row];
+      if (conf == null) continue;
+      let cls = '';
+      if (conf < CodeEditorComponent.LOW) cls = 'oc-low';
+      else if (conf < CodeEditorComponent.MED) cls = 'oc-med';
+      else continue;
+      const id = session.addMarker(
+        new Range(row, 0, row, Infinity),
+        cls,
+        'fullLine',
+      );
+      session.addGutterDecoration(row, `${cls}-gutter`);
+      this.confidenceMarkers.push({ row, id, cls });
+    }
+  }
+
+  private clearConfidenceRows(startRow?: number, endRow?: number): void {
+    if (!this.editor || startRow == null) return;
+    const session = this.editor.session;
+    const last = endRow ?? startRow;
+    this.confidenceMarkers = this.confidenceMarkers.filter((m) => {
+      if (m.row >= startRow && m.row <= last) {
+        session.removeMarker(m.id);
+        session.removeGutterDecoration(m.row, `${m.cls}-gutter`);
+        return false;
+      }
+      return true;
     });
   }
 
@@ -178,6 +275,11 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
       this.value !== this.editor.getValue()
     ) {
       this.editor.setValue(this.value ?? '', -1);
+    }
+    // A fresh extraction updates both value and lineConfidence; redraw the
+    // marks after the text is in place.
+    if (this.editor && (changes['lineConfidence'] || changes['value'])) {
+      this.renderConfidence();
     }
   }
 
