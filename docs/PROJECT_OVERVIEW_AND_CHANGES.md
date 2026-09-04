@@ -66,6 +66,47 @@ The submission interface was redesigned to make its workflow easier to discover 
 - Corrected portrait-image sizing so previews use the available width without cropping or distortion.
 - Made the Ace editor fill the complete review panel while retaining its default height elsewhere.
 
+## OCR review highlighting
+
+The experimental confidence tint in the Review Code stage now combines all
+available line-specific OCR review evidence instead of treating confidence as
+an error detector:
+
+- Deterministic current-text anomalies, conservative backend spelling
+  suggestions, and per-line confidence feed one prioritized line-flag model.
+- A deterministic anomaly takes visual priority when several signals target
+  the same line, while all distinct review reasons are retained.
+- Violet strong/soft markers distinguish transcription review from red or
+  amber compiler diagnostics. The interface explicitly states that the marks
+  are not C syntax errors.
+- The legend no longer labels unmarked lines as “Confident”; absence of a flag
+  means only that the available checks did not identify that line.
+- Structural imbalance remains a document-level finding because the check
+  cannot reliably identify which line caused it.
+- Empty structural and line-finding panels are removed from the DOM, fixing
+  misleading headings on clean extractions.
+- Editing a line dismisses extraction-era evidence for that line. Inserting or
+  removing lines invalidates stale extraction-era mappings, while
+  deterministic checks continue to recompute from the teacher's current text.
+- A fresh extraction replaces the old evidence. All flags remain advisory and
+  never auto-correct OCR output or teacher edits.
+
+The current backend suggestion engine is intentionally narrow and uses three
+exact function-call variants. It therefore returns no evidence for variants
+such as `scainf` → `scanf`, even when a teacher can confirm the mismatch from
+the paper. A 2026-09-05 offline A/B tested a guarded one-edit matcher before any
+production change. Against identical cached OCR output for 20 held-out pages,
+the current rules produced 0 suggestions and the refined candidate produced 3
+helpful suggestions with 0 non-improving suggestions. It also detected the
+separate `scainf` example. After excluding ambiguous `print`/`scan` and
+student-declared functions, the candidate produced 0 alerts across 188 literal
+transcription controls. This is promising but small-sample evidence, not a
+precision or recall guarantee. Because the guards were refined after reviewing
+false alerts in the same pool, the result is exploratory and still needs a new
+untouched validation set. The candidate remains unimplemented; see
+the local-only `docs/ocr/OCR_REVIEW_SUGGESTION_AB.md` report. That detailed
+report is intentionally ignored by Git.
+
 ## State and reliability decisions
 
 The following state is intentionally retained in `SubmissionsListComponent`:
@@ -108,6 +149,13 @@ Focused tests now cover:
 - Remaining in Review Code after an OCR failure.
 - Advancing after a successful verified-code save.
 - Remaining in Review Code after a failed save.
+- OCR review signal thresholds, priority, and invalid line-number handling.
+- Deterministic unusual-line detection and overlap with weaker signals.
+- Edited-line dismissal and row-map invalidation after line changes.
+- Fresh extraction evidence replacing dismissed evidence.
+- Submission-scoped review-flag isolation.
+- Ace strong/soft marker rendering and edit-event behavior.
+- Removal of empty finding panels and syntax-error-like wording.
 
 ## Setup documentation
 
@@ -121,7 +169,9 @@ Focused tests now cover:
 - The focused submission-list test file passes isolated TypeScript validation.
 - Angular template compilation passed after the submission workflow changes.
 - Running Vitest from the current WSL environment is blocked because `node_modules` contains Windows-native Rollup/esbuild packages. Run `npm ci` and the tests in the same operating system environment, or run them directly from Windows where the dependencies were installed.
-- Repository-wide spec type-checking currently also reports an unrelated missing Node `fs` type used by `question-form.spec.ts`.
+- Repository-wide spec type-checking includes Node's test-only types so template regression specs can use the built-in `fs` module without affecting browser application typings.
+- On `confidence-flagging-experiment-backup`, 42 focused OCR-review and submission tests pass on macOS.
+- Application TypeScript validation and Angular development template compilation pass with the OCR-review changes.
 
 ## Important security work
 
