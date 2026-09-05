@@ -61,6 +61,48 @@ double computeBrightnessSpread(img.Image grayscale, {required int rows, required
   return maxAvg - minAvg;
 }
 
+// Compares each corner's average brightness against the center's. A crop that
+// grabbed background (desk, hand, table edge) reads differently from the
+// paper-filled center at one or more corners.
+// Threshold calibrated to 70: yellow pad vignetting raises clean-crop baseline
+// to ~50–60, so 40 caused false positives; white bond bad crops still hit 100+.
+double computeCornerMismatch(img.Image grayscale, {required double patchFraction}) {
+  final patchWidth = (grayscale.width * patchFraction).round();
+  final patchHeight = (grayscale.height * patchFraction).round();
+
+  final centerX = (grayscale.width - patchWidth) ~/ 2;
+  final centerY = (grayscale.height - patchHeight) ~/ 2;
+  final centerMean = _patchMeanBrightness(grayscale, centerX, centerY, patchWidth, patchHeight);
+
+  final corners = [
+    _patchMeanBrightness(grayscale, 0, 0, patchWidth, patchHeight),
+    _patchMeanBrightness(grayscale, grayscale.width - patchWidth, 0, patchWidth, patchHeight),
+    _patchMeanBrightness(grayscale, 0, grayscale.height - patchHeight, patchWidth, patchHeight),
+    _patchMeanBrightness(
+        grayscale, grayscale.width - patchWidth, grayscale.height - patchHeight, patchWidth, patchHeight),
+  ];
+
+  double maxDiff = 0;
+  for (final cornerMean in corners) {
+    final diff = (cornerMean - centerMean).abs();
+    if (diff > maxDiff) maxDiff = diff;
+  }
+  return maxDiff;
+}
+
+double _patchMeanBrightness(img.Image grayscale, int x0, int y0, int width, int height) {
+  double total = 0;
+  int count = 0;
+  for (int y = y0; y < y0 + height; y++) {
+    for (int x = x0; x < x0 + width; x++) {
+      total += grayscale.getPixel(x, y).r.toDouble();
+      count++;
+    }
+  }
+  if (count == 0) return 0;
+  return total / count;
+}
+
 // Top third of the frame — blur is measured here only, so blank paper
 // below the handwriting doesn't dilute the score.
 img.Image cropTopPortion(img.Image image, {required double fraction}) {
@@ -122,14 +164,18 @@ QualityResult evaluateLighting({
   return QualityResult(passed: !blocked, issues: issues);
 }
 
-// Thresholds calibrated against real device captures across white bond
-// paper, green book, and yellow pad
-
+// brightClipFraction threshold is 0.95 (not 0.20) for post-crop images:
+// white paper fills the frame after cropping and naturally yields 0.85–0.92,
+// so 0.20 always false-positives. 0.95 only fires on genuinely blown-out scans
+// (direct flash, strong specular glare) where nearly every pixel is saturated.
+// The live camera check (checkLightingFrame) uses 0.20 and still catches
+// overexposure in the viewfinder before the user captures.
 QualityResult evaluateQuality({
   required double blurScore,
   required double darkClipFraction,
   required double brightClipFraction,
   required double brightnessSpread,
+  required double cornerMismatch,
 }) {
   final List<String> issues = [];
   bool blocked = false;
@@ -139,13 +185,25 @@ QualityResult evaluateQuality({
     blocked = true;
   }
 
-  final lighting = evaluateLighting(
-    darkClipFraction: darkClipFraction,
-    brightClipFraction: brightClipFraction,
-    brightnessSpread: brightnessSpread,
-  );
-  issues.addAll(lighting.issues);
-  if (!lighting.passed) blocked = true;
+  if (darkClipFraction > 0.05) {
+    issues.add('Too dark — move to a brighter area');
+    blocked = true;
+  }
+
+  if (brightClipFraction > 0.95) {
+    issues.add('Too bright / overexposed — reduce lighting or move away from light source');
+    blocked = true;
+  }
+
+  if (brightnessSpread > 35) {
+    issues.add("Uneven lighting detected — try repositioning so your shadow isn't blocking the page");
+    blocked = true;
+  }
+
+  if (cornerMismatch > 70) {
+    issues.add('Crop may include background — retake and align the corners to the paper edges');
+    blocked = true;
+  }
 
   return QualityResult(passed: !blocked, issues: issues);
 }
@@ -161,6 +219,7 @@ QualityResult checkQuality(List<int> bytes) {
   final darkClipFraction = computeDarkClipFraction(grayscale);
   final brightClipFraction = computeBrightClipFraction(grayscale);
   final brightnessSpread = computeBrightnessSpread(grayscale, rows: 3, cols: 3);
+  final cornerMismatch = computeCornerMismatch(grayscale, patchFraction: 0.1);
 
   // ignore: avoid_print
   print('[quality-check] ----------------------------------------');
@@ -174,12 +233,15 @@ QualityResult checkQuality(List<int> bytes) {
   print('[quality-check] brightClipFraction:${brightClipFraction.toStringAsFixed(4)}');
   // ignore: avoid_print
   print('[quality-check] brightnessSpread:  ${brightnessSpread.toStringAsFixed(1)}');
+  // ignore: avoid_print
+  print('[quality-check] cornerMismatch:    ${cornerMismatch.toStringAsFixed(1)}');
 
   return evaluateQuality(
     blurScore: blurScore,
     darkClipFraction: darkClipFraction,
     brightClipFraction: brightClipFraction,
     brightnessSpread: brightnessSpread,
+    cornerMismatch: cornerMismatch,
   );
 }
 
