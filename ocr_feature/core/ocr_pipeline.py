@@ -63,6 +63,20 @@ ocr = PaddleOCR(
     use_doc_orientation_classify=False,
     use_doc_unwarping=False,
     use_textline_orientation=False,
+    # Lowered from PaddleOCR's default 0.60 to 0.30, decided by measurement
+    # (2026-09-04). The fine-tuned recognizer reads braces well (0.9-1.0 conf),
+    # but standalone braces and some faint code lines were being LOST AT
+    # DETECTION -- their box score fell below the 0.60 cutoff, so the recognizer
+    # never saw them. A/B on the 20-image gate set, sweeping 0.60/0.40/0.30:
+    # overall clean_ws CER stays 0.126 at every value (no phantom-detection
+    # regression), while closing-brace recovery rises 82 -> 86 -> 87 of 89.
+    # A sharper 0.40-vs-0.30 diff confirmed every extra box at 0.30 is REAL
+    # content (1 brace + 4 whole code lines that were missing), zero junk. For a
+    # grading app "misread beats missing" -- a recovered line is teacher-fixable
+    # in the widget, a dropped line may never be noticed. REC_SCORE_FLOOR (0.3)
+    # still guards the recognition stage against genuine junk. Full A/B:
+    # docs/ocr/EVALUATION.md, docs/ocr/DEFENSE_PREP.md.
+    text_det_box_thresh=0.30,
     device="cpu"
 )
 

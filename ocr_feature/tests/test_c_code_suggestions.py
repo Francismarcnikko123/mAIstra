@@ -62,6 +62,40 @@ class CCodeSuggestionTests(unittest.TestCase):
     def test_empty_input_returns_no_suggestions(self):
         self.assertEqual(suggest_c_code(""), [])
 
+    def test_flags_misread_word_inside_a_message_literal(self):
+        # A word inside the printed message that is one edit from a common
+        # word is flagged for the teacher to compare with the paper. It is a
+        # flag, never an edit, and the reason must not assert the OCR is wrong
+        # (it could be the student's own spelling).
+        suggestions = suggest_c_code('printf("Please enter a valind number");')
+
+        literal = [s for s in suggestions if s["rule_id"] == "literal-word-misread"]
+        self.assertEqual(len(literal), 1)
+        self.assertEqual(literal[0]["original"], "valind")
+        self.assertEqual(literal[0]["candidate"], "valid")
+        self.assertIn("OCR misread or the student", literal[0]["reason"])
+
+    def test_does_not_flag_correct_or_distant_message_words(self):
+        # Correct words and words that are NOT within one edit of a common
+        # word are left alone -- no false positives on ordinary messages.
+        self.assertEqual(
+            [
+                s
+                for s in suggest_c_code('printf("enter a five digit number");')
+                if s["rule_id"] == "literal-word-misread"
+            ],
+            [],
+        )
+
+    def test_message_word_check_never_touches_code_identifiers(self):
+        # `valind` as a bare identifier in code (not in a literal) is the
+        # student's variable name and must never be flagged as a message typo.
+        suggestions = suggest_c_code("int valind = 0;")
+        self.assertEqual(
+            [s for s in suggestions if s["rule_id"] == "literal-word-misread"],
+            [],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

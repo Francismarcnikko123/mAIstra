@@ -656,6 +656,69 @@ button:disabled {
   background: transparent;
 }
 
+/* Destructive confirm button (re-extract dialog): red accent, same shape as
+   the primary/secondary buttons. */
+.btn-danger {
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #dc2626;
+  color: #fff;
+  background: #dc2626;
+}
+
+.btn-danger:not(:disabled):hover {
+  background: #b91c1c;
+}
+
+/* Re-extract confirmation dialog. Sits above the review overlay (z 1000);
+   backdrop + card tuned to match .review-overlay / .review-workspace. */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.55);
+  box-sizing: border-box;
+}
+
+.confirm-card {
+  width: min(420px, 92vw);
+  padding: 22px 24px 18px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.34);
+  box-sizing: border-box;
+}
+
+.confirm-title {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.confirm-body {
+  margin: 0 0 20px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .btn-extract {
   white-space: nowrap;
 }
