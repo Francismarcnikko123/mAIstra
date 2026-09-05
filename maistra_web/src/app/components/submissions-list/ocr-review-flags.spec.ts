@@ -17,9 +17,52 @@ describe('OCR review flags', () => {
         line: 3,
         text: '3',
         reason:
-          'lone token — compare it with a brace or punctuation on the paper',
+          'short fragment — compare it with a brace, number, or punctuation on the paper',
       },
     ]);
+  });
+
+  it('flags a short mixed-symbol fragment, not just 1-2 char alnum tokens', () => {
+    // A misread like "s%d" (3 chars, contains a symbol) is exactly the kind
+    // of dangling fragment a real garbled page produces; the old check only
+    // matched a bare 1-2 character alphanumeric token and missed this.
+    const issues = detectOcrLineIssues('s%d');
+    expect(issues).toContainEqual(
+      expect.objectContaining({ line: 1, text: 's%d' }),
+    );
+  });
+
+  it('does not flag a short line that is a complete statement or label', () => {
+    expect(detectOcrLineIssues('};')).not.toContainEqual(
+      expect.objectContaining({ reason: expect.stringContaining('fragment') }),
+    );
+  });
+
+  it('pinpoints the exact line where a closing bracket does not match its opener', () => {
+    // "foo(a, b];" -- the ']' should have been ')'. The whole-document
+    // balance banner can only report totals; this locates the actual line.
+    const issues = detectOcrLineIssues('foo(a, b];');
+    expect(issues).toEqual([
+      expect.objectContaining({
+        line: 1,
+        text: ']',
+        reason: expect.stringContaining('parenthesis )'),
+      }),
+    ]);
+  });
+
+  it('flags a closing bracket that has no opener at all', () => {
+    expect(detectOcrLineIssues('};')).toEqual([
+      expect.objectContaining({
+        line: 1,
+        text: '}',
+        reason: expect.stringContaining('no matching opener'),
+      }),
+    ]);
+  });
+
+  it('does not flag balanced brackets spread across multiple lines', () => {
+    expect(detectOcrLineIssues('int main() {\nreturn 0;\n}')).toEqual([]);
   });
 
   it('uses the documented confidence thresholds', () => {

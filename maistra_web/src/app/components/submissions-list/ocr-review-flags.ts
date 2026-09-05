@@ -51,12 +51,18 @@ export function detectOcrLineIssues(text: string): OcrLineIssue[] {
     const value = raw.trim();
     if (!value) return;
 
-    if (/^[0-9A-Za-z]{1,2}$/.test(value)) {
+    const isShortFragment =
+      value.length <= 3 && // very short
+      /[A-Za-z0-9]/.test(value) && // has some content (not a lone bracket)
+      !/[;{}:]$/.test(value) && // not a finished statement or label
+      !/^[{}()[\];]+$/.test(value); // not pure punctuation (handled by balance)
+
+    if (isShortFragment) {
       issues.push({
         line: index + 1,
         text: value,
         reason:
-          'lone token — compare it with a brace or punctuation on the paper',
+          'short fragment — compare it with a brace, number, or punctuation on the paper',
       });
     } else if (/\bcase\b[^:{\n]*\{/.test(value)) {
       issues.push({
@@ -66,6 +72,88 @@ export function detectOcrLineIssues(text: string): OcrLineIssue[] {
       });
     }
   });
+
+  issues.push(...detectBracketMismatches(text));
+  return issues;
+}
+
+const OPENERS: Record<string, string> = { ')': '(', ']': '[', '}': '{' };
+const PAIR_NAME: Record<string, string> = {
+  '(': 'parenthesis )',
+  '[': 'bracket ]',
+  '{': 'brace }',
+};
+
+/**
+ * Stack-based bracket scan across the whole text (literals/comments skipped).
+ * Flags the exact line where a closer has no opener, or closes the wrong kind
+ * of opener — e.g. `&num5]` where a `)` was expected. This pinpoints the line
+ * the whole-document balance banner can only summarize. A missing closer at
+ * the very end is intentionally NOT pinned to a line (its true location is
+ * ambiguous); the balance banner covers that case.
+ */
+function detectBracketMismatches(text: string): OcrLineIssue[] {
+  const issues: OcrLineIssue[] = [];
+  const stack: { ch: string; line: number }[] = [];
+  const seen = new Set<number>();
+  let line = 1;
+  let inString: string | null = null;
+  let inBlock = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+    if (ch === '\n') {
+      line++;
+      continue;
+    }
+    if (inBlock) {
+      if (ch === '*' && next === '/') {
+        inBlock = false;
+        i++;
+      }
+      continue;
+    }
+    if (inString) {
+      if (ch === '\\') i++;
+      else if (ch === inString) inString = null;
+      continue;
+    }
+    if (ch === '/' && next === '/') {
+      while (i < text.length && text[i] !== '\n') i++;
+      i--;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      inBlock = true;
+      i++;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      inString = ch;
+      continue;
+    }
+    if (ch === '(' || ch === '[' || ch === '{') {
+      stack.push({ ch, line });
+    } else if (ch === ')' || ch === ']' || ch === '}') {
+      const top = stack[stack.length - 1];
+      const mismatched = !top || top.ch !== OPENERS[ch];
+      if (mismatched && !seen.has(line)) {
+        seen.add(line);
+        issues.push({
+          line,
+          text: ch,
+          reason: top
+            ? `“${ch}” closes a ${PAIR_NAME[top.ch]} that was opened — the pair may be misread`
+            : `“${ch}” has no matching opener — a bracket may be missing or misread`,
+        });
+      }
+      // On a mismatch, still pop the innermost opener (assume it was the
+      // intended target, just misread as the wrong bracket type) so one bad
+      // character doesn't cascade into false flags for the rest of the file.
+      if (top) stack.pop();
+    }
+  }
 
   return issues;
 }
