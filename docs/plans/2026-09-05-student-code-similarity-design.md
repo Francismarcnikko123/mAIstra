@@ -2,9 +2,9 @@
 
 Date: 2026-09-05
 
-Status: Comparison scope and web placement agreed with the user. Detection,
-storage, and retry details below are proposed implementation defaults. This
-document describes a future feature; no application behavior has changed.
+Status: Comparison scope, web placement, and detection approach agreed with
+the user. Storage and retry details below are proposed implementation defaults.
+This document describes a future feature; no application behavior has changed.
 
 ## Agreed product decisions
 
@@ -15,6 +15,9 @@ document describes a future feature; no application behavior has changed.
   the comparison group is `(assessment_id, question_id)`.
 - Show findings inside the existing **Run & grade** step. Reviewing matches
   is optional; a separate mandatory review step is unnecessary.
+- Implement the detector locally using the existing Tree-sitter C parser,
+  Winnowing fingerprints, and token-sequence matching. Keep JPlag as a
+  fallback if evaluation shows that the local detector is inadequate.
 
 An assessment ID identifies a particular offering of an exam or activity.
 Its participating block sections share that ID. A future offering receives
@@ -89,9 +92,9 @@ as having cheated. Matching code needs human interpretation, as explained in
 | Local exact and token-sequence comparison | Fits the Python service and supports explanations tied to source passages | Requires implementation and evaluation on representative C answers |
 | Dedicated engine such as JPlag | Provides local pairwise analysis and base-code support | Adds another runtime and integration; C support needs evaluation for this project |
 
-Recommend the local approach for the first version, contingent on validation
-against representative answers. The existing Tree-sitter dependency supplies
-parsing and source positions; it is not itself a plagiarism detector. See the
+The agreed approach for the first version is the local detector, contingent on
+validation against representative answers. The existing Tree-sitter dependency
+supplies parsing and source positions; it is not itself a plagiarism detector. See the
 [Python binding documentation](https://tree-sitter.github.io/py-tree-sitter/).
 [JPlag's official documentation](https://github.com/jplag/JPlag) describes its
 local operation and supported languages; it currently lists its C frontend
@@ -106,7 +109,9 @@ Proposed comparison layers:
    identifier and literal values. Removing comments must not modify strings
    or merge adjacent tokens.
 3. **Similar code:** match substantial contiguous token sequences with a
-   deterministic matching procedure that avoids counting tokens twice.
+   Winnowing fingerprint pass for candidate detection, followed by a
+   deterministic token-sequence matching procedure that avoids counting
+   tokens twice and supplies source ranges for highlighting.
    Canonicalize locally declared variable and parameter names consistently
    with their references and scopes. Preserve operators, literal values,
    and external API names. Report this as similarity, not exact duplication.
