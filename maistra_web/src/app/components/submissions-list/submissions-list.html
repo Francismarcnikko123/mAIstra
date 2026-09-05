@@ -20,10 +20,7 @@
 
     <label class="filter-field">
       <span>Status</span>
-      <select
-        [(ngModel)]="statusFilter"
-        (ngModelChange)="onFiltersChanged()"
-      >
+      <select [(ngModel)]="statusFilter" (ngModelChange)="onFiltersChanged()">
         <option value="all">All statuses</option>
         <option value="new">Needs OCR</option>
         <option value="extracted">Needs review</option>
@@ -50,12 +47,19 @@
         (click)="toggleFolder(group.topic)"
         [attr.aria-expanded]="!collapsedFolders[group.topic]"
       >
-        <span class="folder-arrow" [class.collapsed]="collapsedFolders[group.topic]">▾</span>
+        <span
+          class="folder-arrow"
+          [class.collapsed]="collapsedFolders[group.topic]"
+          >▾</span
+        >
         <span class="folder-name">{{ group.topic }}</span>
         <span class="folder-count">{{ group.submissions.length }}</span>
       </button>
 
-      <div class="folder-content" [class.hidden]="collapsedFolders[group.topic]">
+      <div
+        class="folder-content"
+        [class.hidden]="collapsedFolders[group.topic]"
+      >
         <div class="submission-grid">
           <button
             type="button"
@@ -73,7 +77,9 @@
               </span>
             </div>
             <div class="card-content">
-              <strong>{{ submission.student_name || 'Unnamed student' }}</strong>
+              <strong
+                >{{ submission.student_name || 'Unnamed student' }}</strong
+              >
               <span>{{ getQuestionName(submission) }}</span>
               <time>{{ submission.captured_at | date:'mediumDate' }}</time>
             </div>
@@ -85,8 +91,13 @@
 
   <ng-template #empty>
     <div class="empty-state">
-      <strong>{{ submissions.length ? 'No matching submissions' : 'No submissions yet' }}</strong>
-      <span *ngIf="submissions.length">Try changing or clearing the filters.</span>
+      <strong
+        >{{ submissions.length ? 'No matching submissions' : 'No submissions
+        yet' }}</strong
+      >
+      <span *ngIf="submissions.length"
+        >Try changing or clearing the filters.</span
+      >
     </div>
   </ng-template>
 </section>
@@ -109,18 +120,40 @@
           {{ selectedSubmission.captured_at | date:'medium' }}
           <span>·</span>
           {{ getQuestionName(selectedSubmission) }}
+          <ng-container *ngIf="selectedAssessmentId && selectedBlockSectionId">
+            <span>·</span>
+            {{ getSelectedAssessmentName() }} / {{ getSelectedBlockSectionName()
+            }}
+          </ng-container>
         </p>
       </div>
-      <button type="button" class="review-close" (click)="closeModal()" aria-label="Close review">✕</button>
+      <button
+        type="button"
+        class="review-close"
+        (click)="closeModal()"
+        aria-label="Close review"
+      >
+        ✕
+      </button>
     </header>
 
     <nav class="review-steps" aria-label="Submission review progress">
-      <button type="button" [class.active]="reviewStep === 1" [class.complete]="reviewStep > 1" (click)="setReviewStep(1)">
+      <button
+        type="button"
+        [class.active]="reviewStep === 1"
+        [class.complete]="reviewStep > 1"
+        (click)="setReviewStep(1)"
+      >
         <span>1</span>
         <strong>Details</strong>
         <small>Organize submission</small>
       </button>
-      <button type="button" [class.active]="reviewStep === 2" [class.complete]="reviewStep > 2" (click)="setReviewStep(2)">
+      <button
+        type="button"
+        [class.active]="reviewStep === 2"
+        [class.complete]="reviewStep > 2"
+        (click)="setReviewStep(2)"
+      >
         <span>2</span>
         <strong>Review code</strong>
         <small>Extract and verify</small>
@@ -133,7 +166,10 @@
       >
         <span>3</span>
         <strong>Run &amp; grade</strong>
-        <small>{{ canOpenGradingStep() ? 'Check test cases' : 'Verify code and question first' }}</small>
+        <small
+          >{{ canOpenGradingStep() ? 'Check test cases' : 'Verify code and
+          question first' }}</small
+        >
       </button>
     </nav>
 
@@ -141,8 +177,15 @@
       <ng-container *ngIf="reviewStep === 1">
         <div class="details-layout">
           <div class="submission-preview">
-            <a [href]="selectedSubmission.image_url" target="_blank" rel="noopener">
-              <img [src]="selectedSubmission.image_url" alt="Full handwritten submission" />
+            <a
+              [href]="selectedSubmission.image_url"
+              target="_blank"
+              rel="noopener"
+            >
+              <img
+                [src]="selectedSubmission.image_url"
+                alt="Full handwritten submission"
+              />
             </a>
             <span>Click the image to open the original.</span>
           </div>
@@ -154,9 +197,85 @@
               <p>Assign the submission before reviewing the extracted code.</p>
             </div>
 
+            <div
+              class="comparison-context-summary"
+              [class.incomplete]="!hasCompleteComparisonContext()"
+            >
+              <span>Similarity group</span>
+              <strong>{{ getComparisonContextStatus() }}</strong>
+            </div>
+
             <label class="field-group">
-              <span>Topic or folder</span>
-              <input [(ngModel)]="editableTopic" placeholder="For example: Loops or Chapter 3" />
+              <span>Assessment</span>
+              <select
+                [ngModel]="selectedAssessmentId"
+                (ngModelChange)="onSelectedAssessmentChange($event)"
+                [class.invalid]="!selectedAssessmentId"
+                [disabled]="loadingComparisonContext"
+                required
+              >
+                <option value="">Select an assessment</option>
+                <option
+                  *ngFor="let assessment of assessments"
+                  [value]="assessment.id"
+                >
+                  {{ assessment.name }}{{ assessment.status === 'closed' ? '
+                  (closed)' : '' }}
+                </option>
+              </select>
+              <small class="field-error" *ngIf="!selectedAssessmentId">
+                Select the assessment containing this submission.
+              </small>
+            </label>
+
+            <label class="field-group">
+              <span>Block section</span>
+              <select
+                [ngModel]="selectedBlockSectionId"
+                (ngModelChange)="onSelectedBlockSectionChange($event)"
+                [class.invalid]="!selectedBlockSectionId"
+                [disabled]="!selectedAssessmentId || loadingComparisonContext"
+                required
+              >
+                <option value="">Select a block section</option>
+                <option
+                  *ngFor="let section of getAvailableSections(selectedAssessmentId)"
+                  [value]="section.id"
+                >
+                  {{ section.name }}
+                </option>
+              </select>
+              <small
+                class="field-error"
+                *ngIf="selectedAssessmentId && !selectedBlockSectionId"
+              >
+                Select the student's block section.
+              </small>
+            </label>
+
+            <label class="field-group">
+              <span>Student</span>
+              <select
+                [ngModel]="selectedStudentId"
+                (ngModelChange)="onSelectedStudentChange($event)"
+                [class.invalid]="!selectedStudentId"
+                [disabled]="!selectedBlockSectionId || loadingComparisonContext"
+                required
+              >
+                <option value="">Select a student</option>
+                <option
+                  *ngFor="let student of getAvailableStudents(selectedAssessmentId, selectedBlockSectionId)"
+                  [value]="student.id"
+                >
+                  {{ student.display_name }} · {{ student.student_number }}
+                </option>
+              </select>
+              <small
+                class="field-error"
+                *ngIf="selectedBlockSectionId && !selectedStudentId"
+              >
+                Select the student who submitted this answer.
+              </small>
             </label>
 
             <label class="field-group">
@@ -165,10 +284,14 @@
                 [ngModel]="selectedQuestionId"
                 (ngModelChange)="onSelectedQuestionChange($event)"
                 [class.invalid]="!selectedQuestionId"
+                [disabled]="!selectedAssessmentId || loadingComparisonContext"
                 required
               >
                 <option value="">Select a question</option>
-                <option *ngFor="let question of questions" [value]="question.id">
+                <option
+                  *ngFor="let question of getAvailableQuestions(selectedAssessmentId)"
+                  [value]="question.id"
+                >
                   {{ question.question_name }}
                 </option>
               </select>
@@ -180,9 +303,23 @@
               </small>
             </label>
 
+            <label class="field-group">
+              <span>Topic or folder</span>
+              <input
+                [(ngModel)]="editableTopic"
+                placeholder="For example: Loops or Chapter 3"
+              />
+            </label>
+
+            <p class="extract-error" *ngIf="comparisonContextError">
+              {{ comparisonContextError }}
+            </p>
+
             <div class="status-summary">
               <span>Status</span>
-              <strong>{{ getSubmissionStatusLabel(selectedSubmission) }}</strong>
+              <strong
+                >{{ getSubmissionStatusLabel(selectedSubmission) }}</strong
+              >
             </div>
           </div>
         </div>
@@ -193,7 +330,10 @@
           <div>
             <p class="eyebrow">Step 2</p>
             <h3>Review extracted code</h3>
-            <p>Compare the submission image with the OCR result, then correct and verify it.</p>
+            <p>
+              Compare the submission image with the OCR result, then correct and
+              verify it.
+            </p>
           </div>
           <button
             type="button"
@@ -201,14 +341,23 @@
             (click)="extractText()"
             [disabled]="isExtracting(selectedSubmission.id)"
           >
-            {{ isExtracting(selectedSubmission.id) ? 'Extracting…' : (hasExtractedText(selectedSubmission.id) ? 'Re-extract code' : 'Extract code') }}
+            {{ isExtracting(selectedSubmission.id) ? 'Extracting…' :
+            (hasExtractedText(selectedSubmission.id) ? 'Re-extract code' :
+            'Extract code') }}
           </button>
         </div>
 
         <div class="ocr-layout">
           <div class="submission-preview compact">
-            <a [href]="selectedSubmission.image_url" target="_blank" rel="noopener">
-              <img [src]="selectedSubmission.image_url" alt="Handwritten submission for comparison" />
+            <a
+              [href]="selectedSubmission.image_url"
+              target="_blank"
+              rel="noopener"
+            >
+              <img
+                [src]="selectedSubmission.image_url"
+                alt="Handwritten submission for comparison"
+              />
             </a>
           </div>
 
@@ -229,9 +378,14 @@
               </button>
             </div>
 
-            <div class="extract-placeholder" *ngIf="!hasExtractedText(selectedSubmission.id)">
+            <div
+              class="extract-placeholder"
+              *ngIf="!hasExtractedText(selectedSubmission.id)"
+            >
               <strong>No code extracted yet</strong>
-              <span>Choose “Extract code” to create an editable OCR result.</span>
+              <span
+                >Choose “Extract code” to create an editable OCR result.</span
+              >
             </div>
 
             <app-code-editor
@@ -241,11 +395,19 @@
               [(value)]="editableText[selectedSubmission.id]"
             ></app-code-editor>
 
-            <p class="extract-error" *ngIf="extractionError[selectedSubmission.id]">
+            <p
+              class="extract-error"
+              *ngIf="extractionError[selectedSubmission.id]"
+            >
               {{ extractionError[selectedSubmission.id] }}
             </p>
-            <p class="save-status" *ngIf="saveStatus[selectedSubmission.id]" [ngClass]="saveStatus[selectedSubmission.id]">
-              {{ saveStatus[selectedSubmission.id] === 'saved' ? '✓ Verified code saved' : '✕ Save failed—please try again' }}
+            <p
+              class="save-status"
+              *ngIf="saveStatus[selectedSubmission.id]"
+              [ngClass]="saveStatus[selectedSubmission.id]"
+            >
+              {{ saveStatus[selectedSubmission.id] === 'saved' ? '✓ Verified
+              code saved' : '✕ Save failed—please try again' }}
             </p>
           </div>
         </div>
@@ -260,7 +422,10 @@
 
         <div class="grading-context">
           <span>Question</span>
-          <strong>{{ getSelectedQuestion()?.question_name || getQuestionName(selectedSubmission) }}</strong>
+          <strong
+            >{{ getSelectedQuestion()?.question_name ||
+            getQuestionName(selectedSubmission) }}</strong
+          >
         </div>
 
         <app-judge0
@@ -284,15 +449,25 @@
     </div>
 
     <footer class="review-footer">
-      <button type="button" class="btn-secondary" (click)="reviewStep === 1 ? closeModal() : setReviewStep(reviewStep === 3 ? 2 : 1)">
+      <button
+        type="button"
+        class="btn-secondary"
+        (click)="reviewStep === 1 ? closeModal() : setReviewStep(reviewStep === 3 ? 2 : 1)"
+      >
         {{ reviewStep === 1 ? 'Cancel' : 'Back' }}
       </button>
 
-      <div class="footer-guidance" *ngIf="reviewStep === 2 && !hasExtractedText(selectedSubmission.id)">
+      <div
+        class="footer-guidance"
+        *ngIf="reviewStep === 2 && !hasExtractedText(selectedSubmission.id)"
+      >
         Extract code to continue.
       </div>
-      <div class="footer-guidance" *ngIf="reviewStep === 2 && hasExtractedText(selectedSubmission.id) && !selectedQuestionId && !selectedSubmission.questions">
-        Go back to Details and select a question before grading.
+      <div
+        class="footer-guidance"
+        *ngIf="reviewStep === 2 && hasExtractedText(selectedSubmission.id) && !hasCompleteComparisonContext()"
+      >
+        Go back to Details and complete the comparison fields before grading.
       </div>
 
       <button
@@ -300,9 +475,13 @@
         type="button"
         class="btn-primary"
         (click)="continueFromDetails()"
-        [disabled]="savingTopic || !selectedQuestionId"
+        [disabled]="savingTopic || loadingComparisonContext || !hasCompleteComparisonContext()"
       >
-        <span class="button-spinner" *ngIf="savingTopic" aria-hidden="true"></span>
+        <span
+          class="button-spinner"
+          *ngIf="savingTopic"
+          aria-hidden="true"
+        ></span>
         {{ savingTopic ? 'Saving assignment…' : 'Save and review code' }}
       </button>
 
@@ -313,10 +492,16 @@
         (click)="saveCodeAndContinue()"
         [disabled]="!hasExtractedText(selectedSubmission.id) || isSaving(selectedSubmission.id) || !canOpenGradingStep()"
       >
-        {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save and continue to grading' }}
+        {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save and continue to
+        grading' }}
       </button>
 
-      <button *ngIf="reviewStep === 3" type="button" class="btn-primary" (click)="closeModal()">
+      <button
+        *ngIf="reviewStep === 3"
+        type="button"
+        class="btn-primary"
+        (click)="closeModal()"
+      >
         Finish review
       </button>
     </footer>

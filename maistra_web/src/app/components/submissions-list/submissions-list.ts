@@ -13,33 +13,16 @@ import { CodeEditorComponent } from '../code-editor/code-editor';
 import { Judge0, LogicAnalysisResult, TestCaseResult } from '../judge0/judge0';
 import { Judge0Service } from '../../services/judge0.service';
 import { firstValueFrom } from 'rxjs';
-
-interface TestCase {
-  test_code: string;
-  test_input: string;
-  expected_output: string;
-  mark: number;
-}
-interface SubmissionQuestion {
-  id: string;
-  question_name: string;
-  question_type: 'function' | 'program';
-  model_answer: string;
-  test_cases: TestCase[];
-}
-
-interface Submission {
-  id: string;
-  image_url: string;
-  student_name?: string;
-  captured_at: string;
-  status?: string;
-  extracted_text?: string;
-  verified_text?: string;
-  topic?: string;
-  question_id?: string;
-  questions?: SubmissionQuestion | SubmissionQuestion[];
-}
+import {
+  Assessment,
+  AssessmentQuestion,
+  AssessmentRosterEntry,
+  BlockSection,
+  Student,
+  Submission,
+  SubmissionQuestion,
+  SupabaseRelation,
+} from '../../models/submission.models';
 
 interface TopicGroup {
   topic: string;
@@ -58,7 +41,13 @@ type SubmissionFilter = 'all' | 'new' | 'extracted' | 'verified' | 'graded';
 })
 export class SubmissionsListComponent implements OnInit, OnDestroy {
   @ViewChild('codeEditor') codeEditor?: CodeEditorComponent;
+  selectedAssessmentId = '';
+  selectedBlockSectionId = '';
+  selectedStudentId = '';
   selectedQuestionId = '';
+  assessments: Assessment[] = [];
+  assessmentQuestions: AssessmentQuestion[] = [];
+  assessmentRoster: AssessmentRosterEntry[] = [];
   questions: SubmissionQuestion[] = [];
   submissions: Submission[] = [];
   groupedSubmissions: TopicGroup[] = [];
@@ -88,10 +77,14 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   submissionRunOutput: Record<string, string> = {};
   submissionTestResults: Record<string, TestCaseResult[]> = {};
   submissionLogicResults: Record<string, LogicAnalysisResult[]> = {};
+  similarityState: Record<string, string> = {};
+  comparisonContextError = '';
+  loadingComparisonContext = false;
 
   private subscription?: ReturnType<SupabaseService['subscribeToSubmissions']>;
   private saveStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private saveGenerations = new Map<string, number>();
+  private contextLoadGeneration = 0;
   private destroyed = false;
 
   constructor(
@@ -103,6 +96,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     await this.loadQuestions();
+    await this.loadSubmissionContextOptions();
     await this.loadSubmissions();
 
     this.subscription = this.supabase.subscribeToSubmissions(() => {
@@ -158,6 +152,92 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  async loadSubmissionContextOptions(assessmentId?: string): Promise<void> {
+    const generation = ++this.contextLoadGeneration;
+    this.loadingComparisonContext = true;
+    this.comparisonContextError = '';
+
+    try {
+      const options =
+        await this.supabase.getSubmissionContextOptions(assessmentId);
+      if (this.destroyed || generation !== this.contextLoadGeneration) return;
+
+      this.assessments = options.assessments;
+      this.assessmentQuestions = options.assessmentQuestions;
+      this.assessmentRoster = options.roster;
+    } catch (error) {
+      if (this.destroyed || generation !== this.contextLoadGeneration) return;
+      console.error('Failed to load submission comparison context:', error);
+      this.comparisonContextError =
+        'Assessment and roster options could not be loaded.';
+    } finally {
+      if (!this.destroyed && generation === this.contextLoadGeneration) {
+        this.loadingComparisonContext = false;
+        this.cdr.detectChanges();
+      }
+    }
+  }
+
+  getAvailableQuestions(assessmentId: string): SubmissionQuestion[] {
+    const questions = this.assessmentQuestions
+      .filter((entry) => entry.assessment_id === assessmentId)
+      .map((entry) => this.firstRelation(entry.questions))
+      .filter((question): question is SubmissionQuestion => !!question);
+
+    return this.uniqueById(questions);
+  }
+
+  getAvailableSections(assessmentId: string): BlockSection[] {
+    const sections = this.assessmentRoster
+      .filter((entry) => entry.assessment_id === assessmentId)
+      .map((entry) => this.firstRelation(entry.block_sections))
+      .filter((section): section is BlockSection => !!section);
+
+    return this.uniqueById(sections).sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+  }
+
+  getAvailableStudents(assessmentId: string, sectionId: string): Student[] {
+    const students = this.assessmentRoster
+      .filter(
+        (entry) =>
+          entry.assessment_id === assessmentId &&
+          entry.block_section_id === sectionId,
+      )
+      .map((entry) => this.firstRelation(entry.students))
+      .filter((student): student is Student => !!student);
+
+    return this.uniqueById(students).sort((left, right) =>
+      left.display_name.localeCompare(right.display_name),
+    );
+  }
+
+  hasCompleteComparisonContext(): boolean {
+    return (
+      !!this.selectedAssessmentId &&
+      !!this.selectedBlockSectionId &&
+      !!this.selectedStudentId &&
+      !!this.selectedQuestionId &&
+      this.assessments.some(
+        (assessment) => assessment.id === this.selectedAssessmentId,
+      ) &&
+      this.getAvailableQuestions(this.selectedAssessmentId).some(
+        (question) => question.id === this.selectedQuestionId,
+      ) &&
+      this.getAvailableStudents(
+        this.selectedAssessmentId,
+        this.selectedBlockSectionId,
+      ).some((student) => student.id === this.selectedStudentId)
+    );
+  }
+
+  getComparisonContextStatus(): string {
+    return this.hasCompleteComparisonContext()
+      ? 'Ready for similarity comparison'
+      : 'Missing comparison details';
+  }
+
   groupSubmissions() {
     const map = new Map<string, Submission[]>();
     const query = this.searchQuery.trim().toLowerCase();
@@ -208,6 +288,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   openModal(submission: Submission) {
     this.selectedSubmission = { ...submission };
     this.editableTopic = submission.topic || 'Uncategorized';
+    this.selectedAssessmentId = submission.assessment_id || '';
+    this.selectedBlockSectionId = submission.block_section_id || '';
+    this.selectedStudentId = submission.student_id || '';
     const linkedQuestion = this.getLinkedQuestion(submission);
     this.selectedQuestionId =
       submission.question_id || linkedQuestion?.id || '';
@@ -224,6 +307,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (saved && !this.editableText[submission.id]) {
       this.editableText[submission.id] = saved;
     }
+
+    if (this.selectedAssessmentId) {
+      void this.loadSubmissionContextOptions(this.selectedAssessmentId);
+    }
   }
 
   closeModal() {
@@ -237,7 +324,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   }
 
   async continueFromDetails() {
-    if (!this.selectedQuestionId) return;
+    if (!this.hasCompleteComparisonContext()) return;
 
     const saved = await this.saveSubmissionDetails();
     if (saved) {
@@ -263,21 +350,26 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.savingTopic = true;
     this.detailsSaveStatus = '';
     try {
-      await this.supabase.updateSubmissionDetails(
-        this.selectedSubmission.id,
-        this.editableTopic,
-        this.selectedQuestionId || null,
-      );
+      await this.supabase.updateSubmissionDetails(this.selectedSubmission.id, {
+        topic: this.editableTopic,
+        assessment_id: this.selectedAssessmentId,
+        question_id: this.selectedQuestionId,
+        student_id: this.selectedStudentId,
+        block_section_id: this.selectedBlockSectionId,
+      });
       const s = this.submissions.find(
         (x) => x.id === this.selectedSubmission!.id,
       );
+      const comparisonChanged = this.hasSubmissionIdentityChanged(
+        this.selectedSubmission,
+      );
       if (s) {
-        s.topic = this.editableTopic;
-        s.question_id = this.selectedQuestionId || undefined;
+        this.applySelectedContext(s);
       }
-      this.selectedSubmission.topic = this.editableTopic;
-      this.selectedSubmission.question_id =
-        this.selectedQuestionId || undefined;
+      this.applySelectedContext(this.selectedSubmission);
+      if (comparisonChanged) {
+        this.clearGroupDependentResults(this.selectedSubmission.id);
+      }
       this.groupSubmissions();
       this.detailsSaveStatus = 'saved';
       this.cdr.detectChanges();
@@ -448,14 +540,75 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.codeEditor?.format();
   }
 
+  async onSelectedAssessmentChange(assessmentId: string) {
+    const changed = assessmentId !== this.selectedAssessmentId;
+    const previousQuestionId = this.selectedQuestionId;
+    const previousSectionId = this.selectedBlockSectionId;
+    const previousStudentId = this.selectedStudentId;
+    this.selectedAssessmentId = assessmentId;
+
+    if (changed) this.clearCurrentGroupDependentResults();
+
+    if (!assessmentId) {
+      this.assessmentQuestions = [];
+      this.assessmentRoster = [];
+      this.selectedQuestionId = '';
+      this.selectedBlockSectionId = '';
+      this.selectedStudentId = '';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    await this.loadSubmissionContextOptions(assessmentId);
+    if (this.selectedAssessmentId !== assessmentId) return;
+
+    this.selectedQuestionId = this.getAvailableQuestions(assessmentId).some(
+      (question) => question.id === previousQuestionId,
+    )
+      ? previousQuestionId
+      : '';
+    this.selectedBlockSectionId = this.getAvailableSections(assessmentId).some(
+      (section) => section.id === previousSectionId,
+    )
+      ? previousSectionId
+      : '';
+    this.selectedStudentId = this.getAvailableStudents(
+      assessmentId,
+      this.selectedBlockSectionId,
+    ).some((student) => student.id === previousStudentId)
+      ? previousStudentId
+      : '';
+    this.cdr.detectChanges();
+  }
+
+  onSelectedBlockSectionChange(sectionId: string) {
+    if (sectionId !== this.selectedBlockSectionId) {
+      this.clearCurrentGroupDependentResults();
+    }
+    this.selectedBlockSectionId = sectionId;
+    if (
+      !this.getAvailableStudents(this.selectedAssessmentId, sectionId).some(
+        (student) => student.id === this.selectedStudentId,
+      )
+    ) {
+      this.selectedStudentId = '';
+    }
+    this.cdr.detectChanges();
+  }
+
+  onSelectedStudentChange(studentId: string) {
+    if (studentId !== this.selectedStudentId) {
+      this.clearCurrentGroupDependentResults();
+    }
+    this.selectedStudentId = studentId;
+    this.cdr.detectChanges();
+  }
+
   onSelectedQuestionChange(questionId: string) {
+    if (questionId !== this.selectedQuestionId) {
+      this.clearCurrentGroupDependentResults();
+    }
     this.selectedQuestionId = questionId;
-
-    if (!this.selectedSubmission) return;
-
-    this.selectedSubmission.question_id = questionId || undefined;
-
-    this.clearExecutionResults(this.selectedSubmission.id);
     this.cdr.detectChanges();
   }
 
@@ -597,7 +750,35 @@ ${testCase.test_code}
   }
 
   getSelectedQuestion() {
-    return this.questions.find((q) => q.id === this.selectedQuestionId) || null;
+    return (
+      this.getAvailableQuestions(this.selectedAssessmentId).find(
+        (question) => question.id === this.selectedQuestionId,
+      ) ||
+      this.questions.find(
+        (question) => question.id === this.selectedQuestionId,
+      ) ||
+      null
+    );
+  }
+
+  getSelectedAssessmentName(): string {
+    return (
+      this.assessments.find(
+        (assessment) => assessment.id === this.selectedAssessmentId,
+      )?.name ||
+      this.getLinkedAssessment()?.name ||
+      'Assessment not assigned'
+    );
+  }
+
+  getSelectedBlockSectionName(): string {
+    return (
+      this.getAvailableSections(this.selectedAssessmentId).find(
+        (section) => section.id === this.selectedBlockSectionId,
+      )?.name ||
+      this.getLinkedBlockSection()?.name ||
+      'Section not assigned'
+    );
   }
 
   getExecutionSourceCode(submission: Submission | null): string {
@@ -656,6 +837,81 @@ ${firstTestCase.test_code}
     this.submissionRunOutput[id] = '';
     this.submissionTestResults[id] = [];
     this.submissionLogicResults[id] = [];
+  }
+
+  private clearCurrentGroupDependentResults() {
+    if (this.selectedSubmission) {
+      this.clearGroupDependentResults(this.selectedSubmission.id);
+    }
+  }
+
+  private clearGroupDependentResults(id: string) {
+    this.clearExecutionResults(id);
+    delete this.similarityState[id];
+  }
+
+  private hasSubmissionIdentityChanged(submission: Submission): boolean {
+    return (
+      (submission.assessment_id || '') !== this.selectedAssessmentId ||
+      (submission.question_id || '') !== this.selectedQuestionId ||
+      (submission.student_id || '') !== this.selectedStudentId ||
+      (submission.block_section_id || '') !== this.selectedBlockSectionId
+    );
+  }
+
+  private applySelectedContext(submission: Submission) {
+    const assessment =
+      this.assessments.find(
+        (option) => option.id === this.selectedAssessmentId,
+      ) || null;
+    const question = this.getSelectedQuestion();
+    const student =
+      this.getAvailableStudents(
+        this.selectedAssessmentId,
+        this.selectedBlockSectionId,
+      ).find((option) => option.id === this.selectedStudentId) || null;
+    const section =
+      this.getAvailableSections(this.selectedAssessmentId).find(
+        (option) => option.id === this.selectedBlockSectionId,
+      ) || null;
+
+    submission.topic = this.editableTopic;
+    submission.assessment_id = this.selectedAssessmentId;
+    submission.question_id = this.selectedQuestionId;
+    submission.student_id = this.selectedStudentId;
+    submission.block_section_id = this.selectedBlockSectionId;
+    submission.questions = question;
+    submission.assessment_questions = assessment
+      ? { assessments: assessment }
+      : null;
+    submission.assessment_roster = {
+      students: student,
+      block_sections: section,
+    };
+    if (student) submission.student_name = student.display_name;
+  }
+
+  private getLinkedAssessment(): Assessment | null {
+    const assignment = this.firstRelation(
+      this.selectedSubmission?.assessment_questions,
+    );
+    return this.firstRelation(assignment?.assessments);
+  }
+
+  private getLinkedBlockSection(): BlockSection | null {
+    const roster = this.firstRelation(
+      this.selectedSubmission?.assessment_roster,
+    );
+    return this.firstRelation(roster?.block_sections);
+  }
+
+  private firstRelation<T>(relation?: SupabaseRelation<T>): T | null {
+    if (Array.isArray(relation)) return relation[0] || null;
+    return relation || null;
+  }
+
+  private uniqueById<T extends { id: string }>(items: T[]): T[] {
+    return Array.from(new Map(items.map((item) => [item.id, item])).values());
   }
 
   private getSubmissionQuestion(

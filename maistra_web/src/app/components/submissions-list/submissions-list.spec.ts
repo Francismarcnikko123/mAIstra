@@ -34,6 +34,8 @@ describe('SubmissionsListComponent save feedback', () => {
       id,
       image_url: 'https://example.test/submission.png',
       captured_at: '2026-07-28T00:00:00.000Z',
+      verified_version: 0,
+      is_current: true,
     };
     component.editableText[id] = `text for ${id}`;
   }
@@ -52,6 +54,7 @@ describe('SubmissionsListComponent save feedback', () => {
   function createWorkflowComponent(options?: {
     updateSubmissionDetails?: ReturnType<typeof vi.fn>;
     updateSubmissionText?: ReturnType<typeof vi.fn>;
+    getSubmissionContextOptions?: ReturnType<typeof vi.fn>;
     post?: ReturnType<typeof vi.fn>;
   }) {
     const cdr = { detectChanges: vi.fn() } as unknown as ChangeDetectorRef;
@@ -59,11 +62,20 @@ describe('SubmissionsListComponent save feedback', () => {
       options?.updateSubmissionDetails ?? vi.fn().mockResolvedValue(undefined);
     const updateSubmissionText =
       options?.updateSubmissionText ?? vi.fn().mockResolvedValue(undefined);
+    const getSubmissionContextOptions =
+      options?.getSubmissionContextOptions ??
+      vi.fn().mockResolvedValue({
+        assessments: [],
+        assessmentQuestions: [],
+        roster: [],
+      });
     const post =
-      options?.post ?? vi.fn().mockReturnValue(of({ cleaned_text: 'int main() {}' }));
+      options?.post ??
+      vi.fn().mockReturnValue(of({ cleaned_text: 'int main() {}' }));
     const supabase = {
       updateSubmissionDetails,
       updateSubmissionText,
+      getSubmissionContextOptions,
     } as unknown as SupabaseService;
     const http = { post } as unknown as HttpClient;
     const component = new SubmissionsListComponent(
@@ -79,7 +91,74 @@ describe('SubmissionsListComponent save feedback', () => {
       post,
       updateSubmissionDetails,
       updateSubmissionText,
+      getSubmissionContextOptions,
     };
+  }
+
+  function configureComparisonContext(
+    component: SubmissionsListComponent,
+    assessmentId = 'assessment-1',
+  ) {
+    const question = {
+      id: 'question-1',
+      question_name: 'Addition',
+      question_type: 'program' as const,
+      model_answer: 'int main(void) { return 0; }',
+      test_cases: [
+        {
+          test_code: '',
+          test_input: '2 3',
+          expected_output: '5',
+          mark: 2,
+        },
+      ],
+    };
+    component.assessments = [
+      {
+        id: assessmentId,
+        name: 'Midterm',
+        status: 'active',
+        starts_at: null,
+      },
+    ];
+    component.assessmentQuestions = [
+      {
+        assessment_id: assessmentId,
+        question_id: question.id,
+        starter_code: '',
+        position: 1,
+        questions: question,
+      },
+    ];
+    component.assessmentRoster = [
+      {
+        assessment_id: assessmentId,
+        student_id: 'student-1',
+        block_section_id: 'section-a',
+        students: {
+          id: 'student-1',
+          student_number: '2026-001',
+          display_name: 'Ana',
+        },
+        block_sections: { id: 'section-a', name: 'BSCS 2A' },
+      },
+      {
+        assessment_id: assessmentId,
+        student_id: 'student-2',
+        block_section_id: 'section-a',
+        students: {
+          id: 'student-2',
+          student_number: '2026-002',
+          display_name: 'Ben',
+        },
+        block_sections: { id: 'section-a', name: 'BSCS 2A' },
+      },
+    ];
+    component.questions = [question];
+    component.selectedAssessmentId = assessmentId;
+    component.selectedBlockSectionId = 'section-a';
+    component.selectedStudentId = 'student-1';
+    component.selectedQuestionId = question.id;
   }
 
   it('keeps a second save confirmation visible for its full three seconds', async () => {
@@ -228,6 +307,8 @@ describe('SubmissionsListComponent save feedback', () => {
       id: 'submission-1',
       image_url: 'https://example.test/submission.png',
       captured_at: '2026-07-28T00:00:00.000Z',
+      verified_version: 0,
+      is_current: true,
     };
     component.selectedSubmission = submission;
     component.editableText['submission-1'] =
@@ -324,6 +405,8 @@ describe('SubmissionsListComponent save feedback', () => {
       image_url: 'https://example.test/submission.png',
       captured_at: '2026-07-28T00:00:00.000Z',
       verified_text: 'stale code',
+      verified_version: 1,
+      is_current: true,
     };
     component.editableText['submission-1'] = 'stale code';
     component.updateSubmissionCode('submission-1', 'edited code');
@@ -382,6 +465,8 @@ describe('SubmissionsListComponent save feedback', () => {
       id: 'submission-1',
       image_url: 'https://example.test/submission.png',
       captured_at: '2026-07-28T00:00:00.000Z',
+      verified_version: 0,
+      is_current: true,
     };
     component.selectedSubmission = submission;
     component.editableText['submission-1'] = 'int main(void) { return 0; }';
@@ -420,6 +505,8 @@ describe('SubmissionsListComponent save feedback', () => {
       id: 'submission-1',
       image_url: 'https://example.test/submission.png',
       captured_at: '2026-07-28T00:00:00.000Z',
+      verified_version: 0,
+      is_current: true,
       questions: {
         id: 'stale-question',
         question_name: 'Old linked question',
@@ -457,6 +544,8 @@ describe('SubmissionsListComponent save feedback', () => {
       id: 'submission-1',
       image_url: 'https://example.test/submission.png',
       captured_at: '2026-07-28T00:00:00.000Z',
+      verified_version: 0,
+      is_current: true,
     };
     component.submissionRunOutput['submission-1'] = 'sum= 32765';
     component.submissionCheckStatus['submission-1'] = 'Wrong Answer';
@@ -483,9 +572,10 @@ describe('SubmissionsListComponent save feedback', () => {
     expect(component.submissionLogicResults['submission-1']).toEqual([]);
   });
 
-  it('does not leave Details until a question is selected', async () => {
+  it('does not leave Details until every comparison field is selected', async () => {
     const { component, updateSubmissionDetails } = createWorkflowComponent();
     selectSubmission(component, 'submission-1');
+    component.selectedQuestionId = 'question-1';
     component.reviewStep = 1;
 
     await component.continueFromDetails();
@@ -499,16 +589,121 @@ describe('SubmissionsListComponent save feedback', () => {
     selectSubmission(component, 'submission-1');
     component.submissions = [component.selectedSubmission!];
     component.editableTopic = 'Loops';
-    component.selectedQuestionId = 'question-1';
+    configureComparisonContext(component);
 
     await component.continueFromDetails();
 
-    expect(updateSubmissionDetails).toHaveBeenCalledWith(
-      'submission-1',
-      'Loops',
-      'question-1',
-    );
+    expect(updateSubmissionDetails).toHaveBeenCalledWith('submission-1', {
+      topic: 'Loops',
+      assessment_id: 'assessment-1',
+      question_id: 'question-1',
+      student_id: 'student-1',
+      block_section_id: 'section-a',
+    });
     expect(component.reviewStep).toBe(2);
+  });
+
+  it('filters questions and roster choices by assessment and section', () => {
+    const { component } = createWorkflowComponent();
+    configureComparisonContext(component);
+    component.assessmentQuestions.push({
+      assessment_id: 'assessment-2',
+      question_id: 'question-2',
+      starter_code: '',
+      position: 1,
+      questions: {
+        id: 'question-2',
+        question_name: 'Arrays',
+        question_type: 'program',
+        model_answer: 'int main(void) { return 0; }',
+        test_cases: [],
+      },
+    });
+
+    expect(
+      component.getAvailableQuestions('assessment-1').map((q) => q.id),
+    ).toEqual(['question-1']);
+    expect(
+      component.getAvailableSections('assessment-1').map((s) => s.id),
+    ).toEqual(['section-a']);
+    expect(
+      component
+        .getAvailableStudents('assessment-1', 'section-a')
+        .map((student) => student.id),
+    ).toEqual(['student-1', 'student-2']);
+  });
+
+  it('clears group choices that are invalid in a newly selected assessment', async () => {
+    const getSubmissionContextOptions = vi.fn().mockResolvedValue({
+      assessments: [
+        {
+          id: 'assessment-2',
+          name: 'Final',
+          status: 'active',
+          starts_at: null,
+        },
+      ],
+      assessmentQuestions: [],
+      roster: [],
+    });
+    const { component } = createWorkflowComponent({
+      getSubmissionContextOptions,
+    });
+    selectSubmission(component, 'submission-1');
+    configureComparisonContext(component);
+
+    await component.onSelectedAssessmentChange('assessment-2');
+
+    expect(component.selectedAssessmentId).toBe('assessment-2');
+    expect(component.selectedQuestionId).toBe('');
+    expect(component.selectedBlockSectionId).toBe('');
+    expect(component.selectedStudentId).toBe('');
+  });
+
+  it('shows legacy submissions as missing comparison details without guessing', () => {
+    const { component } = createWorkflowComponent();
+
+    component.openModal({
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-08-18T00:00:00.000Z',
+      verified_version: 0,
+      is_current: true,
+    });
+
+    expect(component.selectedAssessmentId).toBe('');
+    expect(component.selectedBlockSectionId).toBe('');
+    expect(component.selectedStudentId).toBe('');
+    expect(component.selectedQuestionId).toBe('');
+    expect(component.getComparisonContextStatus()).toBe(
+      'Missing comparison details',
+    );
+  });
+
+  it('clears grading and similarity state when group identity changes', () => {
+    const { component } = createWorkflowComponent();
+    selectSubmission(component, 'submission-1');
+    configureComparisonContext(component);
+    component.submissionRunOutput['submission-1'] = '5';
+    component.submissionCheckStatus['submission-1'] = 'Accepted';
+    component.submissionTestResults['submission-1'] = [
+      {
+        caseNumber: 1,
+        stdin: '2 3',
+        expectedOutput: '5',
+        actualOutput: '5',
+        status: 'Accepted',
+        passed: true,
+      },
+    ];
+    component.similarityState['submission-1'] = 'complete';
+
+    component.onSelectedStudentChange('student-2');
+
+    expect(component.submissionRunOutput['submission-1']).toBe('');
+    expect(component.submissionCheckStatus['submission-1']).toBe('');
+    expect(component.submissionTestResults['submission-1']).toEqual([]);
+    expect(component.similarityState['submission-1']).toBeUndefined();
   });
 
   it.each([
@@ -527,6 +722,8 @@ describe('SubmissionsListComponent save feedback', () => {
       id: 'submission-1',
       image_url: 'https://example.test/submission.png',
       captured_at: '2026-08-18T00:00:00.000Z',
+      verified_version: 0,
+      is_current: true,
       questions: asArray ? [question] : question,
     };
 
@@ -542,18 +739,22 @@ describe('SubmissionsListComponent save feedback', () => {
 
     expect(component.canOpenGradingStep()).toBe(false);
 
-    component.questions = [{
-      id: 'question-1',
-      question_name: 'Addition',
-      question_type: 'program',
-      model_answer: 'int main(void) { return 0; }',
-      test_cases: [{
-        test_code: '',
-        test_input: '2 3',
-        expected_output: '5',
-        mark: 2,
-      }],
-    }];
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'Addition',
+        question_type: 'program',
+        model_answer: 'int main(void) { return 0; }',
+        test_cases: [
+          {
+            test_code: '',
+            test_input: '2 3',
+            expected_output: '5',
+            mark: 2,
+          },
+        ],
+      },
+    ];
     component.selectedQuestionId = 'question-1';
 
     expect(component.canOpenGradingStep()).toBe(true);
@@ -570,6 +771,8 @@ describe('SubmissionsListComponent save feedback', () => {
       id: `submission-${status}`,
       image_url: 'https://example.test/submission.png',
       captured_at: '2026-08-18T00:00:00.000Z',
+      verified_version: status === 'verified' || status === 'graded' ? 1 : 0,
+      is_current: true,
       status,
     };
 
@@ -577,9 +780,9 @@ describe('SubmissionsListComponent save feedback', () => {
   });
 
   it('keeps the user in code review and displays an OCR error on failure', async () => {
-    const post = vi.fn().mockReturnValue(
-      throwError(() => new Error('OCR unavailable')),
-    );
+    const post = vi
+      .fn()
+      .mockReturnValue(throwError(() => new Error('OCR unavailable')));
     const { component } = createWorkflowComponent({ post });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     selectSubmission(component, 'submission-1');
@@ -598,18 +801,22 @@ describe('SubmissionsListComponent save feedback', () => {
     const updateSubmissionText = vi.fn().mockResolvedValue(undefined);
     const { component } = createWorkflowComponent({ updateSubmissionText });
     selectSubmission(component, 'submission-1');
-    component.questions = [{
-      id: 'question-1',
-      question_name: 'Addition',
-      question_type: 'program',
-      model_answer: 'int main(void) { return 0; }',
-      test_cases: [{
-        test_code: '',
-        test_input: '2 3',
-        expected_output: '5',
-        mark: 2,
-      }],
-    }];
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'Addition',
+        question_type: 'program',
+        model_answer: 'int main(void) { return 0; }',
+        test_cases: [
+          {
+            test_code: '',
+            test_input: '2 3',
+            expected_output: '5',
+            mark: 2,
+          },
+        ],
+      },
+    ];
     component.selectedQuestionId = 'question-1';
     component.reviewStep = 2;
 
@@ -626,18 +833,22 @@ describe('SubmissionsListComponent save feedback', () => {
     const { component } = createWorkflowComponent({ updateSubmissionText });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     selectSubmission(component, 'submission-1');
-    component.questions = [{
-      id: 'question-1',
-      question_name: 'Addition',
-      question_type: 'program',
-      model_answer: 'int main(void) { return 0; }',
-      test_cases: [{
-        test_code: '',
-        test_input: '2 3',
-        expected_output: '5',
-        mark: 2,
-      }],
-    }];
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'Addition',
+        question_type: 'program',
+        model_answer: 'int main(void) { return 0; }',
+        test_cases: [
+          {
+            test_code: '',
+            test_input: '2 3',
+            expected_output: '5',
+            mark: 2,
+          },
+        ],
+      },
+    ];
     component.selectedQuestionId = 'question-1';
     component.reviewStep = 2;
 

@@ -200,7 +200,10 @@ button:disabled {
   color: inherit;
   background: #fff;
   text-align: left;
-  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .submission-card:hover,
@@ -489,6 +492,25 @@ button:disabled {
 .field-group .field-error {
   color: #b91c1c;
   font-weight: 600;
+}
+
+.comparison-context-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border: 1px solid #bbf7d0;
+  border-radius: 9px;
+  color: #166534;
+  background: #f0fdf4;
+  font-size: 12px;
+}
+
+.comparison-context-summary.incomplete {
+  border-color: #fed7aa;
+  color: #9a3412;
+  background: #fff7ed;
 }
 
 .status-summary,

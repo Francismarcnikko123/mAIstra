@@ -169,21 +169,7 @@ export class SupabaseService {
   async updateSubmissionDetails(
     id: string,
     details: SubmissionDetailsUpdate,
-  ): Promise<void>;
-  async updateSubmissionDetails(
-    id: string,
-    topic: string,
-    questionId: string | null,
-  ): Promise<void>;
-  async updateSubmissionDetails(
-    id: string,
-    detailsOrTopic: SubmissionDetailsUpdate | string,
-    questionId?: string | null,
   ): Promise<void> {
-    const details =
-      typeof detailsOrTopic === 'string'
-        ? { topic: detailsOrTopic, question_id: questionId ?? null }
-        : detailsOrTopic;
     const { error } = await this.supabase
       .from('submissions')
       .update(details)
