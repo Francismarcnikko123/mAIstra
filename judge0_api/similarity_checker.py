@@ -7,13 +7,21 @@ from typing import Any, Sequence
 
 from tree_sitter import Node, Point
 
-from logic_checker import C_PARSER, find_declarator_identifier, node_text, walk_tree
+try:
+    from .logic_checker import (
+        C_PARSER,
+        node_text,
+        walk_tree,
+    )
+except ImportError:
+    from logic_checker import C_PARSER, node_text, walk_tree
 
 
 _ATOMIC_LITERAL_TYPES = {"char_literal", "string_literal"}
 K_GRAM_SIZE = 5
 WINNOW_WINDOW_SIZE = 4
 MIN_MATCH_TOKENS = 12
+MIN_STARTER_MATCH_TOKENS = 8
 REVIEW_COVERAGE_THRESHOLD = 0.60
 
 
@@ -72,13 +80,6 @@ class _MatchingBlock:
         return len(self.left_indexes)
 
 
-@dataclass(frozen=True)
-class _FunctionScope:
-    start_byte: int
-    end_byte: int
-    replacements: dict[str, str]
-
-
 def _source_point(point: Point) -> SourcePoint:
     return SourcePoint(row=point.row, column=point.column)
 
@@ -108,66 +109,116 @@ def _is_inside_atomic_literal(node: Node) -> bool:
     return False
 
 
-def _declared_names(node: Node, source: bytes) -> list[str]:
-    names: list[str] = []
-    for declarator in node.children_by_field_name("declarator"):
-        name = find_declarator_identifier(declarator, source)
-        if name:
-            names.append(name)
-    return names
+def _declarator_chain(node: Node) -> tuple[Node, ...]:
+    chain: list[Node] = []
+    current: Node | None = node
+    while current is not None:
+        chain.append(current)
+        nested = current.child_by_field_name("declarator")
+        if nested is None and current.type == "parenthesized_declarator":
+            nested = next(iter(current.named_children), None)
+        current = nested
+    return tuple(chain)
 
 
-def _function_scopes(root: Node, source: bytes) -> tuple[_FunctionScope, ...]:
-    scopes: list[_FunctionScope] = []
-
+def _identifier_replacements(root: Node, source: bytes) -> dict[int, str]:
+    """Resolve local references in source order, with block and loop scopes."""
+    replacements: dict[int, str] = {}
     for function in (
         node for node in walk_tree(root) if node.type == "function_definition"
     ):
-        replacements: dict[str, str] = {}
-        declarator = function.child_by_field_name("declarator")
-        body = function.child_by_field_name("body")
+        scopes: list[dict[str, str]] = [{}]
+        counts = {"PARAM": 0, "LOCAL": 0}
 
-        parameter_names: list[str] = []
-        if declarator is not None:
-            for node in walk_tree(declarator):
-                if node.type == "parameter_declaration":
-                    parameter_names.extend(_declared_names(node, source))
+        def visit_declarator(node: Node, declared_name: Node) -> None:
+            # Prototype parameter names do not bind names in the caller's body.
+            if node == declared_name or node.type == "parameter_list":
+                return
+            if node.type == "identifier":
+                visit(node)
+                return
+            for child in node.children:
+                visit_declarator(child, declared_name)
 
-        for name in parameter_names:
-            if name not in replacements:
-                replacements[name] = f"PARAM_{len(replacements) + 1}"
-
-        local_count = 0
-        if body is not None:
-            for node in walk_tree(body):
-                if node.type != "declaration":
-                    continue
-                for name in _declared_names(node, source):
-                    if name in replacements:
-                        continue
-                    local_count += 1
-                    replacements[name] = f"LOCAL_{local_count}"
-
-        scopes.append(
-            _FunctionScope(
-                start_byte=function.start_byte,
-                end_byte=function.end_byte,
-                replacements=replacements,
+        def declare(node: Node, prefix: str) -> None:
+            initializer = node.child_by_field_name("value")
+            core = (
+                node.child_by_field_name("declarator")
+                if node.type == "init_declarator"
+                else node
             )
-        )
+            if core is None:
+                return
+            chain = _declarator_chain(core)
+            identifier = chain[-1]
+            if identifier.type != "identifier":
+                return
+            # Array bounds precede the new binding, while its initializer follows
+            # it. In `int n[n]`, the bound therefore resolves the outer n.
+            visit_declarator(core, identifier)
+            name = node_text(identifier, source)
+            nearest_derived = next(
+                (
+                    part.type
+                    for part in reversed(chain[:-1])
+                    if part.type in {
+                        "function_declarator", "pointer_declarator", "array_declarator"
+                    }
+                ),
+                None,
+            )
+            if prefix == "LOCAL" and nearest_derived == "function_declarator":
+                scopes[-1][name] = name
+            else:
+                counts[prefix] += 1
+                replacement = f"{prefix}_{counts[prefix]}"
+                replacements[identifier.start_byte] = replacement
+                scopes[-1][name] = replacement
+            if initializer is not None:
+                visit(initializer)
 
-    return tuple(scopes)
+        def visit(node: Node) -> None:
+            if node.type in {"type_definition", "parameter_list", "function_definition"}:
+                return
+            if node.type in {"compound_statement", "for_statement"}:
+                scopes.append({})
+                for child in node.children:
+                    visit(child)
+                scopes.pop()
+            elif node.type == "declaration":
+                for declarator in node.children_by_field_name("declarator"):
+                    declare(declarator, "LOCAL")
+            elif node.type == "identifier":
+                name = node_text(node, source)
+                for scope in reversed(scopes):
+                    if name in scope:
+                        replacements[node.start_byte] = scope[name]
+                        break
+            else:
+                for child in node.children:
+                    visit(child)
 
+        declarator = function.child_by_field_name("declarator")
+        if declarator is not None:
+            function_declarator = next(
+                (node for node in reversed(_declarator_chain(declarator))
+                 if node.type == "function_declarator"),
+                None,
+            )
+            parameters = (
+                function_declarator.child_by_field_name("parameters")
+                if function_declarator is not None else None
+            )
+            if parameters is not None:
+                for parameter in parameters.named_children:
+                    if parameter.type == "parameter_declaration":
+                        for node in parameter.children_by_field_name("declarator"):
+                            declare(node, "PARAM")
+        body = function.child_by_field_name("body")
+        if body is not None:
+            visit(body)
 
-def _replacement_for_identifier(
-    node: Node,
-    original: str,
-    scopes: tuple[_FunctionScope, ...],
-) -> str:
-    for scope in scopes:
-        if scope.start_byte <= node.start_byte and node.end_byte <= scope.end_byte:
-            return scope.replacements.get(original, original)
-    return original
+    return replacements
 
 
 def _tokenize(code: str) -> tuple[
@@ -177,7 +228,7 @@ def _tokenize(code: str) -> tuple[
 ]:
     source = (code or "").encode("utf-8")
     root = C_PARSER.parse(source).root_node
-    scopes = _function_scopes(root, source)
+    replacements = _identifier_replacements(root, source)
     tokens: list[NormalizedToken] = []
 
     for node in walk_tree(root):
@@ -195,7 +246,7 @@ def _tokenize(code: str) -> tuple[
             continue
 
         value = (
-            _replacement_for_identifier(node, original, scopes)
+            replacements.get(node.start_byte, original)
             if node.type == "identifier"
             else original
         )
@@ -223,23 +274,24 @@ def _starter_token_indexes(
     student_tokens: tuple[NormalizedToken, ...],
     starter_tokens: tuple[NormalizedToken, ...],
 ) -> set[int]:
-    if not starter_tokens or len(starter_tokens) > len(student_tokens):
+    if not starter_tokens or not student_tokens:
         return set()
 
-    student_values = tuple(token.value for token in student_tokens)
-    starter_values = tuple(token.value for token in starter_tokens)
-    excluded: set[int] = set()
-    index = 0
-
-    while index <= len(student_values) - len(starter_values):
-        end = index + len(starter_values)
-        if student_values[index:end] == starter_values:
-            excluded.update(range(index, end))
-            index = end
-        else:
-            index += 1
-
-    return excluded
+    # Align the supplied sequence once so answers inserted into the template
+    # leave separate starter passages, without erasing every repeated occurrence.
+    # Original spellings handle added declarations shifting placeholder numbers;
+    # normalized spellings handle consistent renaming of supplied variables.
+    alignments: list[set[int]] = []
+    for attribute in ("original", "value"):
+        student_values = tuple(getattr(token, attribute) for token in student_tokens)
+        starter_values = tuple(getattr(token, attribute) for token in starter_tokens)
+        matcher = SequenceMatcher(None, starter_values, student_values, autojunk=False)
+        excluded: set[int] = set()
+        for block in matcher.get_matching_blocks():
+            if block.size >= MIN_STARTER_MATCH_TOKENS:
+                excluded.update(range(block.b, block.b + block.size))
+        alignments.append(excluded)
+    return max(alignments, key=len)
 
 
 def _comparison_segments(

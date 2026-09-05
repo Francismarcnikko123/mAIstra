@@ -71,6 +71,70 @@ def test_each_token_retains_its_original_source_range():
     assert return_token.original == "return"
 
 
+def test_nested_shadowing_is_equivalent_to_consistent_lexical_renaming():
+    left = "int f(int x) { { int x=3; x++; } return x; }"
+    right = "int f(int a) { { int b=3; b++; } return a; }"
+
+    result = compare_c_code(left, right)
+
+    assert result["match_type"] == "normalized_duplicate"
+    assert result["left_coverage"] == 1.0
+
+
+def test_local_declarations_do_not_rename_earlier_global_references():
+    program = normalize_c_code(
+        "int value; int f(void) { int saved=value; { int value=3; value++; } return saved; }"
+    )
+    values = [token.value for token in program.tokens if token.original == "value"]
+
+    assert values == ["value", "value", "LOCAL_2", "LOCAL_2"]
+
+
+def test_for_initializer_binding_ends_at_the_end_of_its_loop():
+    left = "int f(int i) { for (int i=0; i<3; i++) {} return i; }"
+    right = "int f(int x) { for (int j=0; j<3; j++) {} return x; }"
+
+    assert token_values(normalize_c_code(left)) == token_values(normalize_c_code(right))
+
+
+def test_function_declarations_and_type_names_are_preserved():
+    program = normalize_c_code(
+        "int f(int x) { typedef int Count; int helper(int x); Count result=helper(x); return result; }"
+    )
+
+    assert [token.value for token in program.tokens if token.original == "helper"] == [
+        "helper", "helper"
+    ]
+    assert [token.value for token in program.tokens if token.original == "Count"] == [
+        "Count", "Count"
+    ]
+    assert [token.value for token in program.tokens if token.original == "x"] == [
+        "PARAM_1", "x", "PARAM_1"
+    ]
+
+
+def test_function_pointer_variables_are_normalized_without_binding_prototype_names():
+    left = "int f(int a) { int (*callback)(int a); callback=0; return a; }"
+    right = "int f(int x) { int (*operation)(int a); operation=0; return x; }"
+
+    assert token_values(normalize_c_code(left)) == token_values(normalize_c_code(right))
+
+
+def test_declarator_array_bounds_use_the_preceding_binding():
+    program = normalize_c_code("int f(int n) { { int n[n]; } return n; }")
+
+    assert [token.value for token in program.tokens if token.original == "n"] == [
+        "PARAM_1", "LOCAL_1", "PARAM_1", "PARAM_1"
+    ]
+
+
+def test_function_typed_parameters_bind_as_parameters_not_external_functions():
+    left = "int f(int callback(int)) { return callback(1); }"
+    right = "int f(int operation(int)) { return operation(1); }"
+
+    assert token_values(normalize_c_code(left)) == token_values(normalize_c_code(right))
+
+
 def test_starter_code_is_excluded_without_removing_similar_student_logic():
     starter = "int helper(void) { return 7; }"
     student = """
@@ -99,6 +163,55 @@ def test_parse_errors_are_reported_with_source_locations():
     assert program.has_parse_errors is True
     assert program.parse_error_ranges
     assert program.parse_error_ranges[0].start.row >= 0
+
+
+def test_starter_passages_are_excluded_when_student_logic_is_inserted():
+    starter = (
+        'int main(void) { int a=0,b=0; scanf("%d %d",&a,&b); '
+        'printf("%d",a); return 0; }'
+    )
+    left = starter.replace("printf", "a=a+b; printf")
+    right = starter.replace("printf", "a=a*b; printf")
+
+    normalized = normalize_c_code(left, starter)
+    result = compare_c_code(left, right, starter)
+
+    assert sum(token.excluded for token in normalized.tokens) > 20
+    assert "+" in token_values(normalized)
+    assert result["review_recommended"] is False
+    assert result["match_type"] == "insufficient_evidence"
+
+
+def test_short_common_starter_fragments_do_not_erase_student_logic():
+    student = "int answer(void) { return 0; }"
+
+    program = normalize_c_code(student, "return 0;")
+
+    assert not any(token.excluded for token in program.tokens)
+
+
+def test_added_local_declarations_do_not_prevent_unchanged_starter_exclusion():
+    starter = (
+        'int main(void) { int a=0,b=0; scanf("%d %d",&a,&b); '
+        'printf("%d",a); return 0; }'
+    )
+    student = starter.replace("int a", "int extra=1; int a")
+
+    program = normalize_c_code(student, starter)
+
+    assert sum(token.excluded for token in program.tokens) >= 25
+    assert "extra" in [token.original for token in program.tokens if not token.excluded]
+
+
+def test_starter_alignment_does_not_remove_a_second_identical_student_passage():
+    starter = "int helper(void) { return 7; }"
+    student = starter + starter
+
+    program = normalize_c_code(student, starter)
+
+    assert sum(token.excluded for token in program.tokens) == len(
+        normalize_c_code(starter).tokens
+    )
 
 
 def fixture(name: str) -> str:
