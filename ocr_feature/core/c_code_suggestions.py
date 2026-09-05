@@ -11,10 +11,22 @@ overlap:
     automatically, and never edits the text. Each is returned as a suggestion
     the teacher accepts or rejects, with its position and OCR confidence.
 
-The only class of fix that currently belongs here is a function-call
-misspelling (e.g. `printe(` -> `printf`): the trailing `(` makes it clearly a
-call, but the identifier itself is student-authored and could legitimately be
-a custom name, so it must stay a suggestion rather than an auto-edit.
+Two classes of fix live here:
+
+  - A function-call misspelling (e.g. `printe(` -> `printf`): the trailing `(`
+    makes it clearly a call, but the identifier itself is student-authored and
+    could legitimately be a custom name, so it must stay a suggestion rather
+    than an auto-edit.
+  - A likely-misread word INSIDE a printed message (string literal), e.g.
+    `"Pleace enter..."` -> `please`. This is flagging, not fixing: a word in a
+    printf/scanf message is the student's own authored text, and a misspelling
+    there could be the OCR's fault OR the student's own genuine mistake --
+    this module can't tell which. It only points the teacher at the exact
+    word so they compare it with the paper; nothing is ever edited. This is
+    the opposite lane from `_overlaps_literal` used elsewhere in this file,
+    which exists to make sure code-typo suggestions never fire on message
+    text -- this check runs *only* inside message text, and never proposes an
+    edit, only a flag.
 """
 
 import re
@@ -30,6 +42,41 @@ _CALL_FIXES = {
     "printt": "printf",
     "scant": "scanf",
 }
+
+# A small, deliberately narrow set of words common in student console
+# prompts/messages. NOT a general English dictionary -- a broad dictionary
+# would flag legitimate uncommon words the student actually wrote, which is
+# exactly the false-positive this feature must avoid. Only words within a
+# short edit distance of one of these are ever flagged, and only as a
+# question ("compare with the paper"), never as a claimed error.
+_COMMON_MESSAGE_WORDS = {
+    "please", "enter", "valid", "invalid", "number", "digit", "digits",
+    "error", "correct", "incorrect", "exit", "continue", "again", "sum",
+    "average", "total", "result", "value", "values", "hello", "world",
+    "name", "grade", "score", "first", "second", "third", "positive",
+    "negative", "even", "odd", "prime", "factorial", "array", "input",
+    "output", "thank", "you", "welcome", "wrong", "right", "try", "done",
+    "complete", "success", "fail", "failed", "count", "index", "size",
+    "length", "must", "should", "cannot", "need", "required", "greater",
+    "less", "than", "equal", "maximum", "minimum", "largest", "smallest",
+}
+
+_LITERAL_WORD = re.compile(r"[A-Za-z]{3,}")
+
+
+def _edit_distance(a: str, b: str) -> int:
+    """Standard Levenshtein distance -- small inputs (word-length strings),
+    no need for the memory-saving two-row trick used elsewhere for full lines."""
+    if a == b:
+        return 0
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        curr = [i] + [0] * len(b)
+        for j, cb in enumerate(b, 1):
+            cost = 0 if ca == cb else 1
+            curr[j] = min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+        prev = curr
+    return prev[-1]
 
 
 def _line_confidence(detail) -> float | None:
@@ -69,6 +116,65 @@ def _overlaps_literal(match, literal_spans: list[tuple[int, int]]) -> bool:
     )
 
 
+def _literal_word_suggestions(
+    line_number: int,
+    line: str,
+    literal_spans: list[tuple[int, int]],
+    confidence: float | None,
+) -> list[dict]:
+    """Flag words INSIDE message text that closely resemble a common prompt
+    word but don't match it exactly -- e.g. "valind" (paper says "valid").
+    Never claims the word is wrong: it may be the OCR's misread, or the
+    student's own genuine spelling. Only a flag to compare against the paper,
+    never an edit."""
+    if not literal_spans:
+        return []
+
+    out = []
+    for match in _LITERAL_WORD.finditer(line):
+        if not any(
+            match.start() >= start and match.end() <= end
+            for start, end in literal_spans
+        ):
+            continue  # only inside a literal -- code identifiers aren't in scope here
+
+        word = match.group(0)
+        lower = word.lower()
+        if lower in _COMMON_MESSAGE_WORDS:
+            continue  # already a recognized word -- nothing to flag
+
+        # Distance 1 only. Real OCR word-misreads are almost always a single
+        # substituted/inserted/dropped letter (valind->valid, numter->number,
+        # digt->digit, Pleace->please). Allowing distance 2 lets unrelated words
+        # match (printe->prime), which is a false positive this must avoid.
+        threshold = 1
+        best_word = None
+        best_dist = threshold + 1
+        tie = False
+        for candidate in _COMMON_MESSAGE_WORDS:
+            dist = _edit_distance(lower, candidate)
+            if dist > threshold:
+                continue
+            if dist < best_dist:
+                best_dist, best_word, tie = dist, candidate, False
+            elif dist == best_dist:
+                tie = True  # ambiguous which word was meant -- don't guess
+
+        if best_word and not tie:
+            out.append(_suggestion(
+                line_number,
+                match.start(),
+                match.end(),
+                word,
+                best_word,
+                "Word in the printed message doesn't match a common word -- "
+                "may be an OCR misread or the student's own wording.",
+                "literal-word-misread",
+                confidence,
+            ))
+    return out
+
+
 def suggest_c_code(
     text: str,
     line_details: list[dict] | None = None,
@@ -104,5 +210,9 @@ def suggest_c_code(
                     f"function-call-{candidate}",
                     confidence,
                 ))
+
+        suggestions.extend(
+            _literal_word_suggestions(line_number, line, literal_spans, confidence)
+        )
 
     return suggestions
