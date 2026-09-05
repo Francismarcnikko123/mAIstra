@@ -10,9 +10,11 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { SupabaseService } from '../../services/supabase';
 import { CodeEditorComponent } from '../code-editor/code-editor';
+import { SimilarityPanelComponent } from './similarity-panel';
 import { Judge0, LogicAnalysisResult, TestCaseResult } from '../judge0/judge0';
 import { Judge0Service } from '../../services/judge0.service';
 import { firstValueFrom } from 'rxjs';
+import { SimilarityService, SimilarityState, SimilaritySummary, SimilarityDetail } from '../../services/similarity.service';
 import {
   Assessment,
   AssessmentQuestion,
@@ -35,7 +37,7 @@ type SubmissionFilter = 'all' | 'new' | 'extracted' | 'verified' | 'graded';
 @Component({
   selector: 'app-submissions-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, CodeEditorComponent, Judge0],
+  imports: [CommonModule, FormsModule, CodeEditorComponent, Judge0, SimilarityPanelComponent],
   templateUrl: './submissions-list.html',
   styleUrl: './submissions-list.css',
 })
@@ -77,7 +79,15 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   submissionRunOutput: Record<string, string> = {};
   submissionTestResults: Record<string, TestCaseResult[]> = {};
   submissionLogicResults: Record<string, LogicAnalysisResult[]> = {};
-  similarityState: Record<string, string> = {};
+  similarityState: Record<string, SimilarityState> = {};
+  similaritySummary: Record<string, SimilaritySummary> = {};
+  similarityError: Record<string, string> = {};
+  similarityDetail: Record<string, SimilarityDetail> = {};
+  selectedSimilarityPeer: Record<string, string> = {};
+  similarityDetailLoading: Record<string, boolean> = {};
+  similarityDetailError: Record<string, string> = {};
+  private similarityGenerations = new Map<string, number>();
+  private similarityPollTimers = new Map<string, ReturnType<typeof setTimeout>>();
   comparisonContextError = '';
   loadingComparisonContext = false;
 
@@ -92,6 +102,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     private http: HttpClient,
     private cdr: ChangeDetectorRef,
     private judge0Service: Judge0Service,
+    private similarityService: SimilarityService,
   ) {}
 
   async ngOnInit() {
@@ -111,6 +122,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       clearTimeout(timer);
     }
     this.saveStatusTimers.clear();
+    for (const timer of this.similarityPollTimers.values()) clearTimeout(timer);
+    this.similarityPollTimers.clear();
 
     if (this.subscription) {
       this.subscription.unsubscribe();
@@ -311,16 +324,20 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (this.selectedAssessmentId) {
       void this.loadSubmissionContextOptions(this.selectedAssessmentId);
     }
+    void this.refreshSimilarity(submission.id);
   }
 
   closeModal() {
+    if (this.selectedSubmission) this.clearSimilarityPoll(this.selectedSubmission.id);
     this.selectedSubmission = null;
     this.reviewStep = 1;
   }
 
   setReviewStep(step: ReviewStep) {
+    if (step === 2 && (!this.hasCompleteComparisonContext() || (this.selectedSubmission && this.hasSubmissionIdentityChanged(this.selectedSubmission)))) return;
     if (step === 3 && !this.canOpenGradingStep()) return;
     this.reviewStep = step;
+    if (step === 3 && this.selectedSubmission) void this.refreshSimilarity(this.selectedSubmission.id);
   }
 
   async continueFromDetails() {
@@ -335,13 +352,14 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   async saveCodeAndContinue() {
     if (!this.canOpenGradingStep()) return;
-
+    const id = this.selectedSubmission!.id;
     await this.saveVerifiedText();
     if (
-      this.selectedSubmission &&
-      this.saveStatus[this.selectedSubmission.id] === 'saved'
+      this.selectedSubmission?.id === id &&
+      this.saveStatus[id] === 'saved'
     ) {
       this.reviewStep = 3;
+      void this.refreshSimilarity(id, true);
     }
   }
 
@@ -401,7 +419,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       );
       const text = res?.cleaned_text ?? '';
       this.extractedText[id] = text;
-      this.editableText[id] = text;
+      this.updateSubmissionCode(id, text);
       this.extractionError[id] = '';
     } catch (err) {
       console.error('OCR failed:', err);
@@ -417,6 +435,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (!this.selectedSubmission || this.destroyed) return;
     const id = this.selectedSubmission.id;
     const generation = this.startSaveGeneration(id);
+    this.invalidateSimilarity(id);
+    this.similarityState[id] = 'outdated';
     this.savingId = id;
     this.clearSaveStatusTimer(id);
     this.saveStatus[id] = '';
@@ -534,6 +554,113 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   updateSubmissionCode(id: string, code: string) {
     this.editableText[id] = code;
+    const submission = this.findSubmission(id);
+    if (submission && code !== (submission.verified_text ?? '')) {
+      this.invalidateSimilarity(id);
+      this.similarityState[id] = 'outdated';
+    }
+  }
+
+  async refreshSimilarity(id: string, scan = false): Promise<void> {
+    if (this.destroyed) return;
+    const generation = this.invalidateSimilarity(id);
+    const submission = this.findSubmission(id);
+    if (!submission || !submission.assessment_id || !submission.question_id || !submission.student_id || !submission.block_section_id ||
+        (this.selectedSubmission?.id === id && this.hasSubmissionIdentityChanged(submission))) {
+      this.similarityState[id] = 'missing_metadata';
+      return;
+    }
+    if ((this.editableText[id] ?? submission.verified_text ?? '') !== (submission.verified_text ?? '')) {
+      this.similarityState[id] = 'outdated';
+      return;
+    }
+    this.similarityState[id] = 'checking';
+    this.similarityError[id] = '';
+    try {
+      const result = await firstValueFrom(scan
+        ? this.similarityService.scanSubmission(id)
+        : this.similarityService.getSubmissionSimilarity(id));
+      if (!this.isCurrentSimilarity(id, generation)) return;
+      this.similaritySummary[id] = result;
+      this.similarityState[id] = result.status;
+      this.similarityError[id] = result.error || '';
+    } catch {
+      if (!this.isCurrentSimilarity(id, generation)) return;
+      this.similarityState[id] = 'unavailable';
+      this.similarityError[id] = 'Similarity is unavailable. You can keep grading and retry later.';
+    } finally {
+      if (this.isCurrentSimilarity(id, generation)) {
+        if (this.similarityState[id] === 'checking') this.scheduleSimilarityPoll(id);
+        this.cdr.detectChanges();
+      }
+    }
+  }
+
+  async inspectSimilarityMatch(id: string, peerId: string): Promise<void> {
+    if (this.similarityState[id] !== 'complete') return;
+    if (this.selectedSimilarityPeer[id] === peerId) {
+      delete this.selectedSimilarityPeer[id];
+      return;
+    }
+    this.selectedSimilarityPeer[id] = peerId;
+    const key = `${id}:${peerId}`;
+    if (this.similarityDetail[key] || this.similarityDetailLoading[key]) return;
+    const generation = this.similarityGenerations.get(id);
+    this.similarityDetailLoading[key] = true;
+    this.similarityDetailError[key] = '';
+    try {
+      const detail = await firstValueFrom(this.similarityService.getMatchDetail(id, peerId));
+      if (this.destroyed || generation !== this.similarityGenerations.get(id)) return;
+      if (detail.scan_id !== this.similaritySummary[id]?.scan_id) {
+        this.invalidateSimilarity(id);
+        this.similarityState[id] = 'outdated';
+        return;
+      }
+      this.similarityDetail[key] = detail;
+    } catch {
+      if (this.destroyed || generation !== this.similarityGenerations.get(id)) return;
+      this.similarityDetailError[key] = 'This comparison is unavailable or has changed. Refresh the check to try again.';
+    } finally {
+      if (!this.destroyed && generation === this.similarityGenerations.get(id)) {
+        this.similarityDetailLoading[key] = false;
+        this.cdr.detectChanges();
+      }
+    }
+  }
+
+  private findSubmission(id: string): Submission | undefined {
+    return this.selectedSubmission?.id === id ? this.selectedSubmission : this.submissions.find(s => s.id === id);
+  }
+
+  private invalidateSimilarity(id: string): number {
+    this.clearSimilarityPoll(id);
+    const generation = (this.similarityGenerations.get(id) ?? 0) + 1;
+    this.similarityGenerations.set(id, generation);
+    delete this.similaritySummary[id];
+    delete this.selectedSimilarityPeer[id];
+    for (const map of [this.similarityDetail, this.similarityDetailLoading, this.similarityDetailError]) {
+      for (const key of Object.keys(map)) if (key.startsWith(`${id}:`)) delete map[key];
+    }
+    return generation;
+  }
+
+  private isCurrentSimilarity(id: string, generation: number): boolean {
+    return !this.destroyed && generation === this.similarityGenerations.get(id);
+  }
+
+  private scheduleSimilarityPoll(id: string) {
+    this.clearSimilarityPoll(id);
+    const timer = setTimeout(() => {
+      this.similarityPollTimers.delete(id);
+      if (!this.destroyed && this.selectedSubmission?.id === id) void this.refreshSimilarity(id);
+    }, 3000);
+    this.similarityPollTimers.set(id, timer);
+  }
+
+  private clearSimilarityPoll(id: string) {
+    const timer = this.similarityPollTimers.get(id);
+    if (timer !== undefined) clearTimeout(timer);
+    this.similarityPollTimers.delete(id);
   }
 
   formatCode() {
@@ -847,6 +974,7 @@ ${firstTestCase.test_code}
 
   private clearGroupDependentResults(id: string) {
     this.clearExecutionResults(id);
+    this.invalidateSimilarity(id);
     delete this.similarityState[id];
   }
 

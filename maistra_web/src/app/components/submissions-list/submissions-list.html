@@ -392,7 +392,8 @@
               *ngIf="hasExtractedText(selectedSubmission.id)"
               #codeEditor
               class="text-editor"
-              [(value)]="editableText[selectedSubmission.id]"
+              [value]="editableText[selectedSubmission.id]"
+              (valueChange)="updateSubmissionCode(selectedSubmission.id, $event)"
             ></app-code-editor>
 
             <p
@@ -427,6 +428,21 @@
             getQuestionName(selectedSubmission) }}</strong
           >
         </div>
+
+        <app-similarity-panel
+          [state]="similarityState[selectedSubmission.id] || 'not_checked'"
+          [summary]="similaritySummary[selectedSubmission.id]"
+          [selectedPeer]="selectedSimilarityPeer[selectedSubmission.id] || ''"
+          [detail]="selectedSimilarityPeer[selectedSubmission.id] ? similarityDetail[selectedSubmission.id + ':' + selectedSimilarityPeer[selectedSubmission.id]] : undefined"
+          [detailLoading]="selectedSimilarityPeer[selectedSubmission.id] ? !!similarityDetailLoading[selectedSubmission.id + ':' + selectedSimilarityPeer[selectedSubmission.id]] : false"
+          [detailError]="selectedSimilarityPeer[selectedSubmission.id] ? similarityDetailError[selectedSubmission.id + ':' + selectedSimilarityPeer[selectedSubmission.id]] || '' : ''"
+          [studentName]="selectedSubmission.student_name || 'Current student'"
+          [sectionName]="getSelectedBlockSectionName()"
+          [imageUrl]="selectedSubmission.image_url"
+          [hasUnsavedCode]="(editableText[selectedSubmission.id] || '') !== (selectedSubmission.verified_text || '')"
+          (retry)="refreshSimilarity(selectedSubmission.id, true)"
+          (inspect)="inspectSimilarityMatch(selectedSubmission.id, $event)"
+        ></app-similarity-panel>
 
         <app-judge0
           [initialCode]="editableText[selectedSubmission.id]"

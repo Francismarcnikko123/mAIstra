@@ -5,6 +5,7 @@ import { of, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Judge0Service } from '../../services/judge0.service';
 import { SupabaseService } from '../../services/supabase';
+import { SimilarityService } from '../../services/similarity.service';
 import { SubmissionsListComponent } from './submissions-list';
 
 describe('SubmissionsListComponent save feedback', () => {
@@ -24,6 +25,7 @@ describe('SubmissionsListComponent save feedback', () => {
       {} as HttpClient,
       cdr,
       judge0Overrides as Judge0Service,
+      {} as SimilarityService,
     );
 
     return { component, cdr };
@@ -83,6 +85,7 @@ describe('SubmissionsListComponent save feedback', () => {
       http,
       cdr,
       {} as Judge0Service,
+      {} as SimilarityService,
     );
 
     return {

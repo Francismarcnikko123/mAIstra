@@ -1,0 +1,122 @@
+<section class="similarity-panel" aria-label="Code similarity">
+  <header>
+    <div>
+      <div class="title-row">
+        <h4>Code similarity</h4>
+        <span class="optional">Optional review</span>
+      </div>
+      <p>
+        Matching code requires teacher review and does not change the grade.
+      </p>
+    </div>
+    <button
+      type="button"
+      (click)="retry.emit()"
+      [disabled]="state === 'checking' || state === 'missing_metadata' || hasUnsavedCode"
+    >
+      {{ state === 'checking' ? 'Checking…' : state === 'unavailable' ? 'Retry'
+      : state === 'complete' ? 'Check again' : 'Check similarity' }}
+    </button>
+  </header>
+  <p
+    class="status"
+    role="status"
+    aria-live="polite"
+    [class.attention]="state === 'outdated' || state === 'unavailable'"
+  >
+    {{ message }}
+  </p>
+  <ng-container *ngIf="state === 'complete' && summary">
+    <p class="counts">
+      Assessment group: {{ summary.compared_pair_count || 0 }} pairs compared ·
+      {{ summary.skipped_pair_count || 0 }} skipped
+    </p>
+    <p class="limitation" *ngIf="summary.skipped_reasons?.['partial_analysis']">
+      Some answers have incomplete parsing. Exact text matches can still be
+      shown; other comparisons may be skipped.
+    </p>
+    <p
+      class="limitation"
+      *ngIf="summary.skipped_reasons?.['insufficient_evidence']"
+    >
+      Some pairs contain too little original code to assess reliably.
+    </p>
+    <p class="limitation" *ngIf="summary.skipped_reasons?.['missing_code']">
+      Some saved answers contain no code and were skipped.
+    </p>
+    <div class="match" *ngFor="let match of summary.matches">
+      <div class="match-row">
+        <div class="identity">
+          <strong>{{ match.peer_student_name || 'Student' }}</strong
+          ><span
+            >{{ match.peer_block_section_name || 'Section unavailable' }}</span
+          >
+        </div>
+        <div class="evidence">
+          <span class="match-type">{{ matchLabel(match.match_type) }}</span
+          ><span>{{ match.matched_token_count }} matching tokens</span>
+        </div>
+        <div class="coverage">
+          <span
+            >Your answer: {{ match.submission_coverage | percent:'1.0-0'
+            }}</span
+          ><span
+            >Other answer: {{ match.peer_coverage | percent:'1.0-0' }}</span
+          >
+        </div>
+        <button
+          type="button"
+          (click)="inspect.emit(match.peer_submission_id)"
+          [attr.aria-expanded]="selectedPeer === match.peer_submission_id"
+        >
+          {{ selectedPeer === match.peer_submission_id ? 'Hide match' : 'Inspect
+          match' }}
+        </button>
+      </div>
+      <div class="detail" *ngIf="selectedPeer === match.peer_submission_id">
+        <p *ngIf="detailLoading" role="status">Loading saved code…</p>
+        <p *ngIf="detailError" role="alert">{{ detailError }}</p>
+        <ng-container *ngIf="detail">
+          <p class="legend">
+            <span aria-hidden="true"></span> Highlighted passages match.
+            Coverage measures code overlap, not intent.
+          </p>
+          <div class="code-panes">
+            <section
+              class="code-pane"
+              [attr.aria-label]="studentName + ' saved answer'"
+            >
+              <h5>
+                {{ studentName || 'Current student' }}
+                <small>{{ sectionName }}</small>
+              </h5>
+              <ng-container
+                *ngTemplateOutlet="source; context: { $implicit: leftLines }"
+              ></ng-container>
+            </section>
+            <section
+              class="code-pane"
+              [attr.aria-label]="match.peer_student_name + ' saved answer'"
+            >
+              <h5>
+                {{ match.peer_student_name || 'Other student' }}
+                <small>{{ match.peer_block_section_name }}</small>
+              </h5>
+              <ng-container
+                *ngTemplateOutlet="source; context: { $implicit: rightLines }"
+              ></ng-container>
+            </section>
+          </div>
+          <a *ngIf="imageUrl" [href]="imageUrl" target="_blank" rel="noopener"
+            >Open original submission image ↗</a
+          >
+        </ng-container>
+      </div>
+    </div>
+  </ng-container>
+</section>
+<ng-template #source let-lines>
+  <pre
+    tabindex="0"
+  ><code><span class="code-line" *ngFor="let line of lines"><span class="line-number" aria-hidden="true">{{ line.number }}</span><span *ngFor="let fragment of line.fragments" [class.matched]="fragment.matched">{{ fragment.text }}</span>{{ '\n' }}</span></code></pre>
+</ng-template>
