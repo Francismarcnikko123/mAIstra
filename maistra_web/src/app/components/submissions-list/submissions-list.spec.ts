@@ -265,10 +265,11 @@ describe('SubmissionsListComponent save feedback', () => {
     expect(gradeSubmission).toHaveBeenCalledWith({
       model_code: 'int main(void) { return 0; }',
       student_code: component.editableText['submission-1'],
-      expected_output: '5',
-      actual_output: '5',
-      compilation_passed: true,
+      expected_output: '',
+      actual_output: '',
+      compilation_passed: false,
     });
+    expect(gradeSubmission).toHaveBeenCalledTimes(1);
     expect(component.submissionRunOutput['submission-1']).toBe('5');
     expect(component.submissionCheckStatus['submission-1']).toBe('Accepted');
     expect(runCCode).toHaveBeenCalledTimes(2);
@@ -546,7 +547,12 @@ describe('SubmissionsListComponent save feedback', () => {
       question_name: 'Addition',
       question_type: 'program',
       model_answer: 'int main(void) { return 0; }',
-      test_cases: [],
+      test_cases: [{
+        test_code: '',
+        test_input: '2 3',
+        expected_output: '5',
+        mark: 2,
+      }],
     }];
     component.selectedQuestionId = 'question-1';
 
@@ -597,7 +603,12 @@ describe('SubmissionsListComponent save feedback', () => {
       question_name: 'Addition',
       question_type: 'program',
       model_answer: 'int main(void) { return 0; }',
-      test_cases: [],
+      test_cases: [{
+        test_code: '',
+        test_input: '2 3',
+        expected_output: '5',
+        mark: 2,
+      }],
     }];
     component.selectedQuestionId = 'question-1';
     component.reviewStep = 2;
@@ -620,7 +631,12 @@ describe('SubmissionsListComponent save feedback', () => {
       question_name: 'Addition',
       question_type: 'program',
       model_answer: 'int main(void) { return 0; }',
-      test_cases: [],
+      test_cases: [{
+        test_code: '',
+        test_input: '2 3',
+        expected_output: '5',
+        mark: 2,
+      }],
     }];
     component.selectedQuestionId = 'question-1';
     component.reviewStep = 2;
