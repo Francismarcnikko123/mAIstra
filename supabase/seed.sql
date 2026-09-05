@@ -155,7 +155,7 @@ INSERT INTO public.assessment_questions (
 VALUES (
   'a0000000-0000-0000-0000-000000000001',
   '954a8f00-8c73-4367-ad11-4557ee28ce7e',
-  'int add(int a, int b) {\n  /* Write your solution. */\n}',
+  E'int add(int a, int b) {\n  /* Write your solution. */\n}',
   1
 )
 ON CONFLICT (assessment_id, question_id) DO NOTHING;

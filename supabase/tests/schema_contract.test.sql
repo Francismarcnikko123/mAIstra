@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(25);
+select plan(28);
 
 select ok(
   exists (
@@ -309,6 +309,46 @@ select ok(
       and contype = 'f'
   ),
   'similarity scans belong to an assessment question'
+);
+
+select ok(
+  (
+    select array_agg(column_name::text order by column_name) = array[
+      'compared_pair_count', 'metadata', 'skipped_pair_count'
+    ]
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'similarity_scans'
+      and column_name = any (array[
+        'compared_pair_count', 'metadata', 'skipped_pair_count'
+      ])
+  ),
+  'similarity scans retain pair counts and reproducibility metadata'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.similarity_matches'::regclass
+      and conname = 'similarity_matches_type_check'
+      and pg_get_constraintdef(oid) like '%exact_duplicate%'
+      and pg_get_constraintdef(oid) like '%normalized_duplicate%'
+      and pg_get_constraintdef(oid) like '%similar_code%'
+  ),
+  'similarity matches preserve all evidence classifications'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.similarity_matches'::regclass
+      and conname = 'similarity_matches_source_ranges_check'
+      and pg_get_constraintdef(oid) like '%left%'
+      and pg_get_constraintdef(oid) like '%right%'
+  ),
+  'similarity matches keep independent source range arrays'
 );
 
 select ok(
