@@ -11,8 +11,10 @@ import re
 
 try:
     from .logic_checker import compare_logic
+    from .routers.similarity import router as similarity_router
 except ImportError:
     from logic_checker import compare_logic
+    from routers.similarity import router as similarity_router
 
 load_dotenv()
 
@@ -25,6 +27,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(similarity_router)
 
 JUDGE0_BASE_URL = os.getenv("JUDGE0_BASE_URL")
 JUDGE0_API_KEY = os.getenv("JUDGE0_API_KEY")
