@@ -1,8 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:edge_detection/edge_detection.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../utils/batch_review.dart';
 import '../utils/quality_check.dart';
@@ -19,24 +18,10 @@ class _BatchReviewScreenState extends State<BatchReviewScreen> {
   bool _isUploading = false;
   bool _isProcessing = false;
 
-  Future<String> _tempPath() async {
-    final dir = await getTemporaryDirectory();
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    return '${dir.path}/scan_$ts.jpg';
-  }
-
   Future<void> _retake(BatchItem item) async {
-    final path = await _tempPath();
-    bool success;
+    List<String>? pictures;
     try {
-      success = await EdgeDetection.detectEdge(
-        path,
-        canUseGallery: true,
-        androidScanTitle: 'Retake page',
-        androidCropTitle: 'Adjust crop',
-        androidCropBlackWhiteTitle: 'B&W',
-        androidCropReset: 'Reset',
-      );
+      pictures = await CunningDocumentScanner.getPictures(noOfPages: 1);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -45,7 +30,8 @@ class _BatchReviewScreenState extends State<BatchReviewScreen> {
       }
       return;
     }
-    if (!success || !mounted) return;
+    if (pictures == null || pictures.isEmpty || !mounted) return;
+    final path = pictures.first;
 
     setState(() => _isProcessing = true);
     final bytes = await File(path).readAsBytes();
