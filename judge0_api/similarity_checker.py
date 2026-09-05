@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from difflib import SequenceMatcher
+import hashlib
+from typing import Any, Sequence
 
 from tree_sitter import Node, Point
 
@@ -8,6 +11,10 @@ from logic_checker import C_PARSER, find_declarator_identifier, node_text, walk_
 
 
 _ATOMIC_LITERAL_TYPES = {"char_literal", "string_literal"}
+K_GRAM_SIZE = 5
+WINNOW_WINDOW_SIZE = 4
+MIN_MATCH_TOKENS = 12
+REVIEW_COVERAGE_THRESHOLD = 0.60
 
 
 @dataclass(frozen=True)
@@ -37,6 +44,32 @@ class NormalizedProgram:
     comparison_segments: tuple[tuple[NormalizedToken, ...], ...]
     has_parse_errors: bool
     parse_error_ranges: tuple[SourceRange, ...]
+
+
+@dataclass(frozen=True)
+class Fingerprint:
+    hash_value: int
+    token_index: int
+
+
+@dataclass(frozen=True)
+class PreparedProgram:
+    source: str
+    normalized: NormalizedProgram
+    fingerprints: tuple[Fingerprint, ...]
+    comparable_token_count: int
+
+
+@dataclass(frozen=True)
+class _MatchingBlock:
+    left_indexes: tuple[int, ...]
+    right_indexes: tuple[int, ...]
+    left_range: SourceRange
+    right_range: SourceRange
+
+    @property
+    def length(self) -> int:
+        return len(self.left_indexes)
 
 
 @dataclass(frozen=True)
@@ -247,3 +280,285 @@ def normalize_c_code(code: str, starter_code: str = "") -> NormalizedProgram:
         has_parse_errors=has_parse_errors,
         parse_error_ranges=parse_error_ranges,
     )
+
+
+def stable_kgram_hash(values: Sequence[str]) -> int:
+    """Return a process-independent digest for one normalized token k-gram."""
+    digest = hashlib.blake2b(digest_size=8)
+    for value in values:
+        encoded = value.encode("utf-8", errors="replace")
+        digest.update(len(encoded).to_bytes(4, byteorder="big"))
+        digest.update(encoded)
+    return int.from_bytes(digest.digest(), byteorder="big")
+
+
+def winnow_fingerprints(
+    values: Sequence[str],
+    *,
+    k_gram_size: int = K_GRAM_SIZE,
+    window_size: int = WINNOW_WINDOW_SIZE,
+) -> tuple[Fingerprint, ...]:
+    """Select the rightmost minimum hash from each Winnowing window."""
+    if k_gram_size <= 0 or window_size <= 0:
+        raise ValueError("Winnowing sizes must be positive")
+    if len(values) < k_gram_size:
+        return ()
+
+    hashes = [
+        stable_kgram_hash(values[index : index + k_gram_size])
+        for index in range(len(values) - k_gram_size + 1)
+    ]
+    effective_window = min(window_size, len(hashes))
+    selected: list[Fingerprint] = []
+    seen: set[tuple[int, int]] = set()
+
+    for start in range(len(hashes) - effective_window + 1):
+        window = hashes[start : start + effective_window]
+        minimum = min(window)
+        relative_index = max(
+            index for index, value in enumerate(window) if value == minimum
+        )
+        token_index = start + relative_index
+        key = (minimum, token_index)
+        if key not in seen:
+            selected.append(
+                Fingerprint(hash_value=minimum, token_index=token_index)
+            )
+            seen.add(key)
+
+    return tuple(selected)
+
+
+def _program_fingerprints(
+    program: NormalizedProgram,
+) -> tuple[Fingerprint, ...]:
+    token_indexes = {id(token): index for index, token in enumerate(program.tokens)}
+    fingerprints: list[Fingerprint] = []
+
+    for segment in program.comparison_segments:
+        values = [token.value for token in segment]
+        for fingerprint in winnow_fingerprints(values):
+            fingerprints.append(
+                Fingerprint(
+                    hash_value=fingerprint.hash_value,
+                    token_index=token_indexes[id(segment[fingerprint.token_index])],
+                )
+            )
+
+    return tuple(fingerprints)
+
+
+def prepare_c_code(code: str, starter_code: str = "") -> PreparedProgram:
+    normalized = normalize_c_code(code, starter_code=starter_code)
+    return PreparedProgram(
+        source=code or "",
+        normalized=normalized,
+        fingerprints=_program_fingerprints(normalized),
+        comparable_token_count=sum(
+            len(segment) for segment in normalized.comparison_segments
+        ),
+    )
+
+
+def _range_for_tokens(tokens: Sequence[NormalizedToken]) -> SourceRange:
+    return SourceRange(
+        start=tokens[0].source_range.start,
+        end=tokens[-1].source_range.end,
+    )
+
+
+def _range_dict(source_range: SourceRange) -> dict[str, dict[str, int]]:
+    return {
+        "start": {
+            "row": source_range.start.row,
+            "column": source_range.start.column,
+        },
+        "end": {
+            "row": source_range.end.row,
+            "column": source_range.end.column,
+        },
+    }
+
+
+def _matching_blocks(
+    left: PreparedProgram,
+    right: PreparedProgram,
+) -> tuple[_MatchingBlock, ...]:
+    common_hashes = {fingerprint.hash_value for fingerprint in left.fingerprints} & {
+        fingerprint.hash_value for fingerprint in right.fingerprints
+    }
+    if not common_hashes:
+        return ()
+
+    left_global_indexes = {
+        id(token): index for index, token in enumerate(left.normalized.tokens)
+    }
+    right_global_indexes = {
+        id(token): index for index, token in enumerate(right.normalized.tokens)
+    }
+    candidates: list[_MatchingBlock] = []
+
+    for left_segment in left.normalized.comparison_segments:
+        left_fingerprints = winnow_fingerprints(
+            [token.value for token in left_segment]
+        )
+        left_hashes = {fingerprint.hash_value for fingerprint in left_fingerprints}
+        if not left_hashes & common_hashes:
+            continue
+
+        for right_segment in right.normalized.comparison_segments:
+            right_fingerprints = winnow_fingerprints(
+                [token.value for token in right_segment]
+            )
+            right_hashes = {
+                fingerprint.hash_value for fingerprint in right_fingerprints
+            }
+            if not left_hashes & right_hashes:
+                continue
+
+            matcher = SequenceMatcher(
+                None,
+                [token.value for token in left_segment],
+                [token.value for token in right_segment],
+                autojunk=False,
+            )
+            for block in matcher.get_matching_blocks():
+                if block.size < MIN_MATCH_TOKENS:
+                    continue
+                left_tokens = left_segment[block.a : block.a + block.size]
+                right_tokens = right_segment[block.b : block.b + block.size]
+                candidates.append(
+                    _MatchingBlock(
+                        left_indexes=tuple(
+                            left_global_indexes[id(token)] for token in left_tokens
+                        ),
+                        right_indexes=tuple(
+                            right_global_indexes[id(token)] for token in right_tokens
+                        ),
+                        left_range=_range_for_tokens(left_tokens),
+                        right_range=_range_for_tokens(right_tokens),
+                    )
+                )
+
+    selected: list[_MatchingBlock] = []
+    used_left: set[int] = set()
+    used_right: set[int] = set()
+    for block in sorted(
+        candidates,
+        key=lambda candidate: (
+            -candidate.length,
+            candidate.left_indexes[0],
+            candidate.right_indexes[0],
+        ),
+    ):
+        if used_left.intersection(block.left_indexes) or used_right.intersection(
+            block.right_indexes
+        ):
+            continue
+        selected.append(block)
+        used_left.update(block.left_indexes)
+        used_right.update(block.right_indexes)
+
+    return tuple(sorted(selected, key=lambda block: block.left_indexes[0]))
+
+
+def _duplicate_ranges(
+    program: PreparedProgram,
+) -> list[dict[str, dict[str, int]]]:
+    return [
+        _range_dict(_range_for_tokens(segment))
+        for segment in program.normalized.comparison_segments
+        if segment
+    ]
+
+
+def compare_c_code(
+    left: str | PreparedProgram,
+    right: str | PreparedProgram,
+    starter_code: str = "",
+) -> dict[str, Any]:
+    """Compare two verified C programs and return review evidence."""
+    left_program = (
+        left if isinstance(left, PreparedProgram) else prepare_c_code(left, starter_code)
+    )
+    right_program = (
+        right
+        if isinstance(right, PreparedProgram)
+        else prepare_c_code(right, starter_code)
+    )
+    left_values = tuple(
+        token.value
+        for segment in left_program.normalized.comparison_segments
+        for token in segment
+    )
+    right_values = tuple(
+        token.value
+        for segment in right_program.normalized.comparison_segments
+        for token in segment
+    )
+    has_parse_errors = (
+        left_program.normalized.has_parse_errors
+        or right_program.normalized.has_parse_errors
+    )
+    analysis_state = "partial_analysis" if has_parse_errors else "complete"
+    duplicate = bool(left_values) and left_values == right_values
+
+    if duplicate:
+        match_type = (
+            "exact_duplicate"
+            if left_program.source.strip() == right_program.source.strip()
+            else "normalized_duplicate"
+        )
+        matched_token_count = len(left_values)
+        left_coverage = 1.0
+        right_coverage = 1.0
+        left_ranges = _duplicate_ranges(left_program)
+        right_ranges = _duplicate_ranges(right_program)
+        review_recommended = True
+    else:
+        blocks = _matching_blocks(left_program, right_program)
+        matched_token_count = sum(block.length for block in blocks)
+        left_coverage = (
+            matched_token_count / left_program.comparable_token_count
+            if left_program.comparable_token_count
+            else 0.0
+        )
+        right_coverage = (
+            matched_token_count / right_program.comparable_token_count
+            if right_program.comparable_token_count
+            else 0.0
+        )
+        left_ranges = [_range_dict(block.left_range) for block in blocks]
+        right_ranges = [_range_dict(block.right_range) for block in blocks]
+        review_recommended = (
+            matched_token_count >= MIN_MATCH_TOKENS
+            and max(left_coverage, right_coverage) >= REVIEW_COVERAGE_THRESHOLD
+        )
+
+        if review_recommended:
+            match_type = "similar_code"
+        elif has_parse_errors:
+            match_type = "partial_analysis"
+        elif (
+            min(
+                left_program.comparable_token_count,
+                right_program.comparable_token_count,
+            )
+            < MIN_MATCH_TOKENS
+        ):
+            match_type = "insufficient_evidence"
+        else:
+            match_type = "no_match"
+
+    return {
+        "match_type": match_type,
+        "review_recommended": review_recommended,
+        "matched_token_count": matched_token_count,
+        "left_coverage": round(left_coverage, 4),
+        "right_coverage": round(right_coverage, 4),
+        "left_ranges": left_ranges,
+        "right_ranges": right_ranges,
+        "analysis_state": analysis_state,
+        "left_token_count": left_program.comparable_token_count,
+        "right_token_count": right_program.comparable_token_count,
+    }
