@@ -110,6 +110,10 @@ return O;
 
 }');
 
+UPDATE "public"."submissions"
+SET "verified_version" = 1
+WHERE "verified_text" IS NOT NULL;
+
 
 --
 -- PostgreSQL database dump complete
@@ -118,3 +122,118 @@ return O;
 -- \unrestrict Xd6ZazMUDjwE6jj3FKA58Pgcmfl7wqCVi5R47zHLFVoyA1v73osH0aQhOJLbmCJ
 
 RESET ALL;
+
+-- Stable local cohort for assessment and cross-section similarity development.
+INSERT INTO public.assessments (id, name, status, starts_at)
+VALUES (
+  'a0000000-0000-0000-0000-000000000001',
+  'Programming Fundamentals Midterm',
+  'active',
+  '2026-09-05 01:00:00+00'
+)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.block_sections (id, name)
+VALUES
+  ('b0000000-0000-0000-0000-000000000001', 'BSCS 2A'),
+  ('b0000000-0000-0000-0000-000000000002', 'BSCS 2B')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.students (id, student_number, display_name)
+VALUES
+  ('c0000000-0000-0000-0000-000000000001', '2026-0001', 'Alex Santos'),
+  ('c0000000-0000-0000-0000-000000000002', '2026-0002', 'Bea Cruz'),
+  ('c0000000-0000-0000-0000-000000000003', '2026-0003', 'Carlo Reyes')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.assessment_questions (
+  assessment_id,
+  question_id,
+  starter_code,
+  position
+)
+VALUES (
+  'a0000000-0000-0000-0000-000000000001',
+  '954a8f00-8c73-4367-ad11-4557ee28ce7e',
+  'int add(int a, int b) {\n  /* Write your solution. */\n}',
+  1
+)
+ON CONFLICT (assessment_id, question_id) DO NOTHING;
+
+INSERT INTO public.assessment_roster (
+  assessment_id,
+  student_id,
+  block_section_id
+)
+VALUES
+  (
+    'a0000000-0000-0000-0000-000000000001',
+    'c0000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001'
+  ),
+  (
+    'a0000000-0000-0000-0000-000000000001',
+    'c0000000-0000-0000-0000-000000000002',
+    'b0000000-0000-0000-0000-000000000002'
+  ),
+  (
+    'a0000000-0000-0000-0000-000000000001',
+    'c0000000-0000-0000-0000-000000000003',
+    'b0000000-0000-0000-0000-000000000001'
+  )
+ON CONFLICT (assessment_id, student_id) DO NOTHING;
+
+INSERT INTO public.submissions (
+  id,
+  image_url,
+  student_name,
+  status,
+  verified_at,
+  verified_text,
+  topic,
+  assessment_id,
+  question_id,
+  student_id,
+  block_section_id
+)
+VALUES
+  (
+    'd0000000-0000-0000-0000-000000000001',
+    'https://example.test/similarity/alex.png',
+    'Alex Santos',
+    'verified',
+    now(),
+    'int add(int a, int b) { int total = a + b; return total; }',
+    'Functions',
+    'a0000000-0000-0000-0000-000000000001',
+    '954a8f00-8c73-4367-ad11-4557ee28ce7e',
+    'c0000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001'
+  ),
+  (
+    'd0000000-0000-0000-0000-000000000002',
+    'https://example.test/similarity/bea.png',
+    'Bea Cruz',
+    'verified',
+    now(),
+    'int add(int x, int y) { int sum = x + y; return sum; }',
+    'Functions',
+    'a0000000-0000-0000-0000-000000000001',
+    '954a8f00-8c73-4367-ad11-4557ee28ce7e',
+    'c0000000-0000-0000-0000-000000000002',
+    'b0000000-0000-0000-0000-000000000002'
+  ),
+  (
+    'd0000000-0000-0000-0000-000000000003',
+    'https://example.test/similarity/carlo.png',
+    'Carlo Reyes',
+    'verified',
+    now(),
+    'int add(int a, int b) { while (b != 0) { a++; b--; } return a; }',
+    'Functions',
+    'a0000000-0000-0000-0000-000000000001',
+    '954a8f00-8c73-4367-ad11-4557ee28ce7e',
+    'c0000000-0000-0000-0000-000000000003',
+    'b0000000-0000-0000-0000-000000000001'
+  )
+ON CONFLICT (id) DO NOTHING;
