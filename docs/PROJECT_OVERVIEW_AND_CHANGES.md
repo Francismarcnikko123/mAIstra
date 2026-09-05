@@ -204,7 +204,7 @@ Focused tests now cover:
 ## Verification status
 
 - Angular TypeScript compilation and the development build pass.
-- The Angular suite passes 71 tests, including the optional similarity workflow and panel.
+- The Angular suite passes 73 tests, including the optional similarity workflow and panel.
 - The focused submission-list test file passes isolated TypeScript validation.
 - Angular template compilation passed after the submission workflow changes, and after the Judge0 output-verification changes (`ng build --configuration development` succeeds).
 - The Judge0 output-verification changes were also verified live against the running app (question authoring → Validate → auto-synced `expected_output` → Save gated correctly; a model answer missing `#include <stdio.h>` now validates successfully instead of being rejected for a compiler warning).

@@ -328,14 +328,18 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   }
 
   closeModal() {
-    if (this.selectedSubmission) this.clearSimilarityPoll(this.selectedSubmission.id);
+    if (this.selectedSubmission) {
+      this.invalidateSimilarity(this.selectedSubmission.id);
+      delete this.similarityState[this.selectedSubmission.id];
+    }
     this.selectedSubmission = null;
     this.reviewStep = 1;
   }
 
   setReviewStep(step: ReviewStep) {
     if (step === 2 && (!this.hasCompleteComparisonContext() || (this.selectedSubmission && this.hasSubmissionIdentityChanged(this.selectedSubmission)))) return;
-    if (step === 3 && !this.canOpenGradingStep()) return;
+    if (step === 3 && (!this.canOpenGradingStep() || !this.hasCompleteComparisonContext() ||
+        (this.selectedSubmission && this.hasSubmissionIdentityChanged(this.selectedSubmission)))) return;
     this.reviewStep = step;
     if (step === 3 && this.selectedSubmission) void this.refreshSimilarity(this.selectedSubmission.id);
   }
@@ -677,6 +681,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (changed) this.clearCurrentGroupDependentResults();
 
     if (!assessmentId) {
+      ++this.contextLoadGeneration;
+      this.loadingComparisonContext = false;
       this.assessmentQuestions = [];
       this.assessmentRoster = [];
       this.selectedQuestionId = '';

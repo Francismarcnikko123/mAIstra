@@ -28,13 +28,11 @@ function setup() {
   const component = new SubmissionsListComponent(
     {
       updateSubmissionText: save,
-      getSubmissionContextOptions: vi
-        .fn()
-        .mockResolvedValue({
-          assessments: [],
-          assessmentQuestions: [],
-          roster: [],
-        }),
+      getSubmissionContextOptions: vi.fn().mockResolvedValue({
+        assessments: [],
+        assessmentQuestions: [],
+        roster: [],
+      }),
     } as unknown as SupabaseService,
     {} as HttpClient,
     cdr as unknown as ChangeDetectorRef,
@@ -214,5 +212,29 @@ describe('Similarity workflow', () => {
     await component.refreshSimilarity('a', true);
     expect(api.scanSubmission).not.toHaveBeenCalled();
     expect(component.similarityState['a']).toBe('missing_metadata');
+  });
+
+  it('does not allow Run & grade to bypass unsaved comparison details', () => {
+    const { component } = setup();
+    component.reviewStep = 1;
+    component.selectedStudentId = 'different-student';
+
+    component.setReviewStep(3);
+
+    expect(component.reviewStep).toBe(1);
+  });
+
+  it('ignores a pending summary after the review modal closes', async () => {
+    const { component, api } = setup();
+    component.editableText['a'] = 'old';
+    const pending = new Subject<SimilaritySummary>();
+    api.getSubmissionSimilarity.mockReturnValue(pending);
+    const request = component.refreshSimilarity('a');
+
+    component.closeModal();
+    pending.next({ status: 'complete', submission_id: 'a' });
+    await request;
+
+    expect(component.similarityState['a']).not.toBe('complete');
   });
 });
