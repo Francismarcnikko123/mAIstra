@@ -1,15 +1,218 @@
-<div style="background: #B71C1C; padding: 16px 24px; margin-bottom: 0;">
-  <h1 style="color: white; margin: 0; font-size: 22px; font-weight: 700;">mAIstra</h1>
-  <p style="color: rgba(255,255,255,0.8); margin: 2px 0 0 0; font-size: 13px;">
-    Vision-based Handwritten Assessment Grading
-  </p>
+<style>
+  .navbar {
+    background: #B71C1C;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  }
+
+  .navbar-brand {
+    padding: 14px 0;
+  }
+
+  .navbar-brand h1 {
+    color: white;
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .navbar-brand p {
+    color: rgba(255,255,255,0.7);
+    margin: 0;
+    font-size: 11px;
+  }
+
+  .burger-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    transition: background 0.15s;
+  }
+
+  .burger-btn:hover {
+    background: rgba(255,255,255,0.15);
+  }
+
+  .burger-line {
+    width: 24px;
+    height: 2px;
+    background: white;
+    border-radius: 2px;
+    transition: transform 0.3s, opacity 0.3s;
+    display: block;
+  }
+
+  .burger-btn.open .burger-line:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+  }
+
+  .burger-btn.open .burger-line:nth-child(2) {
+    opacity: 0;
+  }
+
+  .burger-btn.open .burger-line:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+  }
+
+  /* Overlay */
+  .drawer-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  .drawer-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* Drawer */
+  .drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    background: #fff;
+    z-index: 300;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 4px 0 16px rgba(0,0,0,0.15);
+  }
+
+  .drawer.open {
+    transform: translateX(0);
+  }
+
+  .drawer-header {
+    background: #B71C1C;
+    padding: 18px 20px;
+  }
+
+  .drawer-header h2 {
+    color: white;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .drawer-header p {
+    color: rgba(255,255,255,0.7);
+    margin: 2px 0 0 0;
+    font-size: 11px;
+  }
+
+  .drawer-nav {
+    padding: 12px 0;
+    flex: 1;
+  }
+
+  .drawer-nav-btn {
+    width: 100%;
+    padding: 14px 20px;
+    border: none;
+    background: transparent;
+    text-align: left;
+    font-size: 15px;
+    font-weight: 500;
+    color: #333;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: background 0.15s;
+  }
+
+  .drawer-nav-btn:hover {
+    background: #f5f5f5;
+  }
+
+  .drawer-nav-btn.active {
+    color: #B71C1C;
+    background: #fff0f0;
+    font-weight: 700;
+  }
+
+  .drawer-nav-btn .nav-icon {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+  }
+
+  .page-content {
+    padding: 24px;
+    min-height: calc(100vh - 62px);
+    background: #f0f0f0;
+  }
+</style>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="navbar-brand">
+    <h1>mAIstra</h1>
+    <p>Vision-based Grading</p>
+  </div>
+  <button class="burger-btn" [class.open]="sidebarOpen" (click)="toggleSidebar()" aria-label="Toggle menu">
+    <span class="burger-line"></span>
+    <span class="burger-line"></span>
+    <span class="burger-line"></span>
+  </button>
+</nav>
+
+<!-- Overlay -->
+<div class="drawer-overlay" [class.open]="sidebarOpen" (click)="closeSidebar()"></div>
+
+<!-- Slide-in Drawer -->
+<div class="drawer" [class.open]="sidebarOpen">
+  <div class="drawer-header">
+    <h2>mAIstra</h2>
+    <p>Vision-based Grading</p>
+  </div>
+  <nav class="drawer-nav">
+    <button class="drawer-nav-btn" [class.active]="activeTab === 'submissions'" (click)="setTab('submissions')">
+      <span class="nav-icon">📋</span>
+      Submissions
+    </button>
+    <button class="drawer-nav-btn" [class.active]="activeTab === 'bank'" (click)="setTab('bank')">
+      <span class="nav-icon">📚</span>
+      Question Bank
+    </button>
+    <button class="drawer-nav-btn" [class.active]="activeTab === 'create'" (click)="setTab('create')">
+      <span class="nav-icon">➕</span>
+      Create Question
+    </button>
+  </nav>
 </div>
 
-<div style="display: flex; gap: 24px; padding: 24px; min-height: calc(100vh - 70px); background: #f0f0f0;">
-  <div style="flex: 1;">
+<!-- Page Content -->
+<div class="page-content">
+  <div *ngIf="activeTab === 'submissions'">
     <app-submissions-list></app-submissions-list>
   </div>
-  <div style="flex: 1;">
+
+  <div *ngIf="activeTab === 'bank'">
+    <app-question-bank></app-question-bank>
+  </div>
+
+  <div *ngIf="activeTab === 'create'" style="max-width: 800px; margin: 0 auto;">
     <app-question-form></app-question-form>
   </div>
 </div>

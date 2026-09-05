@@ -1,0 +1,69 @@
+<div class="bank-container">
+  <div class="bank-header">
+    <h2>Question Bank</h2>
+    <span class="count">{{ questions.length }} questions</span>
+  </div>
+
+  <div class="loading" *ngIf="isLoading">Loading questions...</div>
+  <div class="error" *ngIf="errorMessage">{{ errorMessage }}</div>
+
+  <div class="question-list" *ngIf="!isLoading && !errorMessage">
+    <div class="question-card" *ngFor="let q of questions; let i = index">
+      <button type="button" class="question-header" (click)="toggle(q.id)">
+        <div class="question-title-row">
+          <span class="question-number">{{ i + 1 }}</span>
+          <span class="question-name">{{ q.question_name }}</span>
+          <span class="type-badge" [class.function]="q.question_type === 'function'">
+            {{ q.question_type === 'function' ? 'Write a Function' : 'Write a Program' }}
+          </span>
+        </div>
+        <div class="question-meta">
+          <span>{{ (q.test_cases && q.test_cases.length) || 0 }} test case(s)</span>
+          <span class="toggle-icon">{{ isExpanded(q.id) ? '▲' : '▼' }}</span>
+        </div>
+      </button>
+
+      <div class="question-body" *ngIf="isExpanded(q.id)">
+        <div class="field-row">
+          <strong>Question Text</strong>
+          <p class="question-text">{{ q.question_text }}</p>
+        </div>
+
+        <div class="field-row">
+          <strong>Model Answer</strong>
+          <pre class="code-block">{{ q.model_answer }}</pre>
+        </div>
+
+        <div class="field-row" *ngIf="q.test_cases && q.test_cases.length">
+          <strong>Test Cases</strong>
+          <div class="test-cases">
+            <div class="tc" *ngFor="let tc of q.test_cases; let j = index">
+              <span class="tc-num">TC{{ j + 1 }}</span>
+              <div class="tc-fields">
+                <div *ngIf="tc.test_code">
+                  <em>Test Code:</em>
+                  <pre>{{ tc.test_code }}</pre>
+                </div>
+                <div *ngIf="tc.test_input">
+                  <em>Input:</em>
+                  <pre>{{ tc.test_input }}</pre>
+                </div>
+                <div *ngIf="tc.expected_output">
+                  <em>Expected Output:</em>
+                  <pre>{{ tc.expected_output }}</pre>
+                </div>
+                <div>
+                  <em>Mark:</em> {{ tc.mark }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="empty" *ngIf="questions.length === 0">
+      No questions yet. Create one using the Question Form.
+    </div>
+  </div>
+</div>
