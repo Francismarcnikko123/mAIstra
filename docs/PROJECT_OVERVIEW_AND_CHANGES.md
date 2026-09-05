@@ -28,13 +28,13 @@ This directory contains local Supabase configuration, schema migrations, seed da
 
 ## Submission review workflow
 
-The Angular submission review uses one existing `SubmissionsListComponent`; no additional visual components were introduced.
+The Angular submission review is coordinated by `SubmissionsListComponent`, with focused child components for code execution and similarity evidence.
 
 1. **Details**
    - Assign a topic or folder.
-   - Select the related question.
-   - The question is required before continuing.
-   - Topic and `question_id` are persisted together.
+   - Select the assessment, question, student, and block section.
+   - All four comparison fields are required before continuing.
+   - The assignment and topic are persisted together.
 
 2. **Review code**
    - Display the original submission image beside the editor.
@@ -48,6 +48,34 @@ The Angular submission review uses one existing `SubmissionsListComponent`; no a
    - For function questions, generate a temporary `main()` test harness.
    - Run all configured test cases.
    - Display output comparison and logic-analysis results.
+   - Start a nonblocking similarity check for the saved verified answer.
+   - Optionally inspect matching passages without changing the grade.
+
+## Student code similarity
+
+Similarity groups use `(assessment_id, question_id)`. Students in different
+block sections are compared when they are answering the same assessment
+question, while a reused question in another assessment remains isolated.
+Only current submissions with `verified` or `graded` status are eligible, and
+answers belonging to the same student are never compared.
+
+The Python service loads persisted verified text by submission ID. It removes
+comments and supplied starter passages, normalizes local identifiers with
+Tree-sitter C scope information, and selects stable Winnowing fingerprints
+before matching token passages. Algorithm version
+`c-tree-sitter-winnowing-v2` uses five-token k-grams, four-hash windows, a
+12-token minimum matching passage, an eight-token starter-alignment minimum,
+and a 60% maximum-side coverage review threshold. These constants identify
+answers for teacher review; they are not a probability or a finding of intent.
+
+Run & grade displays missing metadata, not checked, checking, complete,
+outdated, and unavailable states. Completed scans distinguish an empty cohort
+from no significant matches and disclose compared and skipped pair counts.
+Match rows show the peer student and section, exact/same-token/similar labels,
+coverage for each answer, and source-safe highlighted passages. Saving code,
+changing comparison identity, replacing a current answer, changing starter
+code, or changing the algorithm version makes earlier evidence outdated.
+Grading and Finish review remain available while checks run or fail.
 
 ## Submission interface changes
 
@@ -75,6 +103,7 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - Destruction guards prevent asynchronous callbacks from updating a destroyed component.
 - Original OCR text remains separate from editable and verified text so teacher corrections do not overwrite the OCR baseline.
 - Judge0 result maps keep execution results associated with the correct submission.
+- Similarity generations ignore late scan/detail results, and a short poll reloads persisted checking state while the modal remains open.
 - Execution-source helpers remain responsible for building function-question test harnesses.
 - Student code receives each test case's `test_input` as stdin during both
   grading and the first-test run preview, including function questions.
@@ -162,6 +191,9 @@ Focused tests now cover:
 - Remaining in Review Code after an OCR failure.
 - Advancing after a successful verified-code save.
 - Remaining in Review Code after a failed save.
+- Assessment/question scope across block sections and isolation across assessments.
+- Detector classifications, starter exclusion, lexical shadowing, independent coverage, and source ranges.
+- Persisted scan counts, version-based staleness, transaction rollback, optional failure handling, and safe source rendering.
 
 ## Setup documentation
 
@@ -171,13 +203,14 @@ Focused tests now cover:
 
 ## Verification status
 
-- Angular application TypeScript compilation passes.
+- Angular TypeScript compilation and the development build pass.
+- The Angular suite passes 71 tests, including the optional similarity workflow and panel.
 - The focused submission-list test file passes isolated TypeScript validation.
 - Angular template compilation passed after the submission workflow changes, and after the Judge0 output-verification changes (`ng build --configuration development` succeeds).
 - The Judge0 output-verification changes were also verified live against the running app (question authoring → Validate → auto-synced `expected_output` → Save gated correctly; a model answer missing `#include <stdio.h>` now validates successfully instead of being rejected for a compiler warning).
-- `judge0_api`'s Python test suite (`tests_logic_checker.py`, `tests_judge0_api.py`) passes: 16/16.
-- Running Vitest from the current WSL environment is blocked because `node_modules` contains Windows-native Rollup/esbuild packages. Run `npm ci` and the tests in the same operating system environment, or run them directly from Windows where the dependencies were installed.
-- Repository-wide spec type-checking currently also reports an unrelated missing Node `fs` type used by `question-form.spec.ts` — this is a pre-existing issue, unrelated to the Judge0 output-verification changes above.
+- The Python detector, grading, orchestration, and API suite passes 63 tests.
+- Six opt-in tests pass against local PostgreSQL for scope, persistence, stale evidence, and atomic writes.
+- The Supabase schema contract passes 28 pgTAP checks.
 
 ## Important security work
 
@@ -188,6 +221,7 @@ Before deploying mAIstra beyond a trusted development environment:
 - Add complete Row Level Security policies for questions, submissions, and storage objects.
 - Restrict access to handwritten submission images or serve them with signed URLs.
 - Authenticate and rate-limit the OCR and Judge0 wrapper APIs.
+- Authenticate the similarity routes and map assessment-review permissions before production use; the new tables intentionally expose no browser RLS policy.
 - Restrict the OCR URL downloader to trusted storage hosts and enforce download-size limits.
 - Move hardcoded service URLs into Angular environment configuration.
 - Add missing migrations for application columns such as `question_type`, `topic`, and `question_id`.

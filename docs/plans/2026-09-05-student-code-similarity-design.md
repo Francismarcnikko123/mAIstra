@@ -2,9 +2,13 @@
 
 Date: 2026-09-05
 
-Status: Comparison scope, web placement, and detection approach agreed with
-the user. Storage and retry details below are proposed implementation defaults.
-This document describes a future feature; no application behavior has changed.
+Status: Implemented on the `code-similarity/duplicate` branch. Production
+deployment still requires authenticated similarity routes and assessment-level
+authorization.
+
+The implementation follows the scope and placement agreed below. It uses
+algorithm version `c-tree-sitter-winnowing-v2`, persists reproducible scan and
+pair evidence, and renders optional review inside Run & grade.
 
 ## Agreed product decisions
 
@@ -46,7 +50,7 @@ Assessment, stable student identity, and section relationships are missing
 from the repository schema and submission flow inspected for this design.
 This is a repository finding, not verification of a deployed database.
 
-## Proposed web workflow
+## Implemented web workflow
 
 ```mermaid
 flowchart TD
@@ -74,7 +78,7 @@ and their sections, match type, coverage for each answer, and an expandable
 comparison with highlighted passages. Preserve access to the original
 handwriting when the teacher wants to verify a passage against the image.
 
-Proposed states: missing metadata, not checked, checking, no other eligible
+Implemented states: missing metadata, not checked, checking, no other eligible
 submissions, complete, partial analysis, outdated, and unavailable with Retry.
 Only a complete, current scan can report no significant matches. Show how
 many submissions were compared and skipped so early results are understandable.
@@ -92,8 +96,8 @@ as having cheated. Matching code needs human interpretation, as explained in
 | Local exact and token-sequence comparison | Fits the Python service and supports explanations tied to source passages | Requires implementation and evaluation on representative C answers |
 | Dedicated engine such as JPlag | Provides local pairwise analysis and base-code support | Adds another runtime and integration; C support needs evaluation for this project |
 
-The agreed approach for the first version is the local detector, contingent on
-validation against representative answers. The existing Tree-sitter dependency
+The implemented first version is the local detector. It is covered by labeled
+fixtures and service/database integration tests. The existing Tree-sitter dependency
 supplies parsing and source positions; it is not itself a plagiarism detector. See the
 [Python binding documentation](https://tree-sitter.github.io/py-tree-sitter/).
 [JPlag's official documentation](https://github.com/jplag/JPlag) describes its
@@ -128,9 +132,11 @@ of code overlap, not probabilities of copying. Short or template-dominated
 answers require an insufficient-evidence indication for similarity flags.
 Literal exact equality can still be reported with that context.
 
-Choose minimum matching length and review thresholds using representative
-beginner answers, including independently written correct solutions. No
-numeric threshold or detection-accuracy promise is established by this design.
+The evaluated constants are five-token k-grams, four-hash Winnowing windows,
+a 12-token minimum passage, an eight-token minimum for aligned starter
+passages, and a 60% maximum-side coverage review threshold. These values were
+checked against exact, renamed, starter-only, short, parser-error, and
+independent examples. They are review heuristics, not a detection-accuracy promise.
 Compilation is not required. Parser failures must remain visible; exact
 text checks can still run, but incomplete token analysis cannot count as a
 successful negative result.

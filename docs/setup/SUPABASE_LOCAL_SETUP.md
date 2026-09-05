@@ -144,6 +144,31 @@ SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_ANON_KEY=your-local-anon-key
 ```
 
+The Judge0 API also hosts the similarity routes. Give that server a direct
+local PostgreSQL connection in `judge0_api/.env`:
+
+```env
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+```
+
+The Angular client calls the service through
+`http://127.0.0.1:8001/api/similarity`. Start the Python API on port 8001 and
+apply the local migrations before using Check similarity. The API derives the
+assessment/question group from the requested submission ID; it does not accept
+browser-supplied assessment IDs or source code.
+
+To run the real repository checks against local Postgres in PowerShell:
+
+```powershell
+$env:SIMILARITY_TEST_DATABASE_URL = 'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
+python -m pytest judge0_api/tests_similarity_repository.py -q
+```
+
+These tests refuse non-loopback hosts and delete only their randomly named
+fixture cohorts. Production access still requires authenticated API routes and
+assessment-level authorization; the similarity tables have RLS enabled and no
+permissive browser policy.
+
 For an Angular application, you may store the values in an environment configuration file:
 
 ```typescript
