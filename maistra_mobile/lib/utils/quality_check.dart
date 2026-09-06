@@ -164,6 +164,14 @@ QualityResult evaluateLighting({
   return QualityResult(passed: !blocked, issues: issues);
 }
 
+// A two-page landscape spread (notebook opened flat, both pages in one shot)
+// has width significantly greater than height. A portrait single page always
+// has height >= width. Ratio > 1.3 gives enough buffer for a slightly rotated
+// portrait shot without missing genuine landscape spreads.
+bool isLandscapeSpread(img.Image image) {
+  return image.width > image.height * 1.3;
+}
+
 // brightClipFraction threshold is 0.95 (not 0.20) for post-crop images:
 // white paper fills the frame after cropping and naturally yields 0.85–0.92,
 // so 0.20 always false-positives. 0.95 only fires on genuinely blown-out scans
@@ -176,9 +184,15 @@ QualityResult evaluateQuality({
   required double brightClipFraction,
   required double brightnessSpread,
   required double cornerMismatch,
+  required bool landscapeSpread,
 }) {
   final List<String> issues = [];
   bool blocked = false;
+
+  if (landscapeSpread) {
+    issues.add('Two pages detected — capture one page at a time in portrait orientation');
+    blocked = true;
+  }
 
   if (blurScore < 480) {
     issues.add('Image quality too low — hold steady, ensure good lighting, and avoid glare');
@@ -215,6 +229,7 @@ QualityResult checkQuality(List<int> bytes) {
   final small = img.copyResize(image, width: 600, height: 600);
   final grayscale = img.grayscale(small);
 
+  final landscapeSpread = isLandscapeSpread(image);
   final blurScore = computeBlurScore(cropTopPortion(grayscale, fraction: 1 / 3));
   final darkClipFraction = computeDarkClipFraction(grayscale);
   final brightClipFraction = computeBrightClipFraction(grayscale);
@@ -225,6 +240,8 @@ QualityResult checkQuality(List<int> bytes) {
   print('[quality-check] ----------------------------------------');
   // ignore: avoid_print
   print('[quality-check] dimensions:        ${image.width}x${image.height}');
+  // ignore: avoid_print
+  print('[quality-check] landscapeSpread:   $landscapeSpread');
   // ignore: avoid_print
   print('[quality-check] blurScore:         ${blurScore.toStringAsFixed(1)}');
   // ignore: avoid_print
@@ -242,6 +259,7 @@ QualityResult checkQuality(List<int> bytes) {
     brightClipFraction: brightClipFraction,
     brightnessSpread: brightnessSpread,
     cornerMismatch: cornerMismatch,
+    landscapeSpread: landscapeSpread,
   );
 }
 

@@ -191,7 +191,7 @@ void main() {
   group('evaluateQuality', () {
     test('passes with no issues for a normal, well-formed image', () {
       final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0);
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0, landscapeSpread: false);
 
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
@@ -199,7 +199,7 @@ void main() {
 
     test('low blur score blocks accept as image quality too low', () {
       final result = evaluateQuality(
-          blurScore: 479, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0);
+          blurScore: 479, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0, landscapeSpread: false);
 
       expect(result.passed, isFalse);
       expect(result.issues, ['Image quality too low — hold steady, ensure good lighting, and avoid glare']);
@@ -207,7 +207,7 @@ void main() {
 
     test('does not flag blur score exactly at the low threshold', () {
       final result = evaluateQuality(
-          blurScore: 480, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0);
+          blurScore: 480, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0, landscapeSpread: false);
 
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
@@ -215,7 +215,7 @@ void main() {
 
     test('high dark-clip fraction blocks accept as too dark', () {
       final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0.06, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0);
+          blurScore: 9000, darkClipFraction: 0.06, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0, landscapeSpread: false);
 
       expect(result.passed, isFalse);
       expect(result.issues, ['Too dark — move to a brighter area']);
@@ -223,7 +223,7 @@ void main() {
 
     test('does not flag dark-clip fraction exactly at the threshold', () {
       final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0.05, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0);
+          blurScore: 9000, darkClipFraction: 0.05, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0, landscapeSpread: false);
 
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
@@ -231,7 +231,7 @@ void main() {
 
     test('high bright-clip fraction blocks accept as too bright', () {
       final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0.96, brightnessSpread: 0, cornerMismatch: 0);
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0.96, brightnessSpread: 0, cornerMismatch: 0, landscapeSpread: false);
 
       expect(result.passed, isFalse);
       expect(result.issues, ['Too bright / overexposed — reduce lighting or move away from light source']);
@@ -239,7 +239,7 @@ void main() {
 
     test('does not flag bright-clip fraction exactly at the threshold', () {
       final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0.95, brightnessSpread: 0, cornerMismatch: 0);
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0.95, brightnessSpread: 0, cornerMismatch: 0, landscapeSpread: false);
 
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
@@ -247,7 +247,7 @@ void main() {
 
     test('does not flag normal white paper bright-clip fraction', () {
       final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0.91, brightnessSpread: 0, cornerMismatch: 0);
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0.91, brightnessSpread: 0, cornerMismatch: 0, landscapeSpread: false);
 
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
@@ -255,7 +255,7 @@ void main() {
 
     test('high brightness spread blocks accept as uneven lighting', () {
       final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 36, cornerMismatch: 0);
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 36, cornerMismatch: 0, landscapeSpread: false);
 
       expect(result.passed, isFalse);
       expect(result.issues,
@@ -264,7 +264,7 @@ void main() {
 
     test('does not flag brightness spread exactly at the threshold', () {
       final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 35, cornerMismatch: 0);
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 35, cornerMismatch: 0, landscapeSpread: false);
 
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
@@ -272,7 +272,7 @@ void main() {
 
     test('high corner mismatch blocks accept as crop including background', () {
       final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 71);
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 71, landscapeSpread: false);
 
       expect(result.passed, isFalse);
       expect(result.issues, ['Crop may include background — retake and align the corners to the paper edges']);
@@ -280,7 +280,7 @@ void main() {
 
     test('does not flag corner mismatch exactly at the threshold', () {
       final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 70);
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 70, landscapeSpread: false);
 
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
@@ -288,13 +288,29 @@ void main() {
 
     test('combines low blur and too-dark blocks together', () {
       final result = evaluateQuality(
-          blurScore: 50, darkClipFraction: 0.5, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0);
+          blurScore: 50, darkClipFraction: 0.5, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0, landscapeSpread: false);
 
       expect(result.passed, isFalse);
       expect(result.issues, [
         'Image quality too low — hold steady, ensure good lighting, and avoid glare',
         'Too dark — move to a brighter area',
       ]);
+    });
+
+    test('landscape spread blocks accept as two pages detected', () {
+      final result = evaluateQuality(
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0, landscapeSpread: true);
+
+      expect(result.passed, isFalse);
+      expect(result.issues, ['Two pages detected — capture one page at a time in portrait orientation']);
+    });
+
+    test('portrait image does not trigger landscape spread check', () {
+      final result = evaluateQuality(
+          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0, cornerMismatch: 0, landscapeSpread: false);
+
+      expect(result.passed, isTrue);
+      expect(result.issues, isEmpty);
     });
   });
 
