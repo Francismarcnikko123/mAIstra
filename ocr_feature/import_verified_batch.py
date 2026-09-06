@@ -14,13 +14,16 @@ paper_type (the same number in different paper types is not the same
 student).
 
 Run once from ocr_feature/:
-    python import_verified_batch.py
+    python import_verified_batch.py --verified-by "Name of verifier"
 """
+import argparse
 import csv
 import re
 import shutil
 from datetime import date
 from pathlib import Path
+
+from evaluators.labels_schema import FIELDNAMES, is_writer_batch_id, load_existing_rows, write_labels_csv
 
 SOURCE_ROOT = Path.home() / "Downloads" / "image_to_transcribe_verified"
 DEST_IMAGES_ROOT = Path("datasets/verified/images")
@@ -41,11 +44,6 @@ def _holdout_stems() -> set:
         return set()
     return {p.stem for p in SAMPLES_DIR.glob("*.jpg")} | {p.stem for p in SAMPLES_DIR.glob("*.jpeg")}
 
-FIELDNAMES = [
-    "submission_id", "image_path", "verified_text", "extracted_text",
-    "verified_at", "topic", "student_name",
-]
-
 
 def find_txt_dir(paper_dir: Path) -> Path:
     candidates = [p for p in paper_dir.iterdir() if p.is_dir() and "txt" in p.name.lower()]
@@ -54,17 +52,7 @@ def find_txt_dir(paper_dir: Path) -> Path:
     return candidates[0]
 
 
-def _load_existing_rows() -> dict:
-    """submission_id -> verified_text for whatever's currently in labels.csv,
-    so a re-run can report what actually changed instead of silently
-    overwriting -- the sanity check this script previously lacked."""
-    if not LABELS_CSV.exists():
-        return {}
-    with LABELS_CSV.open(encoding="utf-8", newline="") as f:
-        return {row["submission_id"]: row["verified_text"] for row in csv.DictReader(f)}
-
-
-def main() -> int:
+def main(verified_by: str) -> int:
     if not SOURCE_ROOT.exists():
         raise RuntimeError(
             f"Source not found: {SOURCE_ROOT}\n"
@@ -74,7 +62,11 @@ def main() -> int:
             "that name is reserved for the OTHER, unverified submission_* batch."
         )
 
-    existing = _load_existing_rows()
+    existing_full = load_existing_rows(LABELS_CSV)
+    existing = {
+        sid: row["verified_text"] for sid, row in existing_full.items()
+        if is_writer_batch_id(sid)
+    }
     holdout = _holdout_stems()
     today = date.today().isoformat()
     rows = []
@@ -117,15 +109,22 @@ def main() -> int:
                 "verified_at": today,
                 "topic": "",
                 "student_name": writer,
+                "literal_verified": "true",
+                "literal_verified_by": verified_by,
+                "literal_verified_at": today,
+                "correction_edit_distance": "",
             })
 
-    LABELS_CSV.parent.mkdir(parents=True, exist_ok=True)
-    with LABELS_CSV.open("w", encoding="utf-8", newline="") as f:
-        writer_csv = csv.DictWriter(f, fieldnames=FIELDNAMES)
-        writer_csv.writeheader()
-        writer_csv.writerows(rows)
-
-    print(f"Wrote {len(rows)} rows to {LABELS_CSV}")
+    preserved = {
+        sid: row for sid, row in existing_full.items()
+        if not is_writer_batch_id(sid)
+    }
+    own_new = {row["submission_id"]: row for row in rows}
+    merged = {**preserved, **own_new}
+    write_labels_csv(LABELS_CSV, merged)
+    print(f"labels.csv now contains {len(merged)} total row(s) "
+          f"({len(preserved)} preserved from Supabase export, "
+          f"{len(own_new)} from this batch).")
     if skipped:
         print(f"Skipped {len(skipped)}:")
         for name, reason in skipped:
@@ -158,5 +157,16 @@ def main() -> int:
     return 0
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--verified-by",
+        required=True,
+        help="Name of the person who physically verified this batch against "
+             "the source paper (recorded in literal_verified_by).",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(_parse_args().verified_by))
