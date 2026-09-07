@@ -778,6 +778,28 @@ class ReassembleDisplacedRegionsTests(unittest.TestCase):
             ],
         )
 
+    def test_refuses_when_normal_contains_a_closer(self):
+        # The severed block ("work(); }") belongs inside the switch, with
+        # after_switch() following it outside the switch. Appending the block
+        # is brace-well-formed but puts both statements in the wrong scopes.
+        # The unique winning L=2 gives depths 0, 1, 2, 2, 2, 1, 1, 0;
+        # longer blocks leave a negative depth and cannot qualify. The
+        # winning normal contains its own "}" (delta -1), so reject it.
+        lines = [
+            _line("struct S { int x; };"),
+            _line("work();", severed=True),
+            _line("}", severed=True),
+            _line("void f() {"),
+            _line("switch (x) {"),
+            _line("case 0:"),
+            _line("after_switch();"),
+            _line("}"),
+        ]
+
+        result = self.pipeline._reassemble_displaced_regions(lines)
+
+        self.assertEqual(result, lines)
+
     def test_two_severed_blocks_is_ambiguous_and_stays_unchanged(self):
         lines = [
             _line("int main() {"),

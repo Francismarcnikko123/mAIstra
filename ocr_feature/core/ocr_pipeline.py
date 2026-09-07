@@ -181,8 +181,9 @@ def _brace_delta(text: str) -> int:
 def _reassemble_displaced_regions(lines: list) -> list:
     """If exactly one contiguous run of gap-severed lines can be moved to
     the end of the page such that the resulting sequence has well-formed
-    brace structure (cumulative depth never negative, ends at 0), move it
-    there. Otherwise return `lines` unchanged.
+    brace structure (cumulative depth never negative, ends at 0), and its
+    normal partition has no negative-delta lines, move it there. Otherwise
+    return `lines` unchanged.
 
     Deliberately narrow: this only covers a block whose correct position is
     at the END of the sequence -- e.g. a switch-case body written in the
@@ -195,6 +196,22 @@ def _reassemble_displaced_regions(lines: list) -> list:
     one that yields a well-formed sequence. Any ambiguity -- zero or
     multiple L values yielding a well-formed sequence, or a non-contiguous
     severed run -- returns `lines` unchanged rather than guessing.
+
+    Only after selecting a unique block length, reject the candidate if
+    any line in its normal partition has _brace_delta < 0. The partition
+    depends on L: unmarked lines can still belong to the displaced block.
+    This guard must not filter candidates before uniqueness is established.
+
+    For the supported end-of-sequence displacement, the main text left one
+    or more scopes open, and the displaced block closes them. In that case,
+    normal contains only openers and zero-delta statements: the scope-closing
+    lines were displaced into the margin. If the winning normal contains a
+    negative-delta line, part of the main text closed a scope by itself, so
+    the displaced block may belong mid-sequence, which brace math alone
+    cannot solve. Refusing to apply is safer than producing a brace-well-formed
+    but semantically wrong reordering. This conservative guard also rejects
+    legitimate end-of-sequence layouts with an earlier completed scope whose
+    closing line has a negative delta; those require human verification.
     """
     severed_indices = [
         i for i, line in enumerate(lines) if line.get("severed_by_gap")
@@ -231,11 +248,14 @@ def _reassemble_displaced_regions(lines: list) -> list:
         normal = lines[:start] + lines[start + block_len:]
         reordering = normal + block
         if is_well_formed(reordering):
-            valid_reorderings.append(reordering)
+            valid_reorderings.append((reordering, normal))
 
     if len(valid_reorderings) != 1:
         return lines
-    return valid_reorderings[0]
+    reordering, normal = valid_reorderings[0]
+    if any(_brace_delta(line_text(line)) < 0 for line in normal):
+        return lines
+    return reordering
 
 
 def _expected_line_y(members, candidate_x):
