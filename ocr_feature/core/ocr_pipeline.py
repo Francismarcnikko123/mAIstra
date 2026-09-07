@@ -10,6 +10,7 @@ from core.preprocess import preprocess_image, PreprocessConfig, DEFAULT_CONFIG
 from core.numeric import finite_float
 from core.debug_artifact import write_debug_artifact
 from core.c_code_cleanup import clean_c_code
+from core.c_literals import C_LITERAL
 from core.c_code_suggestions import suggest_c_code
 
 
@@ -159,6 +160,22 @@ def _filter_low_confidence(rec_texts, rec_scores, rec_boxes):
                 "box": rec_boxes[i] if i < len(rec_boxes) else None,
             })
     return keep_texts, keep_scores, keep_boxes, dropped
+
+
+def _brace_delta(text: str) -> int:
+    """Net change in {}-depth contributed by `text`, skipping anything
+    inside a string/char literal -- that's student content, never real C
+    structure. Walks the same C_LITERAL segment pattern c_code_cleanup.py
+    uses, so literal handling never drifts between the two call sites."""
+    delta = 0
+    last = 0
+    for match in C_LITERAL.finditer(text):
+        segment = text[last:match.start()]
+        delta += segment.count("{") - segment.count("}")
+        last = match.end()
+    segment = text[last:]
+    delta += segment.count("{") - segment.count("}")
+    return delta
 
 
 def _expected_line_y(members, candidate_x):

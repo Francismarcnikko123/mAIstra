@@ -61,6 +61,7 @@ def load_pipeline_without_models():
 
     numeric = load_real("numeric")
     debug_artifact = load_real("debug_artifact")
+    c_literals = load_real("c_literals")
 
     module_name = "ocr_pipeline_grouping_test_module"
     spec = importlib.util.spec_from_file_location(module_name, PIPELINE_PATH)
@@ -74,6 +75,7 @@ def load_pipeline_without_models():
         "core.numeric": numeric,
         "core.debug_artifact": debug_artifact,
         "core.c_code_cleanup": c_code_cleanup,
+        "core.c_literals": c_literals,
         "core.c_code_suggestions": c_code_suggestions,
         module_name: module,
     }
@@ -587,6 +589,39 @@ class LineDetailsTests(unittest.TestCase):
             details[0]["review_reasons"], ["function-call-printf"]
         )
         self.assertEqual(details[1]["review_reasons"], ["function-call-scanf"])
+
+
+class BraceDeltaTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pipeline = load_pipeline_without_models()
+
+    def test_counts_a_single_opener(self):
+        self.assertEqual(self.pipeline._brace_delta("void f() {"), 1)
+
+    def test_counts_a_single_closer(self):
+        self.assertEqual(self.pipeline._brace_delta("}"), -1)
+
+    def test_self_balanced_line_is_zero(self):
+        self.assertEqual(
+            self.pipeline._brace_delta("struct S { int a; };"), 0
+        )
+
+    def test_multiple_closers_in_one_line(self):
+        self.assertEqual(self.pipeline._brace_delta("} } }"), -3)
+
+    def test_ignores_braces_inside_a_string_literal(self):
+        self.assertEqual(
+            self.pipeline._brace_delta('printf("{ not real }");'), 0
+        )
+
+    def test_ignores_braces_inside_a_char_literal(self):
+        self.assertEqual(self.pipeline._brace_delta("char c = '{';"), 0)
+
+    def test_counts_real_brace_alongside_a_shielded_literal(self):
+        self.assertEqual(
+            self.pipeline._brace_delta('if (x) { printf("}"); '), 1
+        )
 
 
 if __name__ == "__main__":
