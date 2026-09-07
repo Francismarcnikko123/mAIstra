@@ -312,6 +312,52 @@ class GroupDetectionRecordsTests(unittest.TestCase):
             [[("first", 0.2)], [("second", 0.3)], [("third", 0.4)]],
         )
 
+    def test_end_to_end_severs_and_reassembles_a_displaced_case_body(self):
+        # End-to-end wiring test. Geometry hand-traced before writing this,
+        # and picked SPECIFICALLY so the well-formedness search is
+        # unambiguous (only one block length yields a valid reordering) --
+        # a smaller "case 0:" flavored fixture was tried first and rejected
+        # because two block lengths both yielded well-formed sequences,
+        # which the algorithm's ambiguity guard correctly declined.
+        #
+        # Raw geometric sweep (y then x, gap-check on same-y merge):
+        #   struct (y=10, x=[0,100])
+        #   }      (y=10, x=[800,900])   <- 700px gap > 600px threshold
+        #                                   at ~100px median width -> severed
+        #   main   (y=30, x=[0,100])     <- 20px y-diff > line_tol(6) -> own line
+        # sweep order: [struct, } (severed), main]  -- misordered, "}"
+        # sits before the opener it's meant to close.
+        #
+        # Reassembly search (start=1):
+        #   L=1: block=[}], normal=[struct, main]
+        #        reordering=[struct, main, }]  depths 0, 1, 0  -> well-formed
+        #   L=2: block=[}, main], normal=[struct]
+        #        reordering=[struct, }, main]  depths 0, -1 -> NOT well-formed
+        # exactly one valid L -> reorder applied.
+        texts = [
+            "struct S { int x; };",   # y=10, x=[0,100]        delta 0
+            "}",                       # y=10, x=[800,900] sev  delta -1
+            "int main() {",            # y=30, x=[0,100]        delta +1
+        ]
+        boxes = [
+            [0, 5, 100, 15],
+            [800, 5, 900, 15],
+            [0, 25, 100, 35],
+        ]
+
+        grouped, geometry_safe = self.pipeline._group_detection_records(
+            texts, [0.9] * 3, boxes
+        )
+
+        self.assertTrue(geometry_safe)
+        result_texts = [
+            member["text"] for line in grouped for member in line
+        ]
+        self.assertEqual(
+            result_texts,
+            ["struct S { int x; };", "int main() {", "}"],
+        )
+
 
 class StructuredRecognitionTests(unittest.TestCase):
     @classmethod

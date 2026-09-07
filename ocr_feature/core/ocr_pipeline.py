@@ -394,6 +394,7 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
 
         lines.append({"members": [it]})
 
+    lines = _reassemble_displaced_regions(lines)
     ordered_lines = [
         sorted(line["members"], key=lambda member: member["x"])
         for line in lines
