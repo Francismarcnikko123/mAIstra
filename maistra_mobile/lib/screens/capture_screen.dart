@@ -18,7 +18,10 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   Future<void> _scanDocument() async {
     try {
-      final pictures = await CunningDocumentScanner.getPictures(noOfPages: 20);
+      final pictures = await CunningDocumentScanner.getPictures(
+        noOfPages: 20,
+        isGalleryImportAllowed: true,
+      );
       if (pictures == null || pictures.isEmpty) return;
       await _processPages(pictures);
     } catch (e) {
@@ -31,25 +34,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
     }
   }
 
-  Future<void> _pickFromGallery() async {
-    try {
-      final pictures = await CunningDocumentScanner.getPictures(
-        isGalleryImportAllowed: true,
-        noOfPages: 20,
-      );
-      if (pictures == null || pictures.isEmpty) return;
-      await _processPages(pictures);
-    } catch (e) {
-      setState(() => _isProcessingBatch = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  Future<void> _processPages(List<String> paths) async {
+Future<void> _processPages(List<String> paths) async {
     setState(() => _isProcessingBatch = true);
 
     final items = <BatchItem>[];
@@ -104,18 +89,6 @@ class _CaptureScreenState extends State<CaptureScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFB71C1C),
               padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: _pickFromGallery,
-            icon: const Icon(Icons.photo_library, color: Color(0xFFB71C1C)),
-            label: const Text('Upload from Gallery',
-                style: TextStyle(color: Color(0xFFB71C1C), fontSize: 16)),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-              side: const BorderSide(color: Color(0xFFB71C1C)),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
