@@ -178,6 +178,66 @@ def _brace_delta(text: str) -> int:
     return delta
 
 
+def _reassemble_displaced_regions(lines: list) -> list:
+    """If exactly one contiguous run of gap-severed lines can be moved to
+    the end of the page such that the resulting sequence has well-formed
+    brace structure (cumulative depth never negative, ends at 0), move it
+    there. Otherwise return `lines` unchanged.
+
+    Deliberately narrow: this only covers a block whose correct position is
+    at the END of the sequence -- e.g. a switch-case body written in the
+    margin while the dangling `case N:` opener is the LAST normal line on
+    the page. A block belonging mid-sequence is a known, uncovered
+    extension (see docs/superpowers/specs/2026-09-07-reading-order-reassembly-design.md).
+
+    The algorithm searches every possible block length L (starting at the
+    first severed line, extending through the next L lines) and picks the
+    one that yields a well-formed sequence. Any ambiguity -- zero or
+    multiple L values yielding a well-formed sequence, or a non-contiguous
+    severed run -- returns `lines` unchanged rather than guessing.
+    """
+    severed_indices = [
+        i for i, line in enumerate(lines) if line.get("severed_by_gap")
+    ]
+    if not severed_indices:
+        return lines
+
+    # Reject a non-contiguous severed run: if the severed indices don't form
+    # a single unbroken sequence starting at severed_indices[0], the page
+    # has multiple displaced regions and reassembly is ambiguous.
+    start = severed_indices[0]
+    expected = list(range(start, start + len(severed_indices)))
+    if severed_indices != expected:
+        return lines
+
+    def line_text(line: dict) -> str:
+        return "\n".join(member["text"] for member in line["members"])
+
+    def is_well_formed(sequence: list) -> bool:
+        depth = 0
+        for line in sequence:
+            depth += _brace_delta(line_text(line))
+            if depth < 0:
+                return False
+        return depth == 0
+
+    valid_reorderings = []
+    for block_len in range(1, len(lines) - start + 1):
+        block = lines[start:start + block_len]
+        # Must contain every severed line -- can't leave a severed line in
+        # the normal section, that would defeat the point of severing it.
+        if block_len < len(severed_indices):
+            continue
+        normal = lines[:start] + lines[start + block_len:]
+        reordering = normal + block
+        if is_well_formed(reordering):
+            valid_reorderings.append(reordering)
+
+    if len(valid_reorderings) != 1:
+        return lines
+    return valid_reorderings[0]
+
+
 def _expected_line_y(members, candidate_x):
     """Predict a candidate's vertical center from the current line members."""
     if len(members) == 1:

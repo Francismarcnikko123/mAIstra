@@ -89,6 +89,16 @@ def box(x, y_center):
     return [x, y_center - 5, x + 10, y_center + 5]
 
 
+def _line(text, severed=False):
+    """Build one minimal line dict, matching what _group_detection_records
+    produces internally: a single member carrying `text`, optionally
+    flagged as severed by the Phase 1 gap check."""
+    line = {"members": [{"text": text, "score": 0.9}]}
+    if severed:
+        line["severed_by_gap"] = True
+    return line
+
+
 def recognition_attempt(text, score=0.8, y_min=0.1, y_max=0.2):
     """Return one complete mocked structured recognition attempt."""
     members = [(text, score)]
@@ -622,6 +632,131 @@ class BraceDeltaTests(unittest.TestCase):
         self.assertEqual(
             self.pipeline._brace_delta('if (x) { printf("}"); '), 1
         )
+
+
+class ReassembleDisplacedRegionsTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pipeline = load_pipeline_without_models()
+
+    def texts_of(self, lines):
+        return [line["members"][0]["text"] for line in lines]
+
+    def test_no_severed_line_returns_input_unchanged(self):
+        lines = [_line("int main() {"), _line("return 0;"), _line("}")]
+
+        result = self.pipeline._reassemble_displaced_regions(lines)
+
+        self.assertEqual(result, lines)
+
+    def test_relocates_the_rbnode_example_to_the_end(self):
+        # The user's real motivating example: a struct def and a function
+        # opening through a dangling `case 0:`, with the case body written
+        # in margin space and severed by Phase 1's gap check.
+        lines = [
+            _line("struct RBNode { int val; int color; struct RBNode *child[2]; };"),
+            _line("(*root)->child[!dir] = save->child[dir];", severed=True),
+            _line("save->child[dir] = *root;"),
+            _line("(*root)->color = 1;"),
+            _line("save->color = 0;"),
+            _line("*root = save;"),
+            _line("break;"),
+            _line("}"),
+            _line("}"),
+            _line("}"),
+            _line("void rotate_rb(struct RBNode **root, int dir) {"),
+            _line("if (*root != NULL && (*root)->child[!dir] != NULL) {"),
+            _line("struct RBNode *save = (*root)->child[!dir];"),
+            _line("switch (save->color) {"),
+            _line("case 0:"),
+        ]
+
+        result = self.pipeline._reassemble_displaced_regions(lines)
+
+        self.assertEqual(
+            self.texts_of(result),
+            [
+                "struct RBNode { int val; int color; struct RBNode *child[2]; };",
+                "void rotate_rb(struct RBNode **root, int dir) {",
+                "if (*root != NULL && (*root)->child[!dir] != NULL) {",
+                "struct RBNode *save = (*root)->child[!dir];",
+                "switch (save->color) {",
+                "case 0:",
+                "(*root)->child[!dir] = save->child[dir];",
+                "save->child[dir] = *root;",
+                "(*root)->color = 1;",
+                "save->color = 0;",
+                "*root = save;",
+                "break;",
+                "}",
+                "}",
+                "}",
+            ],
+        )
+
+    def test_relocates_the_compressor_example_to_the_end(self):
+        lines = [
+            _line("struct Compressor { unsigned int flags; int shift_count; };"),
+            _line("c->flags |= (inputs[i] & 0xFF) << c->shift_count;", severed=True),
+            _line("c->shift_count += 8;"),
+            _line("break;"),
+            _line("}"),
+            _line("i++;"),
+            _line("}"),
+            _line("}"),
+            _line("void pack_flags(struct Compressor *c, unsigned int inputs[], int size) {"),
+            _line("int i = 0;"),
+            _line("while (i < size && c->shift_count <= 24) {"),
+            _line("switch (inputs[i] != 0 && !(inputs[i] & 0x01) ? 1 : 0) {"),
+            _line("case 1:"),
+        ]
+
+        result = self.pipeline._reassemble_displaced_regions(lines)
+
+        self.assertEqual(
+            self.texts_of(result),
+            [
+                "struct Compressor { unsigned int flags; int shift_count; };",
+                "void pack_flags(struct Compressor *c, unsigned int inputs[], int size) {",
+                "int i = 0;",
+                "while (i < size && c->shift_count <= 24) {",
+                "switch (inputs[i] != 0 && !(inputs[i] & 0x01) ? 1 : 0) {",
+                "case 1:",
+                "c->flags |= (inputs[i] & 0xFF) << c->shift_count;",
+                "c->shift_count += 8;",
+                "break;",
+                "}",
+                "i++;",
+                "}",
+                "}",
+            ],
+        )
+
+    def test_two_severed_blocks_is_ambiguous_and_stays_unchanged(self):
+        lines = [
+            _line("int main() {"),
+            _line("a();", severed=True),
+            _line("b();", severed=True),
+            _line("}"),
+        ]
+
+        result = self.pipeline._reassemble_displaced_regions(lines)
+
+        self.assertEqual(result, lines)
+
+    def test_unbalanced_result_stays_unchanged(self):
+        # The severed block's braces don't bring the page back to a clean
+        # close -- must not guess.
+        lines = [
+            _line("int main() {"),
+            _line("return 0;", severed=True),
+            _line("}"),
+            _line("}"),  # one extra closer -- never balances to 0
+        ]
+
+        result = self.pipeline._reassemble_displaced_regions(lines)
+
+        self.assertEqual(result, lines)
 
 
 if __name__ == "__main__":
