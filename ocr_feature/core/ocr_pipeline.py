@@ -113,6 +113,25 @@ REC_SCORE_FLOOR = 0.3
 # sides of that measured gap.
 MAX_SAME_LINE_X_OVERLAP = 0.3
 
+# Region-gap threshold: how far apart two same-height fragments can be and
+# still count as one physical line, vs. being flagged as a spatially
+# distinct region a student wrote elsewhere on the page (see
+# docs/superpowers/specs/2026-09-07-reading-order-reassembly-design.md).
+#
+# PROVISIONAL (2026-09-07): derived by re-running this function's OWN
+# current grouping over 111 real debug artifacts in outputs/debug/*.json and
+# measuring the horizontal gaps it already accepts as "same line": median
+# member width 112px; within-line gap median 92px, p90 545px, p95 612px,
+# p99 788px, max 1131px. The extreme tail may itself include undetected
+# over-merges -- exactly the failure mode this constant targets -- so it
+# cannot be trusted as ground truth for "definitely correct" gaps. 6x
+# median width (~672px on a typical page) sits between the measured p95 and
+# p99, erring toward NOT splitting ordinary long lines. This has NOT been
+# validated against a confirmed different-content case, because none exist
+# in the current dataset -- recalibrate once real split-layout photos
+# arrive.
+REGION_GAP_MULTIPLIER = 6.0
+
 
 def _filter_low_confidence(rec_texts, rec_scores, rec_boxes):
     """Drop entries below REC_SCORE_FLOOR, keeping the three lists aligned.
@@ -199,6 +218,7 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
 
     items = []
     heights = []
+    widths = []
     for i, box in enumerate(rec_boxes):
         try:
             x_min, y_min, x_max, y_max = (float(box[0]), float(box[1]),
@@ -222,6 +242,7 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
                       "x": x_min, "x_max": x_max, "y": y_center,
                       "y_min": y_min, "y_max": y_max})
         heights.append(height)
+        widths.append(width)
 
     # Two boxes belong to the same visual line if their vertical centers are
     # within ~60% of a typical line height. Using the median height keeps this
@@ -229,6 +250,10 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
     heights.sort()
     median_h = heights[len(heights) // 2] if heights else 0.0
     line_tol = max(median_h * 0.6, 1.0)
+
+    widths.sort()
+    median_width = widths[len(widths) // 2] if widths else 0.0
+    region_gap_threshold = max(REGION_GAP_MULTIPLIER * median_width, 1.0)
 
     # Sort by vertical position first so we can sweep top-to-bottom.
     items.sort(key=lambda it: it["y"])
@@ -267,7 +292,24 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
                 # member so an empty gap inside the line's span cannot veto a
                 # merge merely because detections arrived out of x-order.
                 if max(overlap_fractions) <= MAX_SAME_LINE_X_OVERLAP:
-                    members.append(it)
+                    gap_to_nearest_member = min(
+                        max(
+                            0.0,
+                            it["x"] - member["x_max"],
+                            member["x"] - it["x_max"],
+                        )
+                        for member in members
+                    )
+                    # Disjoint fragments of one physical row sit close
+                    # together; a fragment written elsewhere on the page (see
+                    # the reading-order reassembly design) sits far apart
+                    # despite matching height and not overlapping. Sever it
+                    # into its own line instead of fusing it in, and flag the
+                    # severance so a later pass can try to relocate it.
+                    if gap_to_nearest_member <= region_gap_threshold:
+                        members.append(it)
+                        continue
+                    lines.append({"members": [it], "severed_by_gap": True})
                     continue
         else:
             lines.append({"members": [it]})

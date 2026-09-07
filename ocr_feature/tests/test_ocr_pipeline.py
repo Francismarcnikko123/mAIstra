@@ -217,6 +217,28 @@ class GroupDetectionRecordsTests(unittest.TestCase):
 
         self.assertEqual(lines, [["int main()", "{"]])
 
+    def test_severs_a_far_apart_same_height_fragment_instead_of_fusing_it(self):
+        # Median width here is ~100 (both boxes are 100 wide), so the gap
+        # threshold is 6 * 100 = 600. A 700px gap must sever, not merge.
+        lines = self.group_lines(
+            ["struct Compressor { unsigned int flags; };", "c->flags |= 1;"],
+            [[0, 10, 100, 20], [800, 10, 900, 20]],
+        )
+
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0][0][0], "struct Compressor { unsigned int flags; };")
+        self.assertEqual(lines[1][0][0], "c->flags |= 1;")
+
+    def test_keeps_a_moderate_gap_merged_as_one_line(self):
+        # Same widths (median 100, threshold 600), but only a 50px gap --
+        # must still merge as before this change.
+        lines = self.group_texts(
+            ["int main()", "{"],
+            [[0, 10, 100, 20], [150, 10, 250, 20]],
+        )
+
+        self.assertEqual(lines, [["int main()", "{"]])
+
     def test_accepts_a_finite_box_centered_at_zero(self):
         lines = self.group_texts(["a", "b"], [box(0, 0), box(20, 0)])
 
