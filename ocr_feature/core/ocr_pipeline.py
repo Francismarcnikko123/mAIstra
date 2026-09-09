@@ -119,19 +119,30 @@ MAX_SAME_LINE_X_OVERLAP = 0.3
 # distinct region a student wrote elsewhere on the page (see
 # docs/superpowers/specs/2026-09-07-reading-order-reassembly-design.md).
 #
-# PROVISIONAL (2026-09-07): derived by re-running this function's OWN
-# current grouping over 111 real debug artifacts in outputs/debug/*.json and
-# measuring the horizontal gaps it already accepts as "same line": median
-# member width 112px; within-line gap median 92px, p90 545px, p95 612px,
-# p99 788px, max 1131px. The extreme tail may itself include undetected
-# over-merges -- exactly the failure mode this constant targets -- so it
-# cannot be trusted as ground truth for "definitely correct" gaps. 6x
-# median width (~672px on a typical page) sits between the measured p95 and
-# p99, erring toward NOT splitting ordinary long lines. This has NOT been
-# validated against a confirmed different-content case, because none exist
-# in the current dataset -- recalibrate once real split-layout photos
-# arrive.
-REGION_GAP_MULTIPLIER = 6.0
+# RECALIBRATED (2026-09-10) against two real photos of the exact target
+# scenario (a struct + if/else body written in margin space while the rest
+# of the function fills the space below it -- both on bond paper, one
+# writer). Confirmed same-line fragment gaps (a case-label detected
+# separately from its own statement, same physical line, Duff's-device
+# switch block): 48-81px across 6 pairs. Confirmed cross-region gaps (left
+# column vs. the displaced top-right block, genuinely different content):
+# 151-391px across 5 pairs. Clean separation, no overlap between the two
+# ranges. 0.75x median width sits with margin on both sides (114px at this
+# photo's median width of 152px, 120px at the other photo's median width of
+# 160px) -- both comfortably between the confirmed same-line max and
+# cross-region min.
+#
+# The previous provisional value (6.0, derived indirectly from the
+# algorithm's own historically-accepted same-line gaps rather than a
+# confirmed real cross-region case) was proven wrong by this data: it failed
+# to sever on both real photos (required gap ~960-1050px vs. actual observed
+# 151-391px), so Phase 2 reassembly never got a chance to run at all.
+#
+# Still confirmed against ONE writer's handwriting on ONE paper type (bond)
+# only -- not yet cross-validated against other writers or paper types.
+# Recalibrate further if a different writer's natural spacing habits don't
+# fit this range.
+REGION_GAP_MULTIPLIER = 0.75
 
 
 def _filter_low_confidence(rec_texts, rec_scores, rec_boxes):

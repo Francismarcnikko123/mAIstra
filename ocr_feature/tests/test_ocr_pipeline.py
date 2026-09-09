@@ -89,6 +89,16 @@ def box(x, y_center):
     return [x, y_center - 5, x + 10, y_center + 5]
 
 
+def wide_box(x, y_center):
+    """Like box(), but realistically word-scale (100px wide) rather than
+    10px. Needed for tests whose x-positions must stay merge-eligible under
+    the real, evidence-based REGION_GAP_MULTIPLIER=0.75 -- box()'s tiny 10px
+    width makes any nonzero gap exceed that threshold (0.75 * 10 = 7.5px),
+    which has nothing to do with what these particular tests are actually
+    checking (vertical-tolerance/slope/sort logic, not gap-severance)."""
+    return [x, y_center - 5, x + 100, y_center + 5]
+
+
 def _line(text, severed=False):
     """Build one minimal line dict, matching what _group_detection_records
     produces internally: a single member carrying `text`, optionally
@@ -144,7 +154,7 @@ class GroupDetectionRecordsTests(unittest.TestCase):
     def test_does_not_merge_next_line_after_running_mean_drift(self):
         lines = self.group_texts(
             ["a", "b", "c", "next"],
-            [box(0, 10), box(20, 11), box(40, 12), box(0, 17)],
+            [wide_box(0, 10), wide_box(130, 11), wide_box(260, 12), wide_box(0, 17)],
         )
 
         self.assertEqual(lines, [["a", "b", "c"], ["next"]])
@@ -152,7 +162,7 @@ class GroupDetectionRecordsTests(unittest.TestCase):
     def test_keeps_a_sloped_handwritten_line_together(self):
         lines = self.group_texts(
             ["a", "b", "c"],
-            [box(0, 10), box(20, 14), box(40, 18)],
+            [wide_box(0, 10), wide_box(130, 14), wide_box(260, 18)],
         )
 
         self.assertEqual(lines, [["a", "b", "c"]])
@@ -160,7 +170,7 @@ class GroupDetectionRecordsTests(unittest.TestCase):
     def test_keeps_a_four_fragment_slope_together(self):
         lines = self.group_texts(
             ["a", "b", "c", "d"],
-            [box(0, 10), box(20, 14), box(40, 18), box(60, 22)],
+            [wide_box(0, 10), wide_box(130, 14), wide_box(260, 18), wide_box(390, 22)],
         )
 
         self.assertEqual(lines, [["a", "b", "c", "d"]])
@@ -168,7 +178,7 @@ class GroupDetectionRecordsTests(unittest.TestCase):
     def test_rejects_an_indented_next_row_after_a_shallow_slope(self):
         lines = self.group_texts(
             ["a", "b", "c", "next"],
-            [box(0, 10), box(20, 11), box(40, 12), box(80, 18)],
+            [wide_box(0, 10), wide_box(130, 11), wide_box(260, 12), wide_box(520, 18)],
         )
 
         self.assertEqual(lines, [["a", "b", "c"], ["next"]])
@@ -195,7 +205,7 @@ class GroupDetectionRecordsTests(unittest.TestCase):
         self.assertEqual(lines, [["a"], ["b"]])
 
     def test_exact_vertical_tolerance_boundary_stays_on_the_line(self):
-        lines = self.group_texts(["a", "b"], [box(0, 10), box(20, 16)])
+        lines = self.group_texts(["a", "b"], [wide_box(0, 10), wide_box(130, 16)])
 
         self.assertEqual(lines, [["a", "b"]])
 
@@ -231,7 +241,7 @@ class GroupDetectionRecordsTests(unittest.TestCase):
 
     def test_severs_a_far_apart_same_height_fragment_instead_of_fusing_it(self):
         # Median width here is ~100 (both boxes are 100 wide), so the gap
-        # threshold is 6 * 100 = 600. A 700px gap must sever, not merge.
+        # threshold is 0.75 * 100 = 75. A 700px gap must sever, not merge.
         lines = self.group_lines(
             ["struct Compressor { unsigned int flags; };", "c->flags |= 1;"],
             [[0, 10, 100, 20], [800, 10, 900, 20]],
@@ -242,7 +252,7 @@ class GroupDetectionRecordsTests(unittest.TestCase):
         self.assertEqual(lines[1][0][0], "c->flags |= 1;")
 
     def test_keeps_a_moderate_gap_merged_as_one_line(self):
-        # Same widths (median 100, threshold 600), but only a 50px gap --
+        # Same widths (median 100, threshold 75), but only a 50px gap --
         # must still merge as before this change.
         lines = self.group_texts(
             ["int main()", "{"],
@@ -252,14 +262,23 @@ class GroupDetectionRecordsTests(unittest.TestCase):
         self.assertEqual(lines, [["int main()", "{"]])
 
     def test_accepts_a_finite_box_centered_at_zero(self):
-        lines = self.group_texts(["a", "b"], [box(0, 0), box(20, 0)])
+        lines = self.group_texts(["a", "b"], [wide_box(0, 0), wide_box(130, 0)])
 
         self.assertEqual(lines, [["a", "b"]])
 
     def test_sorts_members_left_to_right_within_a_line(self):
+        # Input list order is scrambled (right, left, middle) to test the
+        # final within-line sort -- but y-values are distinct (not tied) so
+        # the sweep processes them in genuine spatial order (left, then
+        # middle, then right), not input-list order. With tied y-values,
+        # same-y ties break by input order, which would compare "right"
+        # directly against "left" (the farthest pair) before "middle" ever
+        # joins the line -- fine under the old 600px threshold, but exceeds
+        # the real 75px one even though every *adjacent* pair is well within
+        # it.
         lines = self.group_texts(
             ["right", "left", "middle"],
-            [box(50, 10), box(0, 10), box(25, 10)],
+            [wide_box(325, 11), wide_box(0, 10), wide_box(163, 10.5)],
         )
 
         self.assertEqual(lines, [["left", "middle", "right"]])
