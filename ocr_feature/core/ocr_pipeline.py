@@ -180,16 +180,28 @@ def _reassemble_displaced_regions(lines: list) -> list:
     the page. A block belonging mid-sequence is a known, uncovered
     extension (see docs/superpowers/specs/2026-09-07-reading-order-reassembly-design.md).
 
-    The algorithm searches every possible block length L (starting at the
-    first severed line, extending through the next L lines) and picks the
-    one that yields a well-formed sequence. Any ambiguity -- zero or
-    multiple L values yielding a well-formed sequence, or a non-contiguous
-    severed run -- returns `lines` unchanged rather than guessing.
+    The block's fixed core is every severed line, in original relative
+    order, wherever it sits -- a real displaced region (see
+    docs/superpowers/specs/2026-09-10-displaced-region-tracking-design.md)
+    can interleave with unrelated normal lines in the sweep, and those
+    interleaved lines must stay in `normal`, not get swept into the block
+    just because they sit between two severed indices.
 
-    Only after selecting a unique block length, reject the candidate if
+    Beyond that core, the search still varies how many of the *trailing*
+    lines (everything after the last severed index) join the block -- this
+    is what makes the RBNode/Compressor style case work, where only the
+    block's first line is actually flagged severed and the rest of the
+    displaced body simply follows it as ordinary un-flagged lines. Lines
+    positioned before the last severed index are never candidates for this
+    extension, whether severed or not -- only the contiguous tail is
+    searched. Any ambiguity -- zero or multiple tail lengths yielding a
+    well-formed sequence -- returns `lines` unchanged rather than guessing.
+
+    Only after selecting a unique tail length, reject the candidate if
     any line in its normal partition has _brace_delta < 0. The partition
-    depends on L: unmarked lines can still belong to the displaced block.
-    This guard must not filter candidates before uniqueness is established.
+    depends on the tail length: unmarked trailing lines can still belong
+    to the displaced block. This guard must not filter candidates before
+    uniqueness is established.
 
     For the supported end-of-sequence displacement, the main text left one
     or more scopes open, and the displaced block closes them. In that case,
@@ -208,13 +220,13 @@ def _reassemble_displaced_regions(lines: list) -> list:
     if not severed_indices:
         return lines
 
-    # Reject a non-contiguous severed run: if the severed indices don't form
-    # a single unbroken sequence starting at severed_indices[0], the page
-    # has multiple displaced regions and reassembly is ambiguous.
-    start = severed_indices[0]
-    expected = list(range(start, start + len(severed_indices)))
-    if severed_indices != expected:
-        return lines
+    severed_set = set(severed_indices)
+    last_severed = severed_indices[-1]
+    block_core = [lines[i] for i in severed_indices]
+    fixed_normal = [
+        lines[i] for i in range(last_severed + 1) if i not in severed_set
+    ]
+    tail_candidates = lines[last_severed + 1:]
 
     def line_text(line: dict) -> str:
         return "\n".join(member["text"] for member in line["members"])
@@ -228,13 +240,9 @@ def _reassemble_displaced_regions(lines: list) -> list:
         return depth == 0
 
     valid_reorderings = []
-    for block_len in range(1, len(lines) - start + 1):
-        block = lines[start:start + block_len]
-        # Must contain every severed line -- can't leave a severed line in
-        # the normal section, that would defeat the point of severing it.
-        if block_len < len(severed_indices):
-            continue
-        normal = lines[:start] + lines[start + block_len:]
+    for tail_len in range(0, len(tail_candidates) + 1):
+        block = block_core + tail_candidates[:tail_len]
+        normal = fixed_normal + tail_candidates[tail_len:]
         reordering = normal + block
         if is_well_formed(reordering):
             valid_reorderings.append((reordering, normal))
