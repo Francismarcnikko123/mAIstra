@@ -114,57 +114,14 @@ REC_SCORE_FLOOR = 0.3
 # sides of that measured gap.
 MAX_SAME_LINE_X_OVERLAP = 0.3
 
-# Region-gap threshold: how far apart two same-height fragments can be and
-# still count as one physical line, vs. being flagged as a spatially
-# distinct region a student wrote elsewhere on the page (see
-# docs/superpowers/specs/2026-09-07-reading-order-reassembly-design.md).
-#
-# REVERTED TO PROVISIONAL (2026-09-10). A recalibration to 0.75 was tried
-# and reverted the same day -- keeping the full story here since the
-# measurement that motivated it is still real and useful, just not
-# sufficient on its own.
-#
-# The 0.75 value was derived from two real photos of the target scenario (a
-# struct + if/else body written in margin space, main flow below): confirmed
-# same-line fragment gaps 48-81px vs. confirmed cross-region gaps 151-391px,
-# a clean separation with no overlap. That measurement is still valid for
-# the scenario it covers.
-#
-# But re-running the real evaluate_cer baseline (which should have happened
-# immediately after committing the recalibration, and did not -- a process
-# gap, not caught until a later handoff) showed 0.75 regresses the official
-# 20-image samples/ set: CER 0.126 -> 0.128, WER 0.351 -> 0.354, token-acc
-# 0.696 -> 0.694. Root cause, confirmed by instrumenting the reassembly call
-# directly: Phase 2 (reassembly) correctly stayed inert (25 severed lines on
-# the affected sample, nowhere near a single contiguous block, safety guard
-# held) -- the regression is Phase 1 (severance) alone, over-triggering on
-# `greenbook/green_writer10_B2_1.jpg`, which has multiple independent short
-# programs stacked on one page. Unrelated-but-adjacent program fragments on
-# that kind of page can sit closer together than the 151-391px cross-region
-# range the two calibration photos measured -- a structurally different
-# scenario the calibration data never covered. The two real-world cases
-# (genuine margin displacement vs. multiple independent programs close
-# together) may have overlapping natural gap ranges that a single distance
-# threshold cannot cleanly separate; this needs confirming with real
-# measured gaps from a multi-program page like the one that regressed,
-# not assumed.
-#
-# PROVISIONAL (2026-09-07): derived by re-running this function's OWN
-# current grouping over 111 real debug artifacts in outputs/debug/*.json and
-# measuring the horizontal gaps it already accepts as "same line": median
-# member width 112px; within-line gap median 92px, p90 545px, p95 612px,
-# p99 788px, max 1131px. The extreme tail may itself include undetected
-# over-merges -- exactly the failure mode this constant targets -- so it
-# cannot be trusted as ground truth for "definitely correct" gaps. 6x
-# median width (~672px on a typical page) sits between the measured p95 and
-# p99, erring toward NOT splitting ordinary long lines. Confirmed safe
-# against the official 20-image baseline (no-op, exact match). Confirmed
-# NOT sensitive enough to catch the real margin-displacement scenario in the
-# two 2026-09-10 calibration photos -- recalibrate once a threshold (or a
-# smarter signal than raw gap distance) is found that satisfies both
-# constraints, not just one.
-REGION_GAP_MULTIPLIER = 6.0
-
+# Revision 3: a realistic gap proposes a gutter; only a confirmed bounded
+# window authorizes separation. Retain the historical 6.0 merge threshold
+# outside that window, including when the trace never closes. Lowering the
+# merge threshold itself regressed green_writer10 in the held-out set.
+REGION_GAP_MULTIPLIER = 0.75
+BASELINE_REGION_GAP_MULTIPLIER = 6.0
+MAX_DISPLACED_REGION_LINES = 12
+MAX_DISPLACED_REGION_SPAN = 300.0
 
 def _filter_low_confidence(rec_texts, rec_scores, rec_boxes):
     """Drop entries below REC_SCORE_FLOOR, keeping the three lists aligned.
@@ -334,6 +291,114 @@ def _original_detection_records(rec_texts, rec_scores):
     }] for i, text in enumerate(rec_texts)]
 
 
+def _trace_displaced_region(items, left_max, right_min):
+    """Confirm the first bounded RIGHT region, or discard every candidate.
+
+    Walk box tops so a tall margin row that overlaps the open window is
+    considered before the wide row closing it, even if its center is lower.
+    The 12-detection/300px limits apply only to a confirmed window. An open
+    or collapsed gutter never authorizes a change to baseline grouping.
+
+    Closing has two independent triggers, not just the straddle case: a
+    displaced block isn't guaranteed to be followed by a line that bridges
+    back across the gutter. See the end-of-loop check below -- an earlier
+    version tried a fixed-distance inactivity trigger instead (closing as
+    soon as some number of px passed since the last RIGHT match, without
+    waiting for the page to end), but hand-tracing it against
+    green_writer10_B2_1.jpg found it fires too early on that page's
+    tighter real line spacing: skipping just 2 LEFT lines between RIGHT
+    matches there already exceeds a distance threshold sized off a
+    different, more widely-spaced real photo, confirming a false 2-line
+    "displaced block" on a genuine two-column page. A single value tuned
+    from one photo's spacing isn't safe to apply to another's -- removed
+    rather than shipped unvalidated. If an early-exit trigger is revisited,
+    it needs its own real-data validation across multiple photos, not a
+    reused constant from a different measurement.
+    """
+    by_top = sorted(items, key=lambda item: item["y_min"])
+    start_y = by_top[0]["y_min"]
+
+    def confirm(accepted, close_y):
+        # A box starting exactly at the close has no overlap with the
+        # open window, regardless of input ordering among equal tops.
+        accepted = [c for c in accepted if c["y_min"] < close_y]
+        if (len(accepted) > MAX_DISPLACED_REGION_LINES
+                or close_y - start_y > MAX_DISPLACED_REGION_SPAN):
+            return []
+        return accepted
+
+    candidates = []
+    last_was_right = False
+    for item in by_top:
+        if item["x_max"] <= right_min:
+            left_max = max(left_max, item["x_max"])
+            last_was_right = False
+        elif item["x"] >= left_max:
+            right_min = min(right_min, item["x"])
+            candidates.append(item)
+            last_was_right = True
+        else:
+            return confirm(candidates, item["y_min"])
+        if left_max >= right_min:
+            return []
+    # Reached the end of the page's content without a straddle. If RIGHT
+    # matches were still ongoing at the very last item, this looks like a
+    # genuine column that simply hasn't ended yet -- never authorize it.
+    # Otherwise the block quietly ended with nothing left to bridge back.
+    if candidates and not last_was_right:
+        return confirm(candidates, by_top[-1]["y_min"] + 1)
+    return []
+
+
+def _sweep_detection_records(items, line_tol, seed_gap_threshold,
+                             baseline_gap_threshold, severed_ids):
+    """Retain baseline merges within each partition; observe the first seed."""
+    lines = []
+    first_seed = None
+    for it in items:
+        severed = id(it) in severed_ids
+        if lines and bool(lines[-1].get("severed_by_gap")) == severed:
+            members = lines[-1]["members"]
+            expected_y = _expected_line_y(members, it["x"])
+            if expected_y is None:
+                return None, None
+            mean_y = sum(member["y"] for member in members) / len(members)
+            trend_delta = abs(it["y"] - expected_y)
+            center_delta = abs(it["y"] - mean_y)
+            within_vertical_tolerance = (
+                trend_delta <= line_tol
+                and (center_delta <= line_tol
+                     or trend_delta <= line_tol * 0.5)
+            )
+            if within_vertical_tolerance:
+                overlap_fractions = (
+                    max(0.0, min(member["x_max"], it["x_max"])
+                        - max(member["x"], it["x"]))
+                    / min(member["x_max"] - member["x"], it["x_max"] - it["x"])
+                    for member in members
+                )
+                # Compare actual members, not the empty space inside the
+                # line's span, just as in the original grouping rule.
+                if max(overlap_fractions) <= MAX_SAME_LINE_X_OVERLAP:
+                    def gap(member):
+                        return max(0.0, it["x"] - member["x_max"],
+                                   member["x"] - it["x_max"])
+
+                    nearest = min(members, key=gap)
+                    distance = gap(nearest)
+                    if first_seed is None and distance > seed_gap_threshold:
+                        left, right = sorted((nearest, it), key=lambda m: m["x"])
+                        first_seed = (left["x_max"], right["x"])
+                    if distance <= baseline_gap_threshold:
+                        members.append(it)
+                        continue
+        line = {"members": [it]}
+        if severed:
+            line["severed_by_gap"] = True
+        lines.append(line)
+    return lines, first_seed
+
+
 def _group_detection_records(rec_texts, rec_scores, rec_boxes):
     """Group detections and retain the box geometry used for ordering.
 
@@ -387,64 +452,23 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
     # Sort by vertical position first so we can sweep top-to-bottom.
     items.sort(key=lambda it: it["y"])
 
-    lines = []
-    for it in items:
-        if lines:
-            members = lines[-1]["members"]
-            expected_y = _expected_line_y(members, it["x"])
-            if expected_y is None:
-                return _original_detection_records(rec_texts, rec_scores), False
-            mean_y = sum(member["y"] for member in members) / len(members)
-            trend_delta = abs(it["y"] - expected_y)
-            center_delta = abs(it["y"] - mean_y)
-            # A tightly fitted trend can continue beyond the center band, but
-            # only within half tolerance to avoid absorbing an indented row.
-            within_vertical_tolerance = (
-                trend_delta <= line_tol
-                and (center_delta <= line_tol
-                     or trend_delta <= line_tol * 0.5)
+    baseline_gap_threshold = max(BASELINE_REGION_GAP_MULTIPLIER * median_width, 1.0)
+    lines, seed = _sweep_detection_records(
+        items, line_tol, region_gap_threshold, baseline_gap_threshold, set()
+    )
+    if lines is None:
+        return _original_detection_records(rec_texts, rec_scores), False
+    if seed is not None:
+        displaced = _trace_displaced_region(items, *seed)
+        if displaced:
+            # Re-sweep to separate region members encountered before the
+            # seed as well. No later seed is traced, even after this window.
+            lines, _ = _sweep_detection_records(
+                items, line_tol, region_gap_threshold, baseline_gap_threshold,
+                {id(item) for item in displaced},
             )
-            if within_vertical_tolerance:
-                overlap_fractions = (
-                    max(
-                        0.0,
-                        min(member["x_max"], it["x_max"])
-                        - max(member["x"], it["x"]),
-                    ) / min(
-                        member["x_max"] - member["x"],
-                        it["x_max"] - it["x"],
-                    )
-                    for member in members
-                )
-                # Stacked rows overlap heavily in x; genuine fragments on one
-                # row are side by side. Compare the candidate with each actual
-                # member so an empty gap inside the line's span cannot veto a
-                # merge merely because detections arrived out of x-order.
-                if max(overlap_fractions) <= MAX_SAME_LINE_X_OVERLAP:
-                    gap_to_nearest_member = min(
-                        max(
-                            0.0,
-                            it["x"] - member["x_max"],
-                            member["x"] - it["x_max"],
-                        )
-                        for member in members
-                    )
-                    # Disjoint fragments of one physical row sit close
-                    # together; a fragment written elsewhere on the page (see
-                    # the reading-order reassembly design) sits far apart
-                    # despite matching height and not overlapping. Sever it
-                    # into its own line instead of fusing it in, and flag the
-                    # severance so a later pass can try to relocate it.
-                    if gap_to_nearest_member <= region_gap_threshold:
-                        members.append(it)
-                        continue
-                    lines.append({"members": [it], "severed_by_gap": True})
-                    continue
-        else:
-            lines.append({"members": [it]})
-            continue
-
-        lines.append({"members": [it]})
+            if lines is None:
+                return _original_detection_records(rec_texts, rec_scores), False
 
     lines = _reassemble_displaced_regions(lines)
     ordered_lines = [

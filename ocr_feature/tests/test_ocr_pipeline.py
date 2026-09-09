@@ -378,6 +378,141 @@ class GroupDetectionRecordsTests(unittest.TestCase):
         )
 
 
+class DynamicGutterGroupingTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pipeline = load_pipeline_without_models()
+
+    def inspect_grouping(self, texts, boxes):
+        # Observe the actual geometry flags independently of brace inference.
+        with patch.object(self.pipeline, "_reassemble_displaced_regions",
+                          side_effect=lambda lines: lines) as reassemble:
+            grouped, safe = self.pipeline._group_detection_records(
+                texts, [0.9] * len(texts), boxes
+            )
+        self.assertTrue(safe)
+        reassemble.assert_called_once()
+        flagged = [
+            member["text"]
+            for line in reassemble.call_args.args[0]
+            if line.get("severed_by_gap")
+            for member in line["members"]
+        ]
+        return [[m["text"] for m in line] for line in grouped], flagged
+
+    def test_interleaved_region_includes_adjacent_right_rows_only(self):
+        # Synthetic text on the measured first-photo geometry. R0/R1 and
+        # R5/R6 separate via overlap; intervening LEFT rows must stay normal.
+        texts = ["R0", "R1", "L0", "R2", "L1", "R3", "L2",
+                 "R4", "L3", "R5", "R6", "L4", "signature"]
+        boxes = [
+            [606, 185, 693, 225], [628, 188, 942, 250],
+            [221, 221, 324, 259], [629, 247, 693, 282],
+            [245, 253, 381, 293], [631, 255, 831, 307],
+            [267, 274, 475, 319], [656, 285, 816, 328],
+            [271, 308, 381, 346], [667, 302, 797, 357],
+            [662, 345, 677, 360], [230, 348, 264, 379],
+            [247, 349, 700, 421],
+        ]
+        grouped, flagged = self.inspect_grouping(texts, boxes)
+        self.assertEqual(flagged, [f"R{i}" for i in range(7)])
+        self.assertEqual(grouped, [[text] for text in texts])
+
+    def test_boundary_box_is_included_by_range_even_after_closer_center(self):
+        grouped, flagged = self.inspect_grouping(
+            ["left", "right", "boundary", "bridge"],
+            [[0, 0, 100, 20], [300, 0, 400, 20],
+             [300, 30, 400, 100], [0, 40, 400, 60]],
+        )
+        self.assertEqual(flagged, ["right", "boundary"])
+        self.assertEqual(grouped, [["left"], ["right"], ["bridge"], ["boundary"]])
+
+    def test_same_side_extensions_narrow_until_a_real_straddle(self):
+        _, flagged = self.inspect_grouping(
+            ["left", "right", "wider left", "wider right", "bridge"],
+            [[0, 0, 100, 20], [300, 0, 400, 20],
+             [0, 30, 180, 50], [250, 30, 400, 50], [0, 60, 400, 80]],
+        )
+        self.assertEqual(flagged, ["right", "wider right"])
+
+    def test_full_height_columns_discard_candidates_and_keep_baseline_merges(self):
+        texts, boxes = [], []
+        for row in range(24):
+            texts.extend([f"L{row}", f"R{row}"])
+            boxes.extend([[0, row * 40, 100 if row == 0 else 180, row * 40 + 20],
+                          [300 if row == 0 else 250, row * 40, 400, row * 40 + 20]])
+        grouped, flagged = self.inspect_grouping(texts, boxes)
+        self.assertEqual(flagged, [])
+        self.assertEqual(grouped, [[f"L{i}", f"R{i}"] for i in range(24)])
+
+    def test_confirmed_window_respects_line_count_cap(self):
+        for count in (12, 13):
+            with self.subTest(count=count):
+                texts, boxes = [], []
+                for row in range(count):
+                    texts.extend([f"L{row}", f"R{row}"])
+                    boxes.extend([[0, row * 20, 100, row * 20 + 10],
+                                  [300, row * 20, 400, row * 20 + 10]])
+                texts.append("bridge")
+                boxes.append([0, count * 20, 400, count * 20 + 10])
+                _, flagged = self.inspect_grouping(texts, boxes)
+                self.assertEqual(flagged, [f"R{i}" for i in range(count)]
+                                 if count == 12 else [])
+
+    def test_confirmed_window_respects_vertical_span_cap(self):
+        for close_y in (300, 301):
+            with self.subTest(close_y=close_y):
+                _, flagged = self.inspect_grouping(
+                    ["left", "right", "bridge"],
+                    [[0, 0, 100, 20], [300, 0, 400, 20],
+                     [0, close_y, 400, close_y + 20]],
+                )
+                self.assertEqual(flagged, ["right"] if close_y == 300 else [])
+
+    def test_collapsed_gutter_discards_candidates_even_with_later_wide_line(self):
+        _, flagged = self.inspect_grouping(
+            ["left", "right", "fills gap", "bridge"],
+            [[0, 0, 100, 20], [300, 0, 400, 20],
+             [100, 30, 300, 50], [0, 60, 400, 80]],
+        )
+        self.assertEqual(flagged, [])
+
+    def test_later_independent_window_is_not_selected(self):
+        _, flagged = self.inspect_grouping(
+            ["left", "right", "bridge", "later left", "later right", "later bridge"],
+            [[0, 0, 100, 20], [300, 0, 400, 20], [0, 30, 400, 50],
+             [0, 70, 100, 90], [300, 70, 400, 90], [0, 100, 400, 120]],
+        )
+        self.assertEqual(flagged, ["right"])
+
+    def test_confirms_a_block_with_no_bridging_line_at_all(self):
+        # A displaced block isn't guaranteed to be followed by a line that
+        # straddles back across the gutter -- it can simply be followed by
+        # more single-column content, or nothing further at all. This is
+        # the exact shape that broke test_end_to_end_severs_and_reassembles
+        # _a_displaced_case_body under the first cut of the dynamic trace.
+        _, flagged = self.inspect_grouping(
+            ["left0", "right0", "left1"],
+            [[0, 0, 100, 20], [300, 0, 400, 20], [0, 30, 100, 50]],
+        )
+        self.assertEqual(flagged, ["right0"])
+
+    def test_right_side_resuming_after_a_gap_is_not_excluded(self):
+        # No fixed-distance inactivity trigger exists (see
+        # _trace_displaced_region's docstring for why one was tried and
+        # removed) -- a RIGHT match that resumes after a quiet stretch is
+        # still a legitimate candidate, not treated as a new/separate
+        # window. Reaching the end of the page with RIGHT still matching
+        # means "not yet confirmed", so the whole run is discarded here,
+        # not partially confirmed up to the gap.
+        _, flagged = self.inspect_grouping(
+            ["left0", "right0", "left1", "right1"],
+            [[0, 0, 100, 20], [300, 0, 400, 20],
+             [0, 130, 100, 150], [300, 140, 400, 160]],
+        )
+        self.assertEqual(flagged, [])
+
+
 class StructuredRecognitionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
