@@ -76,8 +76,9 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - Original OCR text remains separate from editable and verified text so teacher corrections do not overwrite the OCR baseline.
 - Judge0 result maps keep execution results associated with the correct submission.
 - Execution-source helpers remain responsible for building function-question test harnesses.
-- Student code receives each test case's `test_input` as stdin during both
-  grading and the first-test run preview, including function questions.
+- Program submissions receive each test case's `test_input` as stdin during
+  grading and the first-test run preview. Function questions use assigned
+  values in Test Code and always execute with empty stdin.
 - Linked Supabase questions are accepted in either object or array form.
 
 The Judge0 wrapper now converts outbound Judge0 connectivity failures into a
@@ -88,26 +89,22 @@ submission request. `JUDGE0_BASE_URL` is validated at startup — the service
 now fails fast with a clear error instead of silently building `None`-based
 request URLs when the environment variable is missing.
 
-## Judge0 output verification (model answer vs. submitted code)
+## Judge0 output validation (model answer vs. submitted code)
 
-The Judge0 wrapper compiles and runs code for two separate purposes, and both
-now source their "expected output" from Judge0 itself rather than from a
-hand-typed value:
+The Judge0 wrapper compiles and runs code for question validation and student
+grading. Expected Output is authored by the teacher and is never replaced by
+Judge0 output:
 
 - **Question authoring (`question-form`):** clicking "Validate Test Cases"
-  compiles and runs the model answer through Judge0 for each test case. When
-  it runs successfully, Judge0's actual output overwrites that test case's
-  `expected_output` — it is no longer just compared against a manually typed
-  value. This guarantees `expected_output` always reflects what the model
-  answer actually produces, and removes the previous risk of the two silently
-  drifting apart (e.g. the model answer changing without `expected_output`
-  being re-checked).
+  requires a manually entered Expected Output, compiles and runs the model
+  answer through Judge0, and compares the normalized actual and expected
+  values. The result shows both Expected and Got for diagnosis. A mismatch
+  fails validation without changing the teacher's entry.
 - **Saving a question:** the Save button is now disabled until every test
   case has been validated and passed (`canPublish`), so a question can no
   longer be persisted with an unverified `expected_output`.
-- **Grading (`submissions-list`):** unchanged in principle — the submitted
-  code's Judge0 output is compared against `expected_output` — but
-  `expected_output` is now guaranteed to be Judge0-verified per the above.
+- **Grading (`submissions-list`):** the submitted code's Judge0 output is
+  compared against the same teacher-authored `expected_output`.
 
 **Compile status handling:** "compiled successfully" is now determined solely
 by Judge0's own `status.id === 3` ("Accepted"), across the question-form
@@ -117,6 +114,29 @@ treated as a failure, which incorrectly rejected code that compiled with only
 warnings (e.g. calling `printf` without `#include <stdio.h>`) but still ran
 and produced correct output. A real compile error (`status.id === 6`) or
 runtime crash (`status.id` 7-12) still fails, as expected.
+
+### Question format and manual-output validation (updated September 8, 2026)
+
+- **Write a Function:** Model Answer and Test Code reject `#include`, `main()`, and `scanf()` before execution. Inline messages and editor borders explain what to remove. Comments and quoted text do not trigger these checks. Model Answer contains the functions; Test Code assigns fixed values, calls the functions, and prints results. Standard Input is hidden, ignored during validation and grading, and cleared when a function question is saved.
+- **Write a Program:** Model Answer defines `main()`. The shared execution wrapper supplies `#include <stdio.h>` for question validation, model-run helpers, submission grading, and the submission run preview. Programs with their own explicit header still work. The program template contains only `main()`.
+- Write a Program retains Standard Input and may use `scanf()` when required.
+- Expected Output is required and entered manually for both question types. An accepted execution passes only when its normalized stdout matches that value. Empty stdout gets a **No output** failure, and a mismatch gets **Wrong Answer**; neither case changes Expected Output. Compiler warnings do not fail an otherwise successful run with matching output.
+- Execution status, compiler details, stderr, and service messages are displayed separately from actual output.
+- At least one test case is required. Code/input edits and test-case changes invalidate pending results, and Save verifies that the current inputs match the successful validation. A partially completed run cannot display “Passed all tests.”
+
+Design and implementation notes are in [the validation design](plans/2026-09-06-question-validation-design.md) and [the implementation plan](plans/2026-09-06-question-validation.md).
+The September 8 manual-output and function-input update is documented in [its design](plans/2026-09-08-manual-expected-output-function-inputs-design.md) and [implementation plan](plans/2026-09-08-manual-expected-output-function-inputs.md).
+
+### Equal-weight test scoring prototype (September 9, 2026)
+
+- Each passed test case earns one point and each failed case earns zero.
+- The displayed score is `(passed test cases / total test cases) * 100`, rounded to at most two decimal places.
+- Submission results show the passed fraction, percentage, and `1/1 point` or `0/1 point` for every case.
+- The question form no longer exposes editable test-case marks. New and saved cases retain `mark: 1` only for compatibility with the existing JSON shape.
+- Logic Analysis remains visible as feedback only and does not change the test-case score.
+- This is intentionally a partial implementation: score persistence, teacher overrides, and any larger rubric formula are pending adviser approval.
+
+The review questions are tracked in [the adviser-review task](plans/2026-09-09-adviser-review-equal-weight-scoring.md). The supporting rationale and implementation scope are in [the scoring design](plans/2026-09-09-equal-weight-test-scoring-design.md) and [implementation plan](plans/2026-09-09-equal-weight-test-scoring.md).
 
 ## C structural analysis
 
@@ -174,10 +194,13 @@ Focused tests now cover:
 - Angular application TypeScript compilation passes.
 - The focused submission-list test file passes isolated TypeScript validation.
 - Angular template compilation passed after the submission workflow changes, and after the Judge0 output-verification changes (`ng build --configuration development` succeeds).
-- The Judge0 output-verification changes were also verified live against the running app (question authoring → Validate → auto-synced `expected_output` → Save gated correctly; a model answer missing `#include <stdio.h>` now validates successfully instead of being rejected for a compiler warning).
+- The earlier automatic Expected Output synchronization was verified live before being superseded by the September 8 manual-output workflow.
 - `judge0_api`'s Python test suite (`tests_logic_checker.py`, `tests_judge0_api.py`) passes: 16/16.
 - Running Vitest from the current WSL environment is blocked because `node_modules` contains Windows-native Rollup/esbuild packages. Run `npm ci` and the tests in the same operating system environment, or run them directly from Windows where the dependencies were installed.
-- Repository-wide spec type-checking currently also reports an unrelated missing Node `fs` type used by `question-form.spec.ts` — this is a pre-existing issue, unrelated to the Judge0 output-verification changes above.
+- Question-validation follow-up (September 6): 71 focused Vitest tests pass across question-form, C structure checks, submissions-list, and Judge0 runner; `tsc --noEmit -p tsconfig.spec.json` and the Angular development build pass. Updated older fixtures to include real Judge0 status IDs and the test cases required by the existing submission workflow. Removed the redundant filesystem-based template string assertion; the changed UI was checked in the browser.
+- Live browser/Judge0 checks confirmed immediate function-format errors, successful function output, successful programs both with and without an explicit stdio header using Standard Input, and an explicit No output failure with Save disabled. No test questions were saved to Supabase during verification.
+- Manual-output and function-input update (September 8): 79 focused Vitest tests pass across question-form, C structure checks, submissions-list, and Judge0 runner; `tsc --noEmit -p tsconfig.spec.json` and the Angular development build pass. Live Judge0 verification was not run for this update.
+- Equal-weight scoring prototype (September 9): all 85 frontend Vitest tests pass; `tsc --noEmit -p tsconfig.spec.json` and the Angular development build pass. Adviser approval and live Judge0 verification remain pending.
 
 ## Important security work
 

@@ -275,6 +275,4 @@ def compare_logic(model_code: str, student_code: str) -> dict[str, Any]:
     return {
         "score": score,
         "checks": checks,
-        "model_features": model,
-        "student_features": student,
     }

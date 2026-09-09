@@ -13,6 +13,7 @@ import { CodeEditorComponent } from '../code-editor/code-editor';
 import { Judge0, LogicAnalysisResult, TestCaseResult } from '../judge0/judge0';
 import { Judge0Service } from '../../services/judge0.service';
 import { firstValueFrom } from 'rxjs';
+import { buildCQuestionSource } from '../../utils/c-question';
 
 interface TestCase {
   test_code: string;
@@ -71,7 +72,6 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   reviewStep: ReviewStep = 1;
   editableTopic: string = '';
   savingTopic = false;
-  detailsSaveStatus: '' | 'saved' | 'error' = '';
 
   // OCR state
   extractingId: string | null = null;
@@ -212,7 +212,6 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.selectedQuestionId =
       submission.question_id || linkedQuestion?.id || '';
     this.reviewStep = 1;
-    this.detailsSaveStatus = '';
 
     this.checkError = '';
     this.isChecking = false;
@@ -240,9 +239,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (!this.selectedQuestionId) return;
 
     const saved = await this.saveSubmissionDetails();
-    if (saved) {
-      await this.waitForDetailsSavedMessage();
-      if (!this.destroyed) this.reviewStep = 2;
+    if (saved && !this.destroyed) {
+      this.reviewStep = 2;
     }
   }
 
@@ -261,7 +259,6 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   async saveSubmissionDetails(): Promise<boolean> {
     if (!this.selectedSubmission) return false;
     this.savingTopic = true;
-    this.detailsSaveStatus = '';
     try {
       await this.supabase.updateSubmissionDetails(
         this.selectedSubmission.id,
@@ -279,12 +276,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       this.selectedSubmission.question_id =
         this.selectedQuestionId || undefined;
       this.groupSubmissions();
-      this.detailsSaveStatus = 'saved';
       this.cdr.detectChanges();
       return true;
     } catch (err) {
       console.error('Failed to save submission details:', err);
-      this.detailsSaveStatus = 'error';
       return false;
     } finally {
       this.savingTopic = false;
@@ -519,20 +514,16 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       const logicResults: LogicAnalysisResult[] = logicGrade.logic_details;
 
       for (const [index, testCase] of testCases.entries()) {
-        const sourceCode =
-          question.question_type === 'function'
-            ? `#include <stdio.h>
+        const sourceCode = buildCQuestionSource(
+          question.question_type,
+          studentCode,
+          testCase.test_code,
+        );
 
-${studentCode}
-
-int main() {
-${testCase.test_code}
-
-  return 0;
-}`
-            : studentCode;
-
-        const stdin = testCase.test_input || '';
+        const stdin = this.stdinFor(
+          question.question_type,
+          testCase.test_input,
+        );
 
         const runResult = await firstValueFrom(
           this.judge0Service.runCCode(sourceCode, stdin),
@@ -607,26 +598,27 @@ ${testCase.test_code}
     const studentCode = this.getStudentCode(submission);
     const firstTestCase = question?.test_cases?.[0];
 
-    if (!question || question.question_type === 'program' || !firstTestCase) {
+    if (
+      !question ||
+      (question.question_type === 'function' && !firstTestCase)
+    ) {
       return studentCode;
     }
 
-    return `#include <stdio.h>
-
-${studentCode}
-
-int main() {
-${firstTestCase.test_code}
-
-  return 0;
-}`;
+    return buildCQuestionSource(
+      question.question_type,
+      studentCode,
+      firstTestCase?.test_code,
+    );
   }
 
   getExecutionStdin(submission: Submission | null): string {
     const question = submission ? this.getSubmissionQuestion(submission) : null;
     const firstTestCase = question?.test_cases?.[0];
 
-    return firstTestCase?.test_input || '';
+    return question
+      ? this.stdinFor(question.question_type, firstTestCase?.test_input)
+      : '';
   }
 
   getExecutionExpectedOutput(submission: Submission | null): string {
@@ -648,6 +640,13 @@ ${firstTestCase.test_code}
       .toLowerCase()
       .replace(/\s*:\s*/g, ':')
       .replace(/\s+/g, ' ');
+  }
+
+  private stdinFor(
+    questionType: SubmissionQuestion['question_type'],
+    input: string | null | undefined,
+  ): string {
+    return questionType === 'program' ? input || '' : '';
   }
 
   private clearExecutionResults(id: string) {
@@ -683,9 +682,5 @@ ${firstTestCase.test_code}
       submission.extracted_text ||
       ''
     );
-  }
-
-  private async waitForDetailsSavedMessage(): Promise<void> {
-    await new Promise<void>((resolve) => setTimeout(resolve, 900));
   }
 }

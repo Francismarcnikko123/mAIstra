@@ -22,7 +22,7 @@ describe('Judge0', () => {
         stdout: '5\n',
         stderr: '',
         compile_output: '',
-        status: { description: 'Accepted' },
+        status: { id: 3, description: 'Accepted' },
       }),
     );
     const component = new Judge0(
@@ -103,7 +103,7 @@ describe('Judge0', () => {
         stdout: '5\n',
         stderr: '',
         compile_output: '',
-        status: { description: 'Accepted' },
+        status: { id: 3, description: 'Accepted' },
       }),
     );
     const component = new Judge0(
@@ -201,5 +201,45 @@ describe('Judge0', () => {
       },
     ];
     expect(component.shouldShowTerminalResults).toBe(true);
+  });
+
+  it.each([
+    [[true, true, true], 100, '3/3 test cases passed — Score: 100%'],
+    [[true, true, false], 66.67, '2/3 test cases passed — Score: 66.67%'],
+    [[true, true, true, false], 75, '3/4 test cases passed — Score: 75%'],
+  ])(
+    'calculates an equal-weight score for %j results',
+    (outcomes, expectedPercentage, expectedSummary) => {
+      const component = new Judge0(
+        {} as HttpClient,
+        { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+      );
+      component.testCaseResults = outcomes.map((passed, index) => ({
+        caseNumber: index + 1,
+        stdin: '',
+        expectedOutput: String(index),
+        actualOutput: passed ? String(index) : 'wrong',
+        status: passed ? 'Accepted' : 'Wrong Answer',
+        passed,
+      }));
+
+      expect(component.testCaseScorePercentage).toBe(expectedPercentage);
+      expect(component.testCaseScoreSummary).toBe(expectedSummary);
+      expect(
+        component.testCaseResults.map((result) =>
+          component.getTestCasePointLabel(result),
+        ),
+      ).toEqual(outcomes.map((passed) => (passed ? '1/1 point' : '0/1 point')));
+    },
+  );
+
+  it('does not invent a score before test results exist', () => {
+    const component = new Judge0(
+      {} as HttpClient,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+
+    expect(component.testCaseScorePercentage).toBe(0);
+    expect(component.testCaseScoreSummary).toBe('');
   });
 });

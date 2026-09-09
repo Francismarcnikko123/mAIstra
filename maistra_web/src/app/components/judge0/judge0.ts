@@ -152,7 +152,9 @@ export class Judge0 implements OnChanges {
   }
 
   get shouldShowProcessingState(): boolean {
-    return this.isRunning && !this.stdout && !this.stderr && !this.compileOutput;
+    return (
+      this.isRunning && !this.stdout && !this.stderr && !this.compileOutput
+    );
   }
 
   get displayedStatus(): string {
@@ -202,24 +204,45 @@ export class Judge0 implements OnChanges {
     return this.testCaseResults.filter((result) => result.passed).length;
   }
 
+  get testCaseScorePercentage(): number {
+    if (!this.testCaseResults.length) return 0;
+    return Number(
+      ((this.passedTestCaseCount / this.testCaseResults.length) * 100).toFixed(
+        2,
+      ),
+    );
+  }
+
+  get testCaseScoreSummary(): string {
+    if (!this.testCaseResults.length) return '';
+    return `${this.passedTestCaseCount}/${this.testCaseResults.length} test cases passed — Score: ${this.testCaseScorePercentage}%`;
+  }
+
+  getTestCasePointLabel(result: TestCaseResult): string {
+    return result.passed ? '1/1 point' : '0/1 point';
+  }
+
   get firstTestCaseResult(): TestCaseResult | null {
     return this.testCaseResults[0] ?? null;
   }
 
   get firstTestCasePassedLabel(): string {
-    const passed = this.firstTestCaseResult?.passed ?? this.firstRunTestCasePassed;
+    const passed =
+      this.firstTestCaseResult?.passed ?? this.firstRunTestCasePassed;
     if (passed === null) return '';
     return passed ? 'First Test Case Passed' : 'First Test Case Failed';
   }
 
   get runResultTitle(): string {
-    const passed = this.firstTestCaseResult?.passed ?? this.firstRunTestCasePassed;
+    const passed =
+      this.firstTestCaseResult?.passed ?? this.firstRunTestCasePassed;
     if (passed === null) return '';
     return passed ? 'Accepted' : 'Wrong Answer :(';
   }
 
   get runResultSummary(): string {
-    const passed = this.firstTestCaseResult?.passed ?? this.firstRunTestCasePassed;
+    const passed =
+      this.firstTestCaseResult?.passed ?? this.firstRunTestCasePassed;
     if (passed === null) return '';
     return passed ? '1/1 test case passed' : '1/1 test case failed';
   }
@@ -236,10 +259,17 @@ export class Judge0 implements OnChanges {
       return false; // real compile error or runtime crash
     }
 
-    return this.normalizeOutput(this.stdout) === this.normalizeOutput(this.expectedOutput);
+    return (
+      this.normalizeOutput(this.stdout) ===
+      this.normalizeOutput(this.expectedOutput)
+    );
   }
 
   private normalizeOutput(value: string): string {
-    return value.trim().toLowerCase().replace(/\s*:\s*/g, ':').replace(/\s+/g, ' ');
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/\s*:\s*/g, ':')
+      .replace(/\s+/g, ' ');
   }
 }

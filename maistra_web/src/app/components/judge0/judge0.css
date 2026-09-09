@@ -308,6 +308,18 @@
   font-size: 12px;
 }
 
+.testcase-points {
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.testcase-result-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .testcase-card.passed .testcase-badge {
   background: #064e3b;
   color: #a7f3d0;

@@ -60,7 +60,8 @@ describe('SubmissionsListComponent save feedback', () => {
     const updateSubmissionText =
       options?.updateSubmissionText ?? vi.fn().mockResolvedValue(undefined);
     const post =
-      options?.post ?? vi.fn().mockReturnValue(of({ cleaned_text: 'int main() {}' }));
+      options?.post ??
+      vi.fn().mockReturnValue(of({ cleaned_text: 'int main() {}' }));
     const supabase = {
       updateSubmissionDetails,
       updateSubmissionText,
@@ -259,16 +260,17 @@ describe('SubmissionsListComponent save feedback', () => {
     await component.checkSubmission(submission);
 
     expect(runCCode).toHaveBeenCalledWith(
-      component.editableText['submission-1'],
+      '#include <stdio.h>\n\n' + component.editableText['submission-1'],
       '2 3',
     );
     expect(gradeSubmission).toHaveBeenCalledWith({
       model_code: 'int main(void) { return 0; }',
       student_code: component.editableText['submission-1'],
-      expected_output: '5',
-      actual_output: '5',
-      compilation_passed: true,
+      expected_output: '',
+      actual_output: '',
+      compilation_passed: false,
     });
+    expect(gradeSubmission).toHaveBeenCalledOnce();
     expect(component.submissionRunOutput['submission-1']).toBe('5');
     expect(component.submissionCheckStatus['submission-1']).toBe('Accepted');
     expect(runCCode).toHaveBeenCalledTimes(2);
@@ -346,7 +348,10 @@ describe('SubmissionsListComponent save feedback', () => {
 
     await component.checkSubmission(submission);
 
-    expect(runCCode).toHaveBeenCalledWith('edited code', '');
+    expect(runCCode).toHaveBeenCalledWith(
+      '#include <stdio.h>\n\nedited code',
+      '',
+    );
     expect(gradeSubmission).toHaveBeenCalledWith(
       expect.objectContaining({
         student_code: 'edited code',
@@ -448,6 +453,49 @@ describe('SubmissionsListComponent save feedback', () => {
 
     expect(component.getExecutionStdin(submission)).toBe('2 3');
     expect(component.getExecutionExpectedOutput(submission)).toBe('5');
+    expect(component.getExecutionSourceCode(submission)).toBe(
+      '#include <stdio.h>\n\nint main(void) { return 0; }',
+    );
+  });
+
+  it('uses the same function wrapper for grading and runner preview', async () => {
+    const runCCode = vi
+      .fn()
+      .mockReturnValue(of({ stdout: '5', status: { id: 3 } }));
+    const gradeSubmission = vi.fn().mockReturnValue(of({ logic_details: [] }));
+    const { component } = createComponent(vi.fn(), {
+      runCCode,
+      gradeSubmission,
+    });
+    selectSubmission(component, 'function-1');
+    component.editableText['function-1'] =
+      'int add(int a, int b) { return a + b; }';
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'Addition',
+        question_type: 'function',
+        model_answer: component.editableText['function-1'],
+        test_cases: [
+          {
+            test_code: 'printf("%d", add(2, 3));',
+            test_input: '2 3',
+            expected_output: '5',
+            mark: 2,
+          },
+        ],
+      },
+    ];
+    component.selectedQuestionId = 'question-1';
+    const source = component.getExecutionSourceCode(
+      component.selectedSubmission,
+    );
+    expect(component.getExecutionStdin(component.selectedSubmission)).toBe('');
+    await component.checkSubmission(component.selectedSubmission);
+    expect(runCCode).toHaveBeenCalledWith(source, '');
+    expect(source).toContain('#include <stdio.h>');
+    expect(source.match(/\bmain\s*\(/g)).toHaveLength(1);
+    expect(source).toContain('printf("%d", add(2, 3));');
   });
 
   it('clears stale execution results when the selected question changes', () => {
@@ -535,21 +583,30 @@ describe('SubmissionsListComponent save feedback', () => {
     expect(component.getQuestionName(submission)).toBe('Addition');
   });
 
-  it('blocks grading until both student code and a question exist', () => {
+  it('blocks grading until student code and a question with test cases exist', () => {
     const { component } = createWorkflowComponent();
     selectSubmission(component, 'submission-1');
 
     expect(component.canOpenGradingStep()).toBe(false);
 
-    component.questions = [{
-      id: 'question-1',
-      question_name: 'Addition',
-      question_type: 'program',
-      model_answer: 'int main(void) { return 0; }',
-      test_cases: [],
-    }];
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'Addition',
+        question_type: 'program',
+        model_answer: 'int main(void) { return 0; }',
+        test_cases: [],
+      },
+    ];
     component.selectedQuestionId = 'question-1';
 
+    expect(component.canOpenGradingStep()).toBe(false);
+    component.questions[0].test_cases.push({
+      test_code: '',
+      test_input: '',
+      expected_output: '5',
+      mark: 2,
+    });
     expect(component.canOpenGradingStep()).toBe(true);
   });
 
@@ -571,9 +628,9 @@ describe('SubmissionsListComponent save feedback', () => {
   });
 
   it('keeps the user in code review and displays an OCR error on failure', async () => {
-    const post = vi.fn().mockReturnValue(
-      throwError(() => new Error('OCR unavailable')),
-    );
+    const post = vi
+      .fn()
+      .mockReturnValue(throwError(() => new Error('OCR unavailable')));
     const { component } = createWorkflowComponent({ post });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     selectSubmission(component, 'submission-1');
@@ -592,13 +649,17 @@ describe('SubmissionsListComponent save feedback', () => {
     const updateSubmissionText = vi.fn().mockResolvedValue(undefined);
     const { component } = createWorkflowComponent({ updateSubmissionText });
     selectSubmission(component, 'submission-1');
-    component.questions = [{
-      id: 'question-1',
-      question_name: 'Addition',
-      question_type: 'program',
-      model_answer: 'int main(void) { return 0; }',
-      test_cases: [],
-    }];
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'Addition',
+        question_type: 'program',
+        model_answer: 'int main(void) { return 0; }',
+        test_cases: [
+          { test_code: '', test_input: '', expected_output: '5', mark: 2 },
+        ],
+      },
+    ];
     component.selectedQuestionId = 'question-1';
     component.reviewStep = 2;
 
@@ -615,13 +676,17 @@ describe('SubmissionsListComponent save feedback', () => {
     const { component } = createWorkflowComponent({ updateSubmissionText });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     selectSubmission(component, 'submission-1');
-    component.questions = [{
-      id: 'question-1',
-      question_name: 'Addition',
-      question_type: 'program',
-      model_answer: 'int main(void) { return 0; }',
-      test_cases: [],
-    }];
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'Addition',
+        question_type: 'program',
+        model_answer: 'int main(void) { return 0; }',
+        test_cases: [
+          { test_code: '', test_input: '', expected_output: '5', mark: 2 },
+        ],
+      },
+    ];
     component.selectedQuestionId = 'question-1';
     component.reviewStep = 2;
 

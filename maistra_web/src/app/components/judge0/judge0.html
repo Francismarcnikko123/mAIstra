@@ -90,12 +90,13 @@
       </section>
     </ng-container>
 
-    <section class="testcase-results submit-results" *ngIf="shouldShowSubmitResults">
+    <section
+      class="testcase-results submit-results"
+      *ngIf="shouldShowSubmitResults"
+    >
       <div class="testcase-results-header">
         <span>Test Cases</span>
-        <span>
-          {{ passedTestCaseCount }}/{{ testCaseResults.length }} passed
-        </span>
+        <span>{{ testCaseScoreSummary }}</span>
       </div>
 
       <article
@@ -106,8 +107,13 @@
       >
         <div class="testcase-card-header">
           <span>Test Case {{ result.caseNumber }}</span>
-          <span class="testcase-badge">
-            {{ result.passed ? 'Accepted' : result.status }}
+          <span class="testcase-result-meta">
+            <span class="testcase-badge">
+              {{ result.passed ? 'Accepted' : result.status }}
+            </span>
+            <span class="testcase-points">
+              {{ getTestCasePointLabel(result) }}
+            </span>
           </span>
         </div>
         <div class="testcase-grid">
@@ -141,7 +147,7 @@
           >
             ›
           </span>
-          <span>Logic Analysis</span>
+          <span>Logic Analysis (feedback only)</span>
         </span>
         <span>
           {{ passedLogicCheckCount }}/{{ logicAnalysisResults.length }} checks

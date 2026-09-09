@@ -4,7 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
 import { CodeEditorComponent } from '../code-editor/code-editor';
 import { firstValueFrom } from 'rxjs';
-import { Judge0Service } from '../../services/judge0.service';
+import { Judge0Service, Judge0RunResult } from '../../services/judge0.service';
+import {
+  buildCQuestionSource,
+  getFunctionCodeError,
+  getProgramCodeError,
+} from '../../utils/c-question';
 
 interface TestCase {
   test_code: string;
@@ -21,14 +26,14 @@ interface ValidationResult {
   status?: string;
   stderr?: string;
   compile_output?: string;
+  message?: string;
 }
-('');
 
 const DEFAULT_TEST_CASE: TestCase = {
   test_code: '',
   test_input: '',
   expected_output: '',
-  mark: 2,
+  mark: 1,
 };
 
 @Component({
@@ -40,6 +45,9 @@ const DEFAULT_TEST_CASE: TestCase = {
 })
 export class QuestionFormComponent {
   private readonly saveTimeoutMs = 15000;
+  private validationVersion = 0;
+  private validatedInputs = '';
+  private hasAttemptedValidation = false;
 
   testRunStatuses: TestRunStatus[] = [];
   collapsedTestCases: Record<number, boolean> = {};
@@ -60,8 +68,7 @@ export class QuestionFormComponent {
   runStatus = '';
   isRunningModelAnswer = false;
 
-  readonly FUNCTION_TEMPLATE = ``;
-  readonly PROGRAM_TEMPLATE = `#include <stdio.h>\n\nint main(void) {\n  return 0;\n}`;
+  readonly PROGRAM_TEMPLATE = `int main(void) {\n  return 0;\n}`;
 
   constructor(
     private supabase: SupabaseService,
@@ -72,102 +79,101 @@ export class QuestionFormComponent {
     this.collapsedTestCases[index] = !this.collapsedTestCases[index];
   }
   async validateModelAnswer() {
-    this.isValidating = true;
-    this.canPublish = false;
+    if (this.isValidating) return;
+    this.clearValidationResults();
+    this.hasAttemptedValidation = true;
+    this.successMessage = '';
 
-    this.testRunStatuses = this.testCases.map((_, i) =>
-      this.validationResults[i]?.passed ? 'passed' : 'idle',
+    if (this.testCases.length === 0) {
+      this.errorMessage = 'Add at least one test case before validating.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const modelError = this.modelAnswerError;
+    const codeErrors = this.testCases.map((_, i) =>
+      [modelError, this.getTestCodeError(i)].filter(Boolean).join(' '),
     );
+    const expectedErrors = this.testCases.map((_, i) =>
+      this.getExpectedOutputError(i),
+    );
+    const errors = codeErrors.map((error, i) =>
+      [error, expectedErrors[i]].filter(Boolean).join(' '),
+    );
+    if (errors.some(Boolean)) {
+      this.errorMessage = codeErrors.some(Boolean)
+        ? 'Fix the code errors below, then validate again.'
+        : 'Enter the Expected Output for every test case, then validate again.';
+      this.validationResults = this.testCases.map((tc, i) => ({
+        passed: false,
+        expected: tc.expected_output.trim(),
+        actual: '',
+        status: codeErrors[i]
+          ? 'Invalid code structure'
+          : expectedErrors[i]
+            ? 'Missing expected output'
+            : 'Not run',
+        message:
+          errors[i] || 'Fix the other code errors before running this test.',
+      }));
+      this.testRunStatuses = errors.map((error) => (error ? 'failed' : 'idle'));
+      this.cdr.detectChanges();
+      return;
+    }
 
+    const version = this.validationVersion;
+    const inputKey = this.executionInputsKey();
+    const isCurrent = () =>
+      version === this.validationVersion &&
+      inputKey === this.executionInputsKey();
+    const type = this.questionType;
+    const answer = this.modelAnswer;
+    const testCases = this.testCases.map((tc) => ({ ...tc }));
+    this.isValidating = true;
+    this.testRunStatuses = testCases.map(() => 'running');
     this.cdr.detectChanges();
 
     try {
-      const validationPromises = this.testCases.map(async (tc, i) => {
-        if (this.validationResults[i]?.passed) {
-          this.testRunStatuses[i] = 'passed';
-          return this.validationResults[i];
-        }
-
-        this.testRunStatuses[i] = 'running';
-        this.cdr.detectChanges();
-
-        try {
-          const sourceCode =
-            this.questionType === 'function'
-              ? `#include <stdio.h>
-            
-
-${this.modelAnswer}
-
-int main() {
-${tc.test_code}
-
-  return 0;
-}`
-              : this.modelAnswer;
-
-          const stdin = this.questionType === 'program' ? tc.test_input : '';
-
-          const result = await firstValueFrom(
-            this.judge0.runCCode(sourceCode, stdin),
-          );
-
-          const actual = (result.stdout || '').trim();
-          // status.id === 3 ("Accepted") already means Judge0 compiled and
-          // ran the program without a compile error or runtime crash — a
-          // real compile error would be status.id === 6, and runtime errors
-          // are 7-12. Don't additionally require stderr/compile_output to be
-          // empty: a program can compile with only warnings (e.g. a missing
-          // #include triggering an implicit-declaration warning) and still
-          // run correctly — that shouldn't be treated as a failure.
-          const compiledCleanly = result.status?.id === 3;
-
-          // The model answer's Judge0 output IS the expected output — write
-          // it back onto the test case so grading later compares against
-          // what Judge0 actually produced, not a hand-typed guess that could
-          // drift out of sync with the model answer.
-          if (compiledCleanly) {
-            tc.expected_output = actual;
+      const results = await Promise.all(
+        testCases.map(async (tc, i) => {
+          let validation: ValidationResult;
+          try {
+            const result = await firstValueFrom(
+              this.judge0.runCCode(
+                buildCQuestionSource(type, answer, tc.test_code),
+                this.stdinFor(type, tc.test_input),
+              ),
+            );
+            validation = this.executionValidation(
+              result,
+              tc.expected_output,
+              type,
+            );
+          } catch (error) {
+            validation = {
+              passed: false,
+              expected: tc.expected_output.trim(),
+              actual: '',
+              status: 'Validation request failed',
+              message: this.validationRequestError(error),
+            };
           }
+          if (isCurrent()) {
+            this.validationResults[i] = validation;
+            this.testRunStatuses[i] = validation.passed ? 'passed' : 'failed';
+            this.cdr.detectChanges();
+          }
+          return validation;
+        }),
+      );
 
-          const passed = compiledCleanly;
-
-          this.validationResults[i] = {
-            passed,
-            expected: tc.expected_output.trim(),
-            actual,
-            status: result.status?.description,
-            stderr: result.stderr,
-            compile_output: result.compile_output,
-          };
-
-          this.testRunStatuses[i] = passed ? 'passed' : 'failed';
-
-          return this.validationResults[i];
-        } catch (error) {
-          this.validationResults[i] = {
-            passed: false,
-            expected: tc.expected_output.trim(),
-            actual: '',
-            status: 'Validation request failed',
-            stderr: 'Unable to validate this test case.',
-            compile_output: '',
-          };
-
-          this.testRunStatuses[i] = 'failed';
-
-          return this.validationResults[i];
-        } finally {
-          this.cdr.detectChanges();
-        }
-      });
-
-      const results = await Promise.all(validationPromises);
+      if (!isCurrent()) {
+        this.clearValidationResults();
+        return;
+      }
       this.validationResults = results;
-
-      this.canPublish =
-        this.validationResults.length === this.testCases.length &&
-        this.validationResults.every((result) => result.passed);
+      this.canPublish = results.every((result) => result.passed);
+      this.validatedInputs = this.canPublish ? this.executionInputsKey() : '';
     } finally {
       this.isValidating = false;
       this.cdr.detectChanges();
@@ -181,14 +187,40 @@ ${tc.test_code}
     this.runStatus = '';
 
     try {
+      this.hasAttemptedValidation = true;
+      const testCase = this.testCases[0];
+      const error =
+        this.modelAnswerError ||
+        this.getTestCodeError(0) ||
+        this.getExpectedOutputError(0);
+      if (error || !testCase) {
+        this.runError = error || 'Add at least one test case before running.';
+        this.runStatus = 'Invalid code structure';
+        return;
+      }
       const result = await firstValueFrom(
-        this.judge0.runCCode(this.modelAnswer, this.testCases[0].test_code),
+        this.judge0.runCCode(
+          buildCQuestionSource(
+            this.questionType,
+            this.modelAnswer,
+            testCase.test_code,
+          ),
+          this.stdinFor(this.questionType, testCase.test_input),
+        ),
       );
-
+      const validation = this.executionValidation(
+        result,
+        testCase.expected_output,
+        this.questionType,
+      );
       this.runOutput = result.stdout || '';
-      this.runError =
-        result.stderr || result.compile_output || result.message || '';
-      this.runStatus = result.status?.description || '';
+      this.runError = [validation.message, result.stderr, result.compile_output]
+        .filter(Boolean)
+        .join('\n');
+      this.runStatus = validation.status || '';
+    } catch (error) {
+      this.runError = this.validationRequestError(error);
+      this.runStatus = 'Validation request failed';
     } finally {
       this.isRunningModelAnswer = false;
       this.cdr.detectChanges();
@@ -197,10 +229,9 @@ ${tc.test_code}
 
   onTypeChange() {
     this.modelAnswer =
-      this.questionType === 'program'
-        ? this.PROGRAM_TEMPLATE
-        : this.FUNCTION_TEMPLATE;
+      this.questionType === 'program' ? this.PROGRAM_TEMPLATE : '';
 
+    this.hasAttemptedValidation = false;
     this.clearValidationResults();
     this.cdr.detectChanges();
   }
@@ -208,15 +239,13 @@ ${tc.test_code}
   addTestCase() {
     this.testCases.push(this.createDefaultTestCase());
 
-    this.validationResults = [];
-    this.canPublish = false;
+    this.clearValidationResults();
   }
 
   removeTestCase(index: number) {
     this.testCases.splice(index, 1);
 
-    this.validationResults = [];
-    this.canPublish = false;
+    this.clearValidationResults();
   }
 
   async save() {
@@ -226,7 +255,12 @@ ${tc.test_code}
       return;
     }
 
-    if (!this.canPublish) {
+    if (
+      this.isValidating ||
+      !this.canPublish ||
+      this.validatedInputs !== this.executionInputsKey()
+    ) {
+      this.canPublish = false;
       this.errorMessage =
         'Click "Validate Test Cases" and make sure every test case passes before saving. ' +
         'This confirms the expected output actually comes from running the model answer in Judge0.';
@@ -245,7 +279,11 @@ ${tc.test_code}
         question_text: this.questionText,
         question_type: this.questionType,
         model_answer: this.modelAnswer,
-        test_cases: this.testCases,
+        test_cases: this.testCases.map((testCase) => ({
+          ...testCase,
+          test_input: this.stdinFor(this.questionType, testCase.test_input),
+          mark: 1,
+        })),
       });
 
       if (error) {
@@ -258,6 +296,7 @@ ${tc.test_code}
         this.modelAnswer = '';
         this.testCases = [this.createDefaultTestCase()];
         this.collapsedTestCases = {};
+        this.hasAttemptedValidation = false;
         this.clearValidationResults();
       }
     } catch (error) {
@@ -276,6 +315,8 @@ ${tc.test_code}
 
   passedAllTests(): boolean {
     return (
+      this.canPublish &&
+      !this.isValidating &&
       this.validationResults.length > 0 &&
       this.validationResults.every((result) => result.passed)
     );
@@ -284,12 +325,103 @@ ${tc.test_code}
     return !!this.collapsedTestCases[index];
   }
   clearValidationResults() {
+    this.validationVersion++;
+    this.validatedInputs = '';
     this.validationResults = [];
     this.testRunStatuses = [];
     this.canPublish = false;
+    this.errorMessage = '';
   }
   getTestCaseStatus(index: number): TestRunStatus {
     return this.testRunStatuses[index] || 'idle';
+  }
+
+  get modelAnswerError(): string {
+    if (!this.modelAnswer.trim() && !this.hasAttemptedValidation) return '';
+    return this.questionType === 'function'
+      ? getFunctionCodeError(this.modelAnswer, 'Model Answer')
+      : getProgramCodeError(this.modelAnswer);
+  }
+
+  getTestCodeError(index: number): string {
+    if (this.questionType !== 'function') return '';
+    const code = this.testCases[index]?.test_code || '';
+    if (!code.trim() && !this.hasAttemptedValidation) return '';
+    return getFunctionCodeError(code, 'Test Code');
+  }
+
+  getExpectedOutputError(index: number): string {
+    const expected = this.testCases[index]?.expected_output || '';
+    if (!expected.trim() && !this.hasAttemptedValidation) return '';
+    return expected.trim() ? '' : 'Expected Output is required.';
+  }
+
+  private executionInputsKey(): string {
+    return JSON.stringify({
+      type: this.questionType,
+      answer: this.modelAnswer,
+      cases: this.testCases.map(
+        ({ test_code, test_input, expected_output }) => ({
+          test_code,
+          test_input: this.stdinFor(this.questionType, test_input),
+          expected_output,
+        }),
+      ),
+    });
+  }
+
+  private executionValidation(
+    result: Judge0RunResult,
+    expected: string,
+    type: string,
+  ): ValidationResult {
+    const actual = (result.stdout || '').trim();
+    const expectedOutput = expected.trim();
+    const ranSuccessfully = result.status?.id === 3;
+    const noOutput = ranSuccessfully && !actual;
+    const outputMatches =
+      this.normalizeOutput(actual) === this.normalizeOutput(expectedOutput);
+    const passed = ranSuccessfully && !noOutput && outputMatches;
+    return {
+      passed,
+      expected: expectedOutput,
+      actual,
+      status: noOutput
+        ? 'No output'
+        : ranSuccessfully && !outputMatches
+          ? 'Wrong Answer'
+          : result.status?.description || 'Unknown execution status',
+      message: noOutput
+        ? type === 'function'
+          ? 'No output was produced. Test Code must call the function and print the result, for example with printf().'
+          : 'No output was produced. The program must print a result, for example with printf(), so this test can grade submissions.'
+        : ranSuccessfully && !outputMatches
+          ? 'The model answer output does not match the manually entered Expected Output.'
+          : result.message,
+      stderr: result.stderr,
+      compile_output: result.compile_output,
+    };
+  }
+
+  private stdinFor(type: string, input: string): string {
+    return type === 'program' ? input : '';
+  }
+
+  private normalizeOutput(value: string | null | undefined): string {
+    if (value == null) return '';
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/\s*:\s*/g, ':')
+      .replace(/\s+/g, ' ');
+  }
+
+  private validationRequestError(error: unknown): string {
+    const detail = (error as { error?: { detail?: unknown } } | null)?.error
+      ?.detail;
+    return typeof detail === 'string'
+      ? detail
+      : 'Unable to validate this test case. Check the Judge0 connection and try again.';
   }
 
   private createDefaultTestCase(): TestCase {
