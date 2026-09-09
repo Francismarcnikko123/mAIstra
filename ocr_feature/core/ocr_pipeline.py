@@ -119,30 +119,51 @@ MAX_SAME_LINE_X_OVERLAP = 0.3
 # distinct region a student wrote elsewhere on the page (see
 # docs/superpowers/specs/2026-09-07-reading-order-reassembly-design.md).
 #
-# RECALIBRATED (2026-09-10) against two real photos of the exact target
-# scenario (a struct + if/else body written in margin space while the rest
-# of the function fills the space below it -- both on bond paper, one
-# writer). Confirmed same-line fragment gaps (a case-label detected
-# separately from its own statement, same physical line, Duff's-device
-# switch block): 48-81px across 6 pairs. Confirmed cross-region gaps (left
-# column vs. the displaced top-right block, genuinely different content):
-# 151-391px across 5 pairs. Clean separation, no overlap between the two
-# ranges. 0.75x median width sits with margin on both sides (114px at this
-# photo's median width of 152px, 120px at the other photo's median width of
-# 160px) -- both comfortably between the confirmed same-line max and
-# cross-region min.
+# REVERTED TO PROVISIONAL (2026-09-10). A recalibration to 0.75 was tried
+# and reverted the same day -- keeping the full story here since the
+# measurement that motivated it is still real and useful, just not
+# sufficient on its own.
 #
-# The previous provisional value (6.0, derived indirectly from the
-# algorithm's own historically-accepted same-line gaps rather than a
-# confirmed real cross-region case) was proven wrong by this data: it failed
-# to sever on both real photos (required gap ~960-1050px vs. actual observed
-# 151-391px), so Phase 2 reassembly never got a chance to run at all.
+# The 0.75 value was derived from two real photos of the target scenario (a
+# struct + if/else body written in margin space, main flow below): confirmed
+# same-line fragment gaps 48-81px vs. confirmed cross-region gaps 151-391px,
+# a clean separation with no overlap. That measurement is still valid for
+# the scenario it covers.
 #
-# Still confirmed against ONE writer's handwriting on ONE paper type (bond)
-# only -- not yet cross-validated against other writers or paper types.
-# Recalibrate further if a different writer's natural spacing habits don't
-# fit this range.
-REGION_GAP_MULTIPLIER = 0.75
+# But re-running the real evaluate_cer baseline (which should have happened
+# immediately after committing the recalibration, and did not -- a process
+# gap, not caught until a later handoff) showed 0.75 regresses the official
+# 20-image samples/ set: CER 0.126 -> 0.128, WER 0.351 -> 0.354, token-acc
+# 0.696 -> 0.694. Root cause, confirmed by instrumenting the reassembly call
+# directly: Phase 2 (reassembly) correctly stayed inert (25 severed lines on
+# the affected sample, nowhere near a single contiguous block, safety guard
+# held) -- the regression is Phase 1 (severance) alone, over-triggering on
+# `greenbook/green_writer10_B2_1.jpg`, which has multiple independent short
+# programs stacked on one page. Unrelated-but-adjacent program fragments on
+# that kind of page can sit closer together than the 151-391px cross-region
+# range the two calibration photos measured -- a structurally different
+# scenario the calibration data never covered. The two real-world cases
+# (genuine margin displacement vs. multiple independent programs close
+# together) may have overlapping natural gap ranges that a single distance
+# threshold cannot cleanly separate; this needs confirming with real
+# measured gaps from a multi-program page like the one that regressed,
+# not assumed.
+#
+# PROVISIONAL (2026-09-07): derived by re-running this function's OWN
+# current grouping over 111 real debug artifacts in outputs/debug/*.json and
+# measuring the horizontal gaps it already accepts as "same line": median
+# member width 112px; within-line gap median 92px, p90 545px, p95 612px,
+# p99 788px, max 1131px. The extreme tail may itself include undetected
+# over-merges -- exactly the failure mode this constant targets -- so it
+# cannot be trusted as ground truth for "definitely correct" gaps. 6x
+# median width (~672px on a typical page) sits between the measured p95 and
+# p99, erring toward NOT splitting ordinary long lines. Confirmed safe
+# against the official 20-image baseline (no-op, exact match). Confirmed
+# NOT sensitive enough to catch the real margin-displacement scenario in the
+# two 2026-09-10 calibration photos -- recalibrate once a threshold (or a
+# smarter signal than raw gap distance) is found that satisfies both
+# constraints, not just one.
+REGION_GAP_MULTIPLIER = 6.0
 
 
 def _filter_low_confidence(rec_texts, rec_scores, rec_boxes):
