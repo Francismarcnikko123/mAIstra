@@ -562,6 +562,60 @@ class TwoColumnDetectionTests(unittest.TestCase):
         self.assertIsNone(self.pipeline._detect_two_columns(items, 0, 480))
 
 
+class RealSampleTwoColumnTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pipeline = load_pipeline_without_models()
+        # Frozen from the debug artifact for samples/greenbook/
+        # green_writer10_B2_1.jpg; no models or ignored outputs are needed.
+        fixture = Path(__file__).parent / "fixtures" / "green_writer10_detections.json"
+        detections = json.loads(fixture.read_text(encoding="utf-8"))
+        cls.rec_texts = [d["text"] for d in detections]
+        cls.rec_scores = [d["score"] for d in detections]
+        cls.rec_boxes = [d["box"] for d in detections]
+
+    def test_real_sample_gutter_splits_24_left_and_23_right_detections(self):
+        items = [
+            {"x": x0, "x_max": x1, "y": (y0 + y1) / 2,
+             "y_min": y0, "y_max": y1}
+            for x0, y0, x1, y1 in self.rec_boxes
+        ]
+        self.assertEqual(len(items), 47)
+        page_top = min(item["y_min"] for item in items)
+        page_bot = max(item["y_max"] for item in items)
+        gutter = self.pipeline._detect_two_columns(items, page_top, page_bot)
+
+        self.assertIsNotNone(gutter)
+        self.assertGreaterEqual(gutter, 300)
+        self.assertLessEqual(gutter, 340)
+        left = [item for item in items if item["x_max"] <= gutter]
+        right = [item for item in items if item["x"] >= gutter]
+        self.assertEqual(len(left), 24)
+        self.assertEqual(len(right), 23)
+
+    def test_real_sample_reads_entire_left_column_before_right_column(self):
+        grouped, safe = self.pipeline._group_detection_records(
+            self.rec_texts, self.rec_scores, self.rec_boxes)
+        self.assertTrue(safe)
+        lines = [" ".join(member["text"] for member in line) for line in grouped]
+
+        def line_index(substring):
+            matches = [i for i, text in enumerate(lines) if substring in text]
+            self.assertEqual(len(matches), 1, msg=f"Expected one line with {substring!r}")
+            return matches[0]
+
+        self.assertLess(line_index("switch(num)"), line_index("while (x <= 10)"))
+        self.assertLess(line_index("sum += arr[i]"), line_index("} while(x"))
+        # Guard every detection, including repeated braces and return lines,
+        # so an interleave outside the distinctive anchors also fails.
+        flat = [member for line in grouped for member in line]
+        self.assertCountEqual([member["text"] for member in flat], self.rec_texts)
+        self.assertEqual(
+            [(member["x"] + member["x_max"]) / 2 < 321 for member in flat],
+            [True] * 24 + [False] * 23,
+        )
+
+
 class StructuredRecognitionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
