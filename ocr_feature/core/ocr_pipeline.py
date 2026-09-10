@@ -47,9 +47,12 @@ from core.c_code_suggestions import suggest_c_code
 # point the pipeline at a DIFFERENT recognizer (e.g. the cross-writer
 # measurement model in models/fine_tuned_rec_crosswriter/) by setting
 # MAISTRA_REC_MODEL_DIR, without editing this file -- see
-# evaluators/crosswriter_eval.py. Unset (the default) is unchanged behaviour.
+# evaluators/crosswriter_eval.py. The default is resolved from this file so
+# demo tools can also run from the repository root; explicit overrides retain
+# their caller-supplied path semantics.
 _FINE_TUNED_REC_DIR = os.environ.get(
-    "MAISTRA_REC_MODEL_DIR", "models/fine_tuned_rec/inference"
+    "MAISTRA_REC_MODEL_DIR",
+    str(Path(__file__).resolve().parent.parent / "models/fine_tuned_rec/inference"),
 )
 if not Path(_FINE_TUNED_REC_DIR).exists():
     raise FileNotFoundError(

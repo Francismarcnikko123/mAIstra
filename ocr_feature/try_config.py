@@ -10,11 +10,13 @@ freely, or delete it.
 The image path is optional -- omit it to fall back to IMAGE below.
 """
 import sys
+from pathlib import Path
 
 from core.preprocess import PreprocessConfig
 from core.ocr_pipeline import extract_text_from_image
 
-IMAGE = "samples/nombrado_s06_struct_green_gate.jpeg"
+IMAGE = str(Path(__file__).resolve().parent
+            / "samples/greenbook/green_writer10_B2_1.jpg")
 
 image_args = [a for a in sys.argv[1:] if not a.startswith("--")]
 IMAGE = image_args[0] if image_args else IMAGE

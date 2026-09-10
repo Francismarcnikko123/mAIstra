@@ -14,9 +14,13 @@ Not part of the pipeline and not imported by anything.
                                                          # preprocessed images
                                                          # as VS Code tabs
 
-If path/to/photo.txt exists next to the image (same basename), its contents
-are used as ground truth and CER is printed for both variants. Otherwise the
-comparison runs without CER -- text and confidence only.
+Ground truth for CER is resolved from the project's labels.csv by image name
+(samples/labels.csv or datasets/verified/labels.csv) -- the canonical
+in-repo ground truth, built from the verified .txt transcriptions that live
+outside the repo, so no loose .txt is needed. An explicit path/to/photo.txt
+beside the image still takes precedence for standalone images. If the image
+is in neither labels.csv and has no .txt, the comparison runs without CER
+(text and confidence only).
 
 --show requires the `code` CLI on PATH (VS Code: Cmd+Shift+P ->
 "Shell Command: Install 'code' command in PATH"). It opens each image as a
@@ -24,6 +28,7 @@ tab in the current window (-r); VS Code doesn't auto-split editor groups from
 the CLI, so drag one tab to the side once for a side-by-side view -- it stays
 split for the rest of the session.
 """
+import csv
 import shutil
 import subprocess
 import sys
@@ -33,7 +38,8 @@ from core.preprocess import PreprocessConfig
 from core.ocr_pipeline import extract_text_from_image
 from evaluators.evaluation import evaluate_text_pair
 
-IMAGE = "samples/nombrado_s06_struct_green_gate.jpeg"
+_SCRIPT_DIR = Path(__file__).resolve().parent
+IMAGE = str(_SCRIPT_DIR / "samples/greenbook/green_writer10_B2_1.jpg")
 
 image_args = [a for a in sys.argv[1:] if not a.startswith("--")]
 IMAGE = image_args[0] if image_args else IMAGE
@@ -46,22 +52,52 @@ VARIANTS = [
 SHOW = "--show" in sys.argv
 
 
-def _load_reference(image_path: str) -> str | None:
+# The project's canonical ground truth is labels.csv (built from the verified
+# .txt transcriptions, which live outside the repo). Look references up here by
+# image basename, rather than requiring a loose .txt beside the image. Each
+# labels.csv has its own schema: (script-relative path, filename-column,
+# text-column), independent of the caller's working directory.
+_LABEL_SOURCES = [
+    ("samples/labels.csv", "filename", "ground_truth_text"),
+    ("datasets/verified/labels.csv", "image_path", "verified_text"),
+]
+
+
+def _load_reference(image_path: str) -> tuple[str, str] | None:
+    """Return (reference_text, source_description), or None if not found.
+
+    An explicit .txt beside the image wins (standalone use); otherwise the
+    image is looked up in the project's labels.csv files by basename.
+    """
     txt_path = Path(image_path).with_suffix(".txt")
     if txt_path.exists():
-        return txt_path.read_text()
+        return txt_path.read_text(), str(txt_path)
+
+    base = Path(image_path).name
+    for csv_path, name_col, text_col in _LABEL_SOURCES:
+        p = _SCRIPT_DIR / csv_path
+        if not p.exists():
+            continue
+        with p.open(newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                if Path(row.get(name_col, "")).name == base:
+                    text = row.get(text_col)
+                    if text:
+                        return text, f"{csv_path} ({name_col}={base})"
     return None
 
 
 def main() -> None:
-    reference = _load_reference(IMAGE)
+    loaded = _load_reference(IMAGE)
+    reference = loaded[0] if loaded else None
 
     print(f"image: {IMAGE}")
-    if reference is not None:
-        print(f"ground truth: {Path(IMAGE).with_suffix('.txt')}")
+    if loaded is not None:
+        print(f"ground truth: {loaded[1]}")
     else:
-        print("ground truth: none found (place a matching .txt next to the "
-              "image to also print CER)")
+        print("ground truth: none found (not in samples/labels.csv or "
+              "datasets/verified/labels.csv, and no matching .txt beside the "
+              "image) -- text and confidence only, no CER")
     print()
 
     results = []
