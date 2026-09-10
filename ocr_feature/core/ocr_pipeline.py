@@ -294,6 +294,10 @@ def _reassemble_displaced_regions(lines: list) -> list:
                 return False
         return depth == 0
 
+    # Tail extension supports the legacy single-line-flag pattern exercised
+    # by synthetic RBNode/Compressor fixtures. The current gutter trace
+    # (_trace_displaced_region) flags the whole block, so it does not produce
+    # this pattern; retain the search for those legacy inputs.
     valid_reorderings = []
     for tail_len in range(0, len(tail_candidates) + 1):
         block = block_core + tail_candidates[:tail_len]
