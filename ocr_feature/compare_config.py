@@ -17,10 +17,11 @@ Not part of the pipeline and not imported by anything.
 Ground truth for CER is resolved from the project's labels.csv by image name
 (samples/labels.csv or datasets/verified/labels.csv) -- the canonical
 in-repo ground truth, built from the verified .txt transcriptions that live
-outside the repo, so no loose .txt is needed. An explicit path/to/photo.txt
-beside the image still takes precedence for standalone images. If the image
-is in neither labels.csv and has no .txt, the comparison runs without CER
-(text and confidence only).
+outside the repo. labels.csv is the only source consulted: a loose .txt
+beside the image is intentionally ignored, because it would be redundant with
+labels.csv (which is derived from those same verified transcriptions) and
+lives outside the project root. If the image is in neither labels.csv, the
+comparison runs without CER (text and confidence only).
 
 --show requires the `code` CLI on PATH (VS Code: Cmd+Shift+P ->
 "Shell Command: Install 'code' command in PATH"). It opens each image as a
@@ -54,9 +55,10 @@ SHOW = "--show" in sys.argv
 
 # The project's canonical ground truth is labels.csv (built from the verified
 # .txt transcriptions, which live outside the repo). Look references up here by
-# image basename, rather than requiring a loose .txt beside the image. Each
-# labels.csv has its own schema: (script-relative path, filename-column,
-# text-column), independent of the caller's working directory.
+# image basename; a loose .txt beside the image is intentionally not consulted
+# (redundant with labels.csv, and outside the project root). Each labels.csv
+# has its own schema: (script-relative path, filename-column, text-column),
+# independent of the caller's working directory.
 _LABEL_SOURCES = [
     ("samples/labels.csv", "filename", "ground_truth_text"),
     ("datasets/verified/labels.csv", "image_path", "verified_text"),
@@ -66,13 +68,12 @@ _LABEL_SOURCES = [
 def _load_reference(image_path: str) -> tuple[str, str] | None:
     """Return (reference_text, source_description), or None if not found.
 
-    An explicit .txt beside the image wins (standalone use); otherwise the
-    image is looked up in the project's labels.csv files by basename.
+    The image is looked up in the project's labels.csv files by basename.
+    labels.csv is the single ground-truth source; a loose .txt beside the
+    image is deliberately NOT consulted, since those .txt transcriptions live
+    outside the repo and labels.csv is already built from them (see module
+    docstring).
     """
-    txt_path = Path(image_path).with_suffix(".txt")
-    if txt_path.exists():
-        return txt_path.read_text(), str(txt_path)
-
     base = Path(image_path).name
     for csv_path, name_col, text_col in _LABEL_SOURCES:
         p = _SCRIPT_DIR / csv_path
