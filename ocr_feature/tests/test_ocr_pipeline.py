@@ -956,23 +956,7 @@ class ReassembleDisplacedRegionsTests(unittest.TestCase):
         # The user's real motivating example: a struct def and a function
         # opening through a dangling `case 0:`, with the case body written
         # in margin space and severed by Phase 1's gap check.
-        lines = [
-            _line("struct RBNode { int val; int color; struct RBNode *child[2]; };"),
-            _line("(*root)->child[!dir] = save->child[dir];", severed=True),
-            _line("save->child[dir] = *root;"),
-            _line("(*root)->color = 1;"),
-            _line("save->color = 0;"),
-            _line("*root = save;"),
-            _line("break;"),
-            _line("}"),
-            _line("}"),
-            _line("}"),
-            _line("void rotate_rb(struct RBNode **root, int dir) {"),
-            _line("if (*root != NULL && (*root)->child[!dir] != NULL) {"),
-            _line("struct RBNode *save = (*root)->child[!dir];"),
-            _line("switch (save->color) {"),
-            _line("case 0:"),
-        ]
+        lines = rbnode_reassembly_lines()
 
         result = self.pipeline._reassemble_displaced_regions(lines)
 
@@ -998,21 +982,7 @@ class ReassembleDisplacedRegionsTests(unittest.TestCase):
         )
 
     def test_relocates_the_compressor_example_to_the_end(self):
-        lines = [
-            _line("struct Compressor { unsigned int flags; int shift_count; };"),
-            _line("c->flags |= (inputs[i] & 0xFF) << c->shift_count;", severed=True),
-            _line("c->shift_count += 8;"),
-            _line("break;"),
-            _line("}"),
-            _line("i++;"),
-            _line("}"),
-            _line("}"),
-            _line("void pack_flags(struct Compressor *c, unsigned int inputs[], int size) {"),
-            _line("int i = 0;"),
-            _line("while (i < size && c->shift_count <= 24) {"),
-            _line("switch (inputs[i] != 0 && !(inputs[i] & 0x01) ? 1 : 0) {"),
-            _line("case 1:"),
-        ]
+        lines = compressor_reassembly_lines()
 
         result = self.pipeline._reassemble_displaced_regions(lines)
 
@@ -1147,5 +1117,88 @@ class ReassembleDisplacedRegionsTests(unittest.TestCase):
         self.assertEqual(result, lines)
 
 
+def rbnode_reassembly_lines():
+    return [
+        _line("struct RBNode { int val; int color; struct RBNode *child[2]; };"),
+        _line("(*root)->child[!dir] = save->child[dir];", severed=True),
+        _line("save->child[dir] = *root;"),
+        _line("(*root)->color = 1;"),
+        _line("save->color = 0;"),
+        _line("*root = save;"),
+        _line("break;"),
+        _line("}"),
+        _line("}"),
+        _line("}"),
+        _line("void rotate_rb(struct RBNode **root, int dir) {"),
+        _line("if (*root != NULL && (*root)->child[!dir] != NULL) {"),
+        _line("struct RBNode *save = (*root)->child[!dir];"),
+        _line("switch (save->color) {"),
+        _line("case 0:"),
+    ]
+
+
+def compressor_reassembly_lines():
+    return [
+        _line("struct Compressor { unsigned int flags; int shift_count; };"),
+        _line("c->flags |= (inputs[i] & 0xFF) << c->shift_count;", severed=True),
+        _line("c->shift_count += 8;"),
+        _line("break;"),
+        _line("}"),
+        _line("i++;"),
+        _line("}"),
+        _line("}"),
+        _line("void pack_flags(struct Compressor *c, unsigned int inputs[], int size) {"),
+        _line("int i = 0;"),
+        _line("while (i < size && c->shift_count <= 24) {"),
+        _line("switch (inputs[i] != 0 && !(inputs[i] & 0x01) ? 1 : 0) {"),
+        _line("case 1:"),
+    ]
+
+
+def small_reassembly_lines():
+    return [
+        _line("struct S { int x; };"),
+        _line("}", severed=True),
+        _line("int main() {"),
+    ]
+
+
+def demo_reassembly(case_name):
+    pipeline = load_pipeline_without_models()
+    cases = {
+        "rbnode": ("RBNode rotate_rb", rbnode_reassembly_lines),
+        "compressor": ("Compressor pack_flags", compressor_reassembly_lines),
+        "small": ("Small displaced closer", small_reassembly_lines),
+    }
+    selected = cases.keys() if case_name == "all" else [case_name]
+
+    for position, name in enumerate(selected):
+        if name not in cases:
+            valid = ", ".join(sorted([*cases, "all"]))
+            raise SystemExit(f"Unknown reassembly demo '{name}'. Use one of: {valid}")
+        title, build_lines = cases[name]
+        lines = build_lines()
+
+        if position:
+            print()
+        print(f"DEMO: {title}")
+        print("BEFORE: synthetic detected order")
+        for index, line in enumerate(lines, 1):
+            marker = "  <- displaced" if line.get("severed_by_gap") else ""
+            print(f"{index}. {line['members'][0]['text']}{marker}")
+
+        ordered = pipeline._reassemble_displaced_regions(lines)
+
+        print("\nAFTER: reassembled continuation")
+        for index, line in enumerate(ordered, 1):
+            print(f"{index}. {line['members'][0]['text']}")
+
+
 if __name__ == "__main__":
+    if "--demo-reassembly" in sys.argv:
+        flag_index = sys.argv.index("--demo-reassembly")
+        case = sys.argv[flag_index + 1] if len(sys.argv) > flag_index + 1 else "rbnode"
+        del sys.argv[flag_index:flag_index + 2]
+        demo_reassembly(case)
+        raise SystemExit(0)
     unittest.main()
