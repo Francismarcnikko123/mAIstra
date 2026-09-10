@@ -1,5 +1,6 @@
 import math
 import os
+import re
 from pathlib import Path
 
 import cv2
@@ -167,6 +168,32 @@ def _brace_delta(text: str) -> int:
     return delta
 
 
+def _is_definition_close(text: str) -> bool:
+    """True if every closing brace on this line is a definition terminator --
+    a `}` immediately followed by `;` (a struct/union/enum/initializer close),
+    literal contents shielded the same way _brace_delta shields them.
+
+    Used by the displaced-reassembly guard. A displaced block is executable
+    code, so it can belong INSIDE a control-flow scope (closed by a plain
+    `}`) -- the genuinely ambiguous case the guard must reject. But it can
+    never belong inside a type definition (closed by `};`): definitions hold
+    declarations, not statements. So a negative-delta normal line whose closes
+    are ALL `};` is a self-contained, unrelated scope, safe to allow past the
+    guard. Requiring EVERY `}` to be a `};` keeps a line that mixes a control
+    close and a definition close (e.g. `} };`) on the reject side.
+    """
+    stripped = ""
+    last = 0
+    for match in C_LITERAL.finditer(text):
+        stripped += text[last:match.start()]
+        last = match.end()
+    stripped += text[last:]
+    for match in re.finditer(r"\}", stripped):
+        if not re.match(r"\s*;", stripped[match.end():]):
+            return False
+    return True
+
+
 def _reassemble_displaced_regions(lines: list) -> list:
     """If exactly one contiguous run of gap-severed lines can be moved to
     the end of the page such that the resulting sequence has well-formed
@@ -197,22 +224,31 @@ def _reassemble_displaced_regions(lines: list) -> list:
     searched. Any ambiguity -- zero or multiple tail lengths yielding a
     well-formed sequence -- returns `lines` unchanged rather than guessing.
 
-    Only after selecting a unique tail length, reject the candidate if
-    any line in its normal partition has _brace_delta < 0. The partition
+    Only after selecting a unique tail length, reject the candidate if its
+    normal partition closes a control-flow scope by itself. The partition
     depends on the tail length: unmarked trailing lines can still belong
     to the displaced block. This guard must not filter candidates before
     uniqueness is established.
 
     For the supported end-of-sequence displacement, the main text left one
     or more scopes open, and the displaced block closes them. In that case,
-    normal contains only openers and zero-delta statements: the scope-closing
-    lines were displaced into the margin. If the winning normal contains a
-    negative-delta line, part of the main text closed a scope by itself, so
-    the displaced block may belong mid-sequence, which brace math alone
-    cannot solve. Refusing to apply is safer than producing a brace-well-formed
-    but semantically wrong reordering. This conservative guard also rejects
-    legitimate end-of-sequence layouts with an earlier completed scope whose
-    closing line has a negative delta; those require human verification.
+    normal contains openers, zero-delta statements, and possibly a
+    self-contained type definition -- but no *control-flow* scope that
+    normal closed by itself. If the winning normal DOES close a control
+    scope on its own (a negative-delta line that isn't a definition close),
+    part of the main text closed a scope without the block, so the block may
+    belong mid-sequence, which brace math alone cannot solve; refusing is
+    safer than a brace-well-formed but semantically wrong reordering.
+
+    The exemption for definition closes (`};`, via _is_definition_close) is
+    what lets a normal multi-line `struct { ... };` before the displaced
+    block through -- the common real case. It is provably safe because a
+    displaced *executable* block can never belong inside a type definition,
+    so a `};` in normal is always an unrelated, self-contained scope. A
+    plain `}` (control-flow close) stays rejected because the block CAN
+    belong inside such a scope. A still-legitimate layout whose main flow
+    closes a control scope by itself before the displaced block remains
+    rejected and needs human verification.
     """
     severed_indices = [
         i for i, line in enumerate(lines) if line.get("severed_by_gap")
@@ -250,7 +286,15 @@ def _reassemble_displaced_regions(lines: list) -> list:
     if len(valid_reorderings) != 1:
         return lines
     reordering, normal = valid_reorderings[0]
-    if any(_brace_delta(line_text(line)) < 0 for line in normal):
+    # Reject if the normal partition closes a CONTROL-FLOW scope by itself: the
+    # displaced block might belong inside it (mid-sequence), which brace math
+    # can't resolve. A definition close (`};`) is exempt -- a type definition
+    # can't contain the displaced executable block, so it's always unrelated
+    # (see _is_definition_close). This lets a normal multi-line struct/union
+    # before the displaced block through, while still refusing a genuine
+    # dangling control scope.
+    if any(_brace_delta(text := line_text(line)) < 0 and not _is_definition_close(text)
+           for line in normal):
         return lines
     return reordering
 

@@ -932,13 +932,76 @@ class ReassembleDisplacedRegionsTests(unittest.TestCase):
             ],
         )
 
+    def test_relocates_past_a_multiline_struct_in_the_main_flow(self):
+        # Real scenario (reassemble_example_isolate_2): a merge function whose
+        # else-branch was written in the top-right margin, so in the y-sweep it
+        # appears early -- interleaved with a struct written across several
+        # lines that ends in a standalone `};` in the main flow. The `};`
+        # closing the struct is a definition close, not a control close -- the
+        # displaced executable block can't belong inside a struct -- so the
+        # guard must let this reorder through. Before the definition-close
+        # exemption, the standalone `};` blocked every such page.
+        lines = [
+            _line("Question 1:"),
+            _line("} else {", severed=True),
+            _line("struct node {"),
+            _line("l2->next = merge_lists(l1, l2->next, cmp);", severed=True),
+            _line("struct node *next, *prev;"),
+            _line("l2->next->prev = l2;", severed=True),
+            _line("void *data;"),
+            _line("l2->prev = NULL;", severed=True),
+            _line("};"),
+            _line("return l2;", severed=True),
+            _line("}", severed=True),
+            _line("}", severed=True),
+            _line("struct node *merge_lists(struct node *l1, struct node *l2,"
+                  " int (*cmp)(void*, void*)) {"),
+            _line("if (!l1) return l2;"),
+            _line("if (!l2) return l1;"),
+            _line("if (cmp(l1->data, l2->data) <= 0) {"),
+            _line("l1->next = merge_lists(l1->next, l2, cmp);"),
+            _line("l1->next->prev = l1;"),
+            _line("l1->prev = NULL;"),
+            _line("return l1;"),
+        ]
+
+        result = self.pipeline._reassemble_displaced_regions(lines)
+
+        self.assertEqual(
+            self.texts_of(result),
+            [
+                "Question 1:",
+                "struct node {",
+                "struct node *next, *prev;",
+                "void *data;",
+                "};",
+                "struct node *merge_lists(struct node *l1, struct node *l2,"
+                " int (*cmp)(void*, void*)) {",
+                "if (!l1) return l2;",
+                "if (!l2) return l1;",
+                "if (cmp(l1->data, l2->data) <= 0) {",
+                "l1->next = merge_lists(l1->next, l2, cmp);",
+                "l1->next->prev = l1;",
+                "l1->prev = NULL;",
+                "return l1;",
+                "} else {",
+                "l2->next = merge_lists(l1, l2->next, cmp);",
+                "l2->next->prev = l2;",
+                "l2->prev = NULL;",
+                "return l2;",
+                "}",
+                "}",
+            ],
+        )
+
     def test_refuses_when_normal_contains_a_closer(self):
         # The severed block ("work(); }") belongs inside the switch, with
         # after_switch() following it outside the switch. Appending the block
         # is brace-well-formed but puts both statements in the wrong scopes.
         # The unique winning L=2 gives depths 0, 1, 2, 2, 2, 1, 1, 0;
         # longer blocks leave a negative depth and cannot qualify. The
-        # winning normal contains its own "}" (delta -1), so reject it.
+        # winning normal contains its own plain "}" (delta -1, a control
+        # close, NOT a definition close), so reject it.
         lines = [
             _line("struct S { int x; };"),
             _line("work();", severed=True),
