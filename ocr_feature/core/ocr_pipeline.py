@@ -489,16 +489,16 @@ def _detect_two_columns(items, page_top, page_bot):
     """Return the x of a clean column gutter if this page is a genuine
     two-column layout (two independent programs side by side), else None.
 
-    Conservative by design (see the constants and the design spec): requires
-    a vertical strip that NO detection crosses, with at least MIN_COLUMN_LINES
-    detections on each side, each side spanning at least
-    MIN_COLUMN_VSPAN_FRACTION of the page height. A crossed gutter -- a wide
-    line spanning both sides, or a displaced-continuation page whose gutter
-    closes partway down -- is rejected here and handled by the single-column
-    path (including the displaced-region reassembly). The coherence-based
-    verification that was explored was found unreliable on real data (a
-    single-column page can split into two coincidentally brace-balanced
-    halves); the geometric persistence signal is what reliably separates the
+    The widest gap in the union of all detection x-intervals supplies the
+    gutter midpoint, guaranteeing that no detection crosses it at any height.
+    A wide line or a gutter that closes partway down covers that candidate
+    gap. The remaining gates require substantial columns: at least
+    MIN_COLUMN_LINES detections per side, each spanning at least
+    MIN_COLUMN_VSPAN_FRACTION of the page height. Pages without a qualifying
+    gap take the single-column path (including displaced-region reassembly).
+    The coherence-based verification that was explored was found unreliable
+    on real data (a single-column page can split into two coincidentally
+    brace-balanced halves); the geometric persistence signal separates the
     two-column page from single-column ones."""
     if len(items) < 2 * MIN_COLUMN_LINES:
         return None
@@ -515,9 +515,8 @@ def _detect_two_columns(items, page_top, page_bot):
         covered = max(covered, x1)
     if best_x is None or best_gap <= 0:
         return None
-    # Persistence: no detection may cross the gutter at any height.
-    if any(it["x"] < best_x < it["x_max"] for it in items):
-        return None
+    # The coverage-gap midpoint already guarantees no crossing. Check that
+    # both sides have enough detections and vertical span to be columns.
     left = [it for it in items if it["x_max"] <= best_x]
     right = [it for it in items if it["x"] >= best_x]
     if len(left) < MIN_COLUMN_LINES or len(right) < MIN_COLUMN_LINES:
