@@ -36,7 +36,11 @@ from core.c_code_suggestions import suggest_c_code
 # Fine-tuned recognizer (2026-08-30): trained on 2,491 handwritten C-code
 # line crops, cut recognition CER on the held-out samples/ set from 0.274
 # (stock PP-OCRv6_medium_rec) to 0.126 (-54%), improving every sample with
-# no regressions. This is the ONLY recognizer this pipeline runs -- no
+# no regressions. That 0.274 -> 0.126 is the historical recognition-only
+# fine-tune comparison, before the two-column reading-order split. Current
+# samples/ end-to-end metrics after that split are clean_ws CER 0.099,
+# clean WER 0.328, and clean token accuracy 0.716 (evaluate_cer).
+# This is the ONLY recognizer this pipeline runs -- no
 # stock-model fallback -- so the result the thesis measured is always what's
 # actually running, never silently swapped for something weaker. Weights
 # aren't committed (see models/README.md -- ~76MB, distributed via a GitHub
@@ -73,8 +77,10 @@ ocr = PaddleOCR(
     # but standalone braces and some faint code lines were being LOST AT
     # DETECTION -- their box score fell below the 0.60 cutoff, so the recognizer
     # never saw them. A/B on the 20-image gate set, sweeping 0.60/0.40/0.30:
-    # overall clean_ws CER stays 0.126 at every value (no phantom-detection
-    # regression), while closing-brace recovery rises 82 -> 86 -> 87 of 89.
+    # historical recognition-only clean_ws CER stayed 0.126 at every value
+    # (no phantom-detection regression), while closing-brace recovery rose
+    # 82 -> 86 -> 87 of 89. This sweep preceded the two-column split; current
+    # end-to-end samples/ clean_ws CER is 0.099 with the shipped setting.
     # A sharper 0.40-vs-0.30 diff confirmed every extra box at 0.30 is REAL
     # content (1 brace + 4 whole code lines that were missing), zero junk. For a
     # grading app "misread beats missing" -- a recovered line is teacher-fixable
