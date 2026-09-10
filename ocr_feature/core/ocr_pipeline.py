@@ -124,6 +124,16 @@ BASELINE_REGION_GAP_MULTIPLIER = 6.0
 MAX_DISPLACED_REGION_LINES = 12
 MAX_DISPLACED_REGION_SPAN = 300.0
 
+# Two-column split (two independent programs written side by side to save
+# paper). Detection is deliberately conservative: a vertical gutter that NO
+# detection crosses, with substantial vertically-distributed content on both
+# sides. Validated against the real dataset -- fires on the one genuine
+# two-column page (green_writer10_B2_1.jpg) and none of the 34 single-column
+# pages. See docs/superpowers/specs/2026-09-10-displaced-region-tracking-design.md.
+MIN_COLUMN_LINES = 4
+MIN_COLUMN_VSPAN_FRACTION = 0.5
+
+
 def _filter_low_confidence(rec_texts, rec_scores, rec_boxes):
     """Drop entries below REC_SCORE_FLOOR, keeping the three lists aligned.
     A missing score passes through rather than getting dropped. Also returns
@@ -451,6 +461,75 @@ def _sweep_detection_records(items, line_tol, seed_gap_threshold,
     return lines, first_seed
 
 
+def _order_column_items(items, line_tol, region_gap_threshold,
+                        baseline_gap_threshold):
+    """Sweep, sever/trace a displaced region, and reassemble -- the full
+    ordering pipeline for one column of items. That column is either a whole
+    single-column page or one side of a two-column split. Returns grouped
+    lines, or None if the geometry is unsafe (caller falls back)."""
+    lines, seed = _sweep_detection_records(
+        items, line_tol, region_gap_threshold, baseline_gap_threshold, set())
+    if lines is None:
+        return None
+    if seed is not None:
+        displaced = _trace_displaced_region(items, *seed)
+        if displaced:
+            lines, _ = _sweep_detection_records(
+                items, line_tol, region_gap_threshold, baseline_gap_threshold,
+                {id(item) for item in displaced})
+            if lines is None:
+                return None
+    return _reassemble_displaced_regions(lines)
+
+
+def _detect_two_columns(items, page_top, page_bot):
+    """Return the x of a clean column gutter if this page is a genuine
+    two-column layout (two independent programs side by side), else None.
+
+    Conservative by design (see the constants and the design spec): requires
+    a vertical strip that NO detection crosses, with at least MIN_COLUMN_LINES
+    detections on each side, each side spanning at least
+    MIN_COLUMN_VSPAN_FRACTION of the page height. A crossed gutter -- a wide
+    line spanning both sides, or a displaced-continuation page whose gutter
+    closes partway down -- is rejected here and handled by the single-column
+    path (including the displaced-region reassembly). The coherence-based
+    verification that was explored was found unreliable on real data (a
+    single-column page can split into two coincidentally brace-balanced
+    halves); the geometric persistence signal is what reliably separates the
+    two-column page from single-column ones."""
+    if len(items) < 2 * MIN_COLUMN_LINES:
+        return None
+    page_height = page_bot - page_top
+    if page_height <= 0:
+        return None
+    intervals = sorted((it["x"], it["x_max"]) for it in items)
+    covered = intervals[0][1]
+    best_gap, best_x = 0.0, None
+    for x0, x1 in intervals[1:]:
+        gap = x0 - covered
+        if gap > best_gap:
+            best_gap, best_x = gap, covered + gap / 2.0
+        covered = max(covered, x1)
+    if best_x is None or best_gap <= 0:
+        return None
+    # Persistence: no detection may cross the gutter at any height.
+    if any(it["x"] < best_x < it["x_max"] for it in items):
+        return None
+    left = [it for it in items if it["x_max"] <= best_x]
+    right = [it for it in items if it["x"] >= best_x]
+    if len(left) < MIN_COLUMN_LINES or len(right) < MIN_COLUMN_LINES:
+        return None
+
+    def vspan(side):
+        ys = [it["y"] for it in side]
+        return (max(ys) - min(ys)) / page_height
+
+    if (vspan(left) < MIN_COLUMN_VSPAN_FRACTION
+            or vspan(right) < MIN_COLUMN_VSPAN_FRACTION):
+        return None
+    return best_x
+
+
 def _group_detection_records(rec_texts, rec_scores, rec_boxes):
     """Group detections and retain the box geometry used for ordering.
 
@@ -505,24 +584,36 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
     items.sort(key=lambda it: it["y"])
 
     baseline_gap_threshold = max(BASELINE_REGION_GAP_MULTIPLIER * median_width, 1.0)
-    lines, seed = _sweep_detection_records(
-        items, line_tol, region_gap_threshold, baseline_gap_threshold, set()
-    )
+
+    # A genuine two-column page (two independent programs side by side) reads
+    # as left column fully, then right column fully -- NOT interleaved by the
+    # y-sweep. Detect it, and if found, order each column on its own and
+    # concatenate. Only applied when detection is confident (see
+    # _detect_two_columns); every other page takes the single-column path.
+    page_top = min(it["y_min"] for it in items)
+    page_bot = max(it["y_max"] for it in items)
+    gutter_x = _detect_two_columns(items, page_top, page_bot)
+    if gutter_x is not None:
+        left = [it for it in items
+                if (it["x"] + it["x_max"]) / 2.0 < gutter_x]
+        right = [it for it in items
+                 if (it["x"] + it["x_max"]) / 2.0 >= gutter_x]
+        left_lines = _order_column_items(
+            left, line_tol, region_gap_threshold, baseline_gap_threshold)
+        right_lines = _order_column_items(
+            right, line_tol, region_gap_threshold, baseline_gap_threshold)
+        if left_lines is not None and right_lines is not None:
+            ordered_lines = [
+                sorted(line["members"], key=lambda member: member["x"])
+                for line in left_lines + right_lines
+            ]
+            return ordered_lines, True
+        # Either column had unsafe geometry -- fall through to single-column.
+
+    lines = _order_column_items(
+        items, line_tol, region_gap_threshold, baseline_gap_threshold)
     if lines is None:
         return _original_detection_records(rec_texts, rec_scores), False
-    if seed is not None:
-        displaced = _trace_displaced_region(items, *seed)
-        if displaced:
-            # Re-sweep to separate region members encountered before the
-            # seed as well. No later seed is traced, even after this window.
-            lines, _ = _sweep_detection_records(
-                items, line_tol, region_gap_threshold, baseline_gap_threshold,
-                {id(item) for item in displaced},
-            )
-            if lines is None:
-                return _original_detection_records(rec_texts, rec_scores), False
-
-    lines = _reassemble_displaced_regions(lines)
     ordered_lines = [
         sorted(line["members"], key=lambda member: member["x"])
         for line in lines

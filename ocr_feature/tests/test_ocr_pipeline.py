@@ -435,15 +435,24 @@ class DynamicGutterGroupingTests(unittest.TestCase):
         )
         self.assertEqual(flagged, ["right", "wider right"])
 
-    def test_full_height_columns_discard_candidates_and_keep_baseline_merges(self):
+    def test_full_height_two_column_page_is_split_into_sequential_columns(self):
+        # A genuine two-column page (two independent programs side by side)
+        # must read as the left column in full, then the right column in full
+        # -- never interleaved by the y-sweep. The persistent uncrossed gutter
+        # plus substantial content on both sides triggers the split.
         texts, boxes = [], []
         for row in range(24):
             texts.extend([f"L{row}", f"R{row}"])
             boxes.extend([[0, row * 40, 100 if row == 0 else 180, row * 40 + 20],
                           [300 if row == 0 else 250, row * 40, 400, row * 40 + 20]])
-        grouped, flagged = self.inspect_grouping(texts, boxes)
-        self.assertEqual(flagged, [])
-        self.assertEqual(grouped, [[f"L{i}", f"R{i}"] for i in range(24)])
+        grouped, safe = self.pipeline._group_detection_records(
+            texts, [0.9] * len(texts), boxes)
+        self.assertTrue(safe)
+        flat = [m["text"] for line in grouped for m in line]
+        self.assertEqual(
+            flat,
+            [f"L{i}" for i in range(24)] + [f"R{i}" for i in range(24)],
+        )
 
     def test_confirmed_window_respects_line_count_cap(self):
         for count in (12, 13):
@@ -511,6 +520,46 @@ class DynamicGutterGroupingTests(unittest.TestCase):
              [0, 130, 100, 150], [300, 140, 400, 160]],
         )
         self.assertEqual(flagged, [])
+
+
+class TwoColumnDetectionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pipeline = load_pipeline_without_models()
+
+    @staticmethod
+    def _col(x0, x1, rows, y0=0, step=40):
+        return [{"x": x0, "x_max": x1, "y": y0 + r * step + 10,
+                 "y_min": y0 + r * step, "y_max": y0 + r * step + 20}
+                for r in range(rows)]
+
+    def test_accepts_a_clean_two_column_layout(self):
+        items = self._col(0, 180, 10) + self._col(250, 400, 10)
+        gutter = self.pipeline._detect_two_columns(items, 0, 400)
+        self.assertIsNotNone(gutter)
+        self.assertTrue(180 < gutter < 250)
+
+    def test_rejects_a_thin_second_side(self):
+        # A persistent gutter can exist on a single-column page with one stray
+        # far-right token, but 1-2 detections is not a genuine second column.
+        items = self._col(0, 200, 20)
+        items.append({"x": 500, "x_max": 560, "y": 10, "y_min": 0, "y_max": 20})
+        self.assertIsNone(self.pipeline._detect_two_columns(items, 0, 800))
+
+    def test_rejects_a_crossed_gutter(self):
+        # Two clusters, but a wide line spans both -> not a persistent gutter
+        # (this is the displaced-continuation / spanning-title shape, handled
+        # by the single-column path instead).
+        items = self._col(0, 180, 10) + self._col(250, 400, 10)
+        items.append({"x": 0, "x_max": 400, "y": 500,
+                      "y_min": 490, "y_max": 510})
+        self.assertIsNone(self.pipeline._detect_two_columns(items, 0, 520))
+
+    def test_rejects_a_second_side_that_does_not_span_the_page(self):
+        # Right side is substantial in count but bunched in the top third --
+        # not a full-height column, so not a two-column layout.
+        items = self._col(0, 180, 12) + self._col(250, 400, 5, y0=0, step=15)
+        self.assertIsNone(self.pipeline._detect_two_columns(items, 0, 480))
 
 
 class StructuredRecognitionTests(unittest.TestCase):
