@@ -1258,6 +1258,28 @@ class IndentationReconstructionTests(unittest.TestCase):
         structured = p._group_structured_lines(texts, [0.9] * 2, boxes, 1000)
         self.assertEqual([line["text"] for line in structured], ["a", "b"])
 
+    def test_two_columns_indent_from_each_columns_own_margin(self):
+        p = self.pipeline
+        unit = p.INDENT_UNIT_FRACTION * 50.0   # all boxes are 50 wide
+        texts, boxes = [], []
+        for row in range(6):
+            left_x = 20 if row < 3 else 20 + unit    # left col: flush, then +1
+            right_x = 300 if row < 3 else 300 + unit  # right col: flush, then +1
+            texts.extend([f"L{row}", f"R{row}"])
+            boxes.extend([
+                [left_x, row * 30, left_x + 50, row * 30 + 20],
+                [right_x, row * 30, right_x + 50, row * 30 + 20],
+            ])
+        grouped, safe = p._group_detection_records(
+            texts, [0.9] * len(texts), boxes)
+        self.assertTrue(safe)
+        flat = [member["text"] for line in grouped for member in line]
+        self.assertEqual(
+            flat, [f"L{i}" for i in range(6)] + [f"R{i}" for i in range(6)])
+        indents = [line[0]["indent"] for line in grouped]
+        # Left col measured from x=20, right col from x=300 -- NOT from page-left.
+        self.assertEqual(indents, [0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1])
+
 
 if __name__ == "__main__":
     if "--demo-reassembly" in sys.argv:

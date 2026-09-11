@@ -624,6 +624,8 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
         right_lines = _order_column_items(
             right, line_tol, region_gap_threshold, baseline_gap_threshold)
         if left_lines is not None and right_lines is not None:
+            _assign_indent_levels(left_lines, median_width)
+            _assign_indent_levels(right_lines, median_width)
             ordered_lines = [
                 sorted(line["members"], key=lambda member: member["x"])
                 for line in left_lines + right_lines
