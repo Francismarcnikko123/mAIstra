@@ -1194,6 +1194,48 @@ def demo_reassembly(case_name):
             print(f"{index}. {line['members'][0]['text']}")
 
 
+class IndentationReconstructionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pipeline = load_pipeline_without_models()
+
+    def test_assign_indent_levels_measures_from_column_left(self):
+        p = self.pipeline
+        unit = p.INDENT_UNIT_FRACTION * 100.0  # median_width == 100
+        lines = [
+            {"members": [{"x": 50.0, "x_max": 150.0, "text": "a"}]},
+            {"members": [{"x": 50.0 + unit, "x_max": 150.0 + unit, "text": "b"}]},
+            {"members": [{"x": 50.0 + 2 * unit, "x_max": 150.0 + 2 * unit,
+                          "text": "c"}]},
+        ]
+        p._assign_indent_levels(lines, 100.0)
+        self.assertEqual(
+            [line["members"][0]["indent"] for line in lines], [0, 1, 2]
+        )
+
+    def test_assign_indent_levels_clamps_to_max(self):
+        p = self.pipeline
+        unit = p.INDENT_UNIT_FRACTION * 100.0
+        far = 50.0 + (p.MAX_INDENT_LEVELS + 5) * unit
+        lines = [
+            {"members": [{"x": 50.0, "x_max": 150.0, "text": "a"}]},
+            {"members": [{"x": far, "x_max": far + 100.0, "text": "b"}]},
+        ]
+        p._assign_indent_levels(lines, 100.0)
+        self.assertEqual(lines[1]["members"][0]["indent"], p.MAX_INDENT_LEVELS)
+
+    def test_assign_indent_levels_degenerate_width_is_flat(self):
+        p = self.pipeline
+        lines = [
+            {"members": [{"x": 50.0, "x_max": 150.0, "text": "a"}]},
+            {"members": [{"x": 9999.0, "x_max": 10099.0, "text": "b"}]},
+        ]
+        p._assign_indent_levels(lines, 0.0)  # zero median width -> no unit
+        self.assertEqual(
+            [line["members"][0]["indent"] for line in lines], [0, 0]
+        )
+
+
 if __name__ == "__main__":
     if "--demo-reassembly" in sys.argv:
         flag_index = sys.argv.index("--demo-reassembly")

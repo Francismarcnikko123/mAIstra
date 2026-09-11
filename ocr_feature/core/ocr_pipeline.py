@@ -142,6 +142,15 @@ MAX_DISPLACED_REGION_SPAN = 300.0
 MIN_COLUMN_LINES = 4
 MIN_COLUMN_VSPAN_FRACTION = 0.5
 
+# Reconstruct the student's handwritten indentation from box geometry -- NOT
+# brace depth. A line indented on paper has a larger left-edge x; one indent
+# level is INDENT_UNIT_FRACTION median-box-widths of rightward offset from the
+# line's own column left margin. Recognition-independent and presentation-only:
+# it prepends whitespace, never changing which characters are emitted.
+INDENT_UNIT_FRACTION = 2.0
+MAX_INDENT_LEVELS = 8
+INDENT_STRING = "  "
+
 
 def _filter_low_confidence(rec_texts, rec_scores, rec_boxes):
     """Drop entries below REC_SCORE_FLOOR, keeping the three lists aligned.
@@ -644,6 +653,32 @@ def line_member_bounds(members):
     y_min = min(member["y_min"] for member in members)
     y_max = max(member["y_max"] for member in members)
     return x_min, y_min, x_max, y_max
+
+
+def _assign_indent_levels(column_lines, median_width):
+    """Set each line's reconstructed indent level on its member dicts.
+
+    `column_lines` is a list of line dicts (each with a "members" list whose
+    members carry "x"), all belonging to ONE column. Indent is measured from
+    that column's own left margin, so a two-column page's right column is not
+    read as deeply indented. Quantized into levels of
+    INDENT_UNIT_FRACTION * median_width and clamped to [0, MAX_INDENT_LEVELS].
+    Mutates members in place, adding an "indent" key. Any degenerate geometry
+    (no unit, non-finite x) yields level 0, i.e. today's flat behavior."""
+    if not column_lines:
+        return
+    unit = INDENT_UNIT_FRACTION * median_width
+    lefts = [min(member["x"] for member in line["members"])
+             for line in column_lines]
+    column_left = min(lefts)
+    for line, x_min in zip(column_lines, lefts):
+        if unit > 0 and math.isfinite(x_min) and math.isfinite(column_left):
+            level = round((x_min - column_left) / unit)
+            level = max(0, min(level, MAX_INDENT_LEVELS))
+        else:
+            level = 0
+        for member in line["members"]:
+            member["indent"] = level
 
 
 def _group_structured_lines(rec_texts, rec_scores, rec_boxes, image_height):
