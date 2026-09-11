@@ -1201,7 +1201,7 @@ class IndentationReconstructionTests(unittest.TestCase):
 
     def test_assign_indent_levels_measures_from_column_left(self):
         p = self.pipeline
-        unit = p.INDENT_UNIT_FRACTION * 100.0  # median_width == 100
+        unit = p.INDENT_STEP_CHARS * 100.0  # char_width == 100
         lines = [
             {"members": [{"x": 50.0, "x_max": 150.0, "text": "a"}]},
             {"members": [{"x": 50.0 + unit, "x_max": 150.0 + unit, "text": "b"}]},
@@ -1215,7 +1215,7 @@ class IndentationReconstructionTests(unittest.TestCase):
 
     def test_assign_indent_levels_clamps_to_max(self):
         p = self.pipeline
-        unit = p.INDENT_UNIT_FRACTION * 100.0
+        unit = p.INDENT_STEP_CHARS * 100.0
         far = 50.0 + (p.MAX_INDENT_LEVELS + 5) * unit
         lines = [
             {"members": [{"x": 50.0, "x_max": 150.0, "text": "a"}]},
@@ -1237,7 +1237,7 @@ class IndentationReconstructionTests(unittest.TestCase):
 
     def test_single_column_text_carries_reconstructed_indentation(self):
         p = self.pipeline
-        unit = p.INDENT_UNIT_FRACTION * 100.0   # all boxes are 100 wide
+        unit = p.INDENT_STEP_CHARS * 100.0   # boxes 100 wide, text len 1 -> char_width 100
         texts = ["a", "b", "c"]
         boxes = [
             [50, 0, 150, 20],
@@ -1260,7 +1260,7 @@ class IndentationReconstructionTests(unittest.TestCase):
 
     def test_two_columns_indent_from_each_columns_own_margin(self):
         p = self.pipeline
-        unit = p.INDENT_UNIT_FRACTION * 50.0   # all boxes are 50 wide
+        unit = p.INDENT_STEP_CHARS * 25.0   # boxes 50 wide, text len 2 -> char_width 25
         texts, boxes = [], []
         for row in range(6):
             left_x = 20 if row < 3 else 20 + unit    # left col: flush, then +1

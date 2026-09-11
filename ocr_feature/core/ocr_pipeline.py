@@ -144,10 +144,15 @@ MIN_COLUMN_VSPAN_FRACTION = 0.5
 
 # Reconstruct the student's handwritten indentation from box geometry -- NOT
 # brace depth. A line indented on paper has a larger left-edge x; one indent
-# level is INDENT_UNIT_FRACTION median-box-widths of rightward offset from the
-# line's own column left margin. Recognition-independent and presentation-only:
-# it prepends whitespace, never changing which characters are emitted.
-INDENT_UNIT_FRACTION = 2.0
+# level is INDENT_STEP_CHARS character-widths of rightward offset from the line's
+# own column left margin. The unit is CHARACTER-scale on purpose: a detection
+# box spans a whole word, so median box width is ~10x a character, and a
+# student's indent is only a few characters -- a box-width unit rounds every
+# real indent to zero (measured on green_writer10: box width 109px vs char
+# width 10.7px vs a 47px case-indent). Recognition-independent and
+# presentation-only: it prepends whitespace, never changing which characters
+# are emitted.
+INDENT_STEP_CHARS = 3.0
 MAX_INDENT_LEVELS = 8
 INDENT_STRING = "  "
 
@@ -601,6 +606,17 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
     median_width = widths[len(widths) // 2] if widths else 0.0
     region_gap_threshold = max(REGION_GAP_MULTIPLIER * median_width, 1.0)
 
+    # Character-scale width (box width / text length) is the unit for indent
+    # reconstruction -- see INDENT_STEP_CHARS. Box width alone spans a whole
+    # word, so it is far too coarse to resolve a few-character indent.
+    char_widths = sorted(
+        (it["x_max"] - it["x"]) / len(it["text"].strip())
+        for it in items if it["text"] and it["text"].strip()
+    )
+    median_char_width = (
+        char_widths[len(char_widths) // 2] if char_widths else 0.0
+    )
+
     # Sort by vertical position first so we can sweep top-to-bottom.
     items.sort(key=lambda it: it["y"])
 
@@ -624,8 +640,8 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
         right_lines = _order_column_items(
             right, line_tol, region_gap_threshold, baseline_gap_threshold)
         if left_lines is not None and right_lines is not None:
-            _assign_indent_levels(left_lines, median_width)
-            _assign_indent_levels(right_lines, median_width)
+            _assign_indent_levels(left_lines, median_char_width)
+            _assign_indent_levels(right_lines, median_char_width)
             ordered_lines = [
                 sorted(line["members"], key=lambda member: member["x"])
                 for line in left_lines + right_lines
@@ -637,7 +653,7 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
         items, line_tol, region_gap_threshold, baseline_gap_threshold)
     if lines is None:
         return _original_detection_records(rec_texts, rec_scores), False
-    _assign_indent_levels(lines, median_width)
+    _assign_indent_levels(lines, median_char_width)
     ordered_lines = [
         sorted(line["members"], key=lambda member: member["x"])
         for line in lines
@@ -658,19 +674,20 @@ def line_member_bounds(members):
     return x_min, y_min, x_max, y_max
 
 
-def _assign_indent_levels(column_lines, median_width):
+def _assign_indent_levels(column_lines, char_width):
     """Set each line's reconstructed indent level on its member dicts.
 
     `column_lines` is a list of line dicts (each with a "members" list whose
-    members carry "x"), all belonging to ONE column. Indent is measured from
-    that column's own left margin, so a two-column page's right column is not
-    read as deeply indented. Quantized into levels of
-    INDENT_UNIT_FRACTION * median_width and clamped to [0, MAX_INDENT_LEVELS].
+    members carry "x"), all belonging to ONE column. `char_width` is the median
+    character width (box width / text length) of the page. Indent is measured
+    from that column's own left margin, so a two-column page's right column is
+    not read as deeply indented. Quantized into levels of
+    INDENT_STEP_CHARS * char_width and clamped to [0, MAX_INDENT_LEVELS].
     Mutates members in place, adding an "indent" key. Any degenerate geometry
     (no unit, non-finite x) yields level 0, i.e. today's flat behavior."""
     if not column_lines:
         return
-    unit = INDENT_UNIT_FRACTION * median_width
+    unit = INDENT_STEP_CHARS * char_width
     lefts = [min(member["x"] for member in line["members"])
              for line in column_lines]
     column_left = min(lefts)
