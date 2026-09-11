@@ -1280,6 +1280,16 @@ class IndentationReconstructionTests(unittest.TestCase):
         # Left col measured from x=20, right col from x=300 -- NOT from page-left.
         self.assertEqual(indents, [0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1])
 
+    def test_unsafe_geometry_falls_back_to_flat_text(self):
+        p = self.pipeline
+        # A malformed box (too short) forces the geometry-unsafe fallback:
+        # one detection per line, original order, and no reconstructed indent.
+        texts = ["first", "second"]
+        boxes = [[1, 2, 3], [10, 20, 30, 40]]
+        structured = p._group_structured_lines(texts, [0.2, 0.3], boxes, 1000)
+        self.assertEqual(
+            [line["text"] for line in structured], ["first", "second"])
+
 
 if __name__ == "__main__":
     if "--demo-reassembly" in sys.argv:
