@@ -1291,16 +1291,6 @@ class IndentationReconstructionTests(unittest.TestCase):
             [line["text"] for line in structured], ["first", "second"])
 
 
-if __name__ == "__main__":
-    if "--demo-reassembly" in sys.argv:
-        flag_index = sys.argv.index("--demo-reassembly")
-        case = sys.argv[flag_index + 1] if len(sys.argv) > flag_index + 1 else "rbnode"
-        del sys.argv[flag_index:flag_index + 2]
-        demo_reassembly(case)
-        raise SystemExit(0)
-    unittest.main()
-
-
 class VerticalSpacingReconstructionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -1355,3 +1345,13 @@ class VerticalSpacingReconstructionTests(unittest.TestCase):
         result = p._join_lines_with_vertical_gaps(structured)
         expected = "a\nb\nc" + "\n" * (p.MAX_BLANK_LINES + 1) + "d"
         self.assertEqual(result, expected)
+
+
+if __name__ == "__main__":
+    if "--demo-reassembly" in sys.argv:
+        flag_index = sys.argv.index("--demo-reassembly")
+        case = sys.argv[flag_index + 1] if len(sys.argv) > flag_index + 1 else "rbnode"
+        del sys.argv[flag_index:flag_index + 2]
+        demo_reassembly(case)
+        raise SystemExit(0)
+    unittest.main()
