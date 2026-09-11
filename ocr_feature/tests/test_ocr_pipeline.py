@@ -1299,3 +1299,49 @@ if __name__ == "__main__":
         demo_reassembly(case)
         raise SystemExit(0)
     unittest.main()
+
+
+class VerticalSpacingReconstructionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pipeline = load_pipeline_without_models()
+
+    @staticmethod
+    def sline(text, y_center, h=0.02):
+        return {"text": text, "y_min": y_center - h / 2, "y_max": y_center + h / 2}
+
+    def test_even_spacing_inserts_no_blanks(self):
+        p = self.pipeline
+        lines = [self.sline("a", 0.10), self.sline("b", 0.20),
+                 self.sline("c", 0.30), self.sline("d", 0.40)]
+        self.assertEqual(p._join_lines_with_vertical_gaps(lines), "a\nb\nc\nd")
+
+    def test_double_gap_inserts_one_blank(self):
+        p = self.pipeline
+        lines = [self.sline("a", 0.10), self.sline("b", 0.20),
+                 self.sline("c", 0.30), self.sline("d", 0.50)]
+        self.assertEqual(p._join_lines_with_vertical_gaps(lines), "a\nb\nc\n\nd")
+
+    def test_large_gap_is_clamped(self):
+        p = self.pipeline
+        lines = [self.sline("a", 0.10), self.sline("b", 0.20),
+                 self.sline("c", 0.30), self.sline("d", 0.80)]
+        expected = "a\nb\nc" + "\n" * (p.MAX_BLANK_LINES + 1) + "d"
+        self.assertEqual(p._join_lines_with_vertical_gaps(lines), expected)
+
+    def test_column_seam_inserts_no_blank(self):
+        p = self.pipeline
+        lines = [self.sline("L0", 0.10), self.sline("L1", 0.20),
+                 self.sline("L2", 0.30), self.sline("R0", 0.10),
+                 self.sline("R1", 0.20), self.sline("R2", 0.30)]
+        self.assertEqual(
+            p._join_lines_with_vertical_gaps(lines), "L0\nL1\nL2\nR0\nR1\nR2")
+
+    def test_missing_geometry_stays_compact(self):
+        p = self.pipeline
+        lines = [{"text": "a", "y_min": None, "y_max": None},
+                 {"text": "b", "y_min": None, "y_max": None}]
+        self.assertEqual(p._join_lines_with_vertical_gaps(lines), "a\nb")
+
+    def test_empty_input(self):
+        self.assertEqual(self.pipeline._join_lines_with_vertical_gaps([]), "")
