@@ -1235,6 +1235,29 @@ class IndentationReconstructionTests(unittest.TestCase):
             [line["members"][0]["indent"] for line in lines], [0, 0]
         )
 
+    def test_single_column_text_carries_reconstructed_indentation(self):
+        p = self.pipeline
+        unit = p.INDENT_UNIT_FRACTION * 100.0   # all boxes are 100 wide
+        texts = ["a", "b", "c"]
+        boxes = [
+            [50, 0, 150, 20],
+            [50 + unit, 40, 150 + unit, 60],
+            [50 + 2 * unit, 80, 150 + 2 * unit, 100],
+        ]
+        structured = p._group_structured_lines(texts, [0.9] * 3, boxes, 1000)
+        ind = p.INDENT_STRING
+        self.assertEqual(
+            [line["text"] for line in structured],
+            ["a", ind + "b", ind * 2 + "c"],
+        )
+
+    def test_flush_left_lines_stay_unindented(self):
+        p = self.pipeline
+        texts = ["a", "b"]
+        boxes = [[50, 0, 150, 20], [50, 40, 150, 60]]
+        structured = p._group_structured_lines(texts, [0.9] * 2, boxes, 1000)
+        self.assertEqual([line["text"] for line in structured], ["a", "b"])
+
 
 if __name__ == "__main__":
     if "--demo-reassembly" in sys.argv:

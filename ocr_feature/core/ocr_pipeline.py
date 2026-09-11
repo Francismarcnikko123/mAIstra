@@ -635,6 +635,7 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
         items, line_tol, region_gap_threshold, baseline_gap_threshold)
     if lines is None:
         return _original_detection_records(rec_texts, rec_scores), False
+    _assign_indent_levels(lines, median_width)
     ordered_lines = [
         sorted(line["members"], key=lambda member: member["x"])
         for line in lines
@@ -735,8 +736,9 @@ def _group_structured_lines(rec_texts, rec_scores, rec_boxes, image_height):
                 y_min = None
                 y_max = None
 
+        indent_level = members[0].get("indent", 0) if members else 0
         structured.append({
-            "text": " ".join(parts),
+            "text": INDENT_STRING * indent_level + " ".join(parts),
             "members": [
                 (member["text"], member["score"]) for member in members
             ],
