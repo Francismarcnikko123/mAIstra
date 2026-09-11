@@ -1345,3 +1345,13 @@ class VerticalSpacingReconstructionTests(unittest.TestCase):
 
     def test_empty_input(self):
         self.assertEqual(self.pipeline._join_lines_with_vertical_gaps([]), "")
+
+    def test_end_to_end_boxes_produce_blank_lines(self):
+        p = self.pipeline
+        texts = ["a", "b", "c", "d"]
+        boxes = [[0, 0, 100, 20], [0, 40, 100, 60],
+                 [0, 80, 100, 100], [0, 240, 100, 260]]
+        structured = p._group_structured_lines(texts, [0.9] * 4, boxes, 1000)
+        result = p._join_lines_with_vertical_gaps(structured)
+        expected = "a\nb\nc" + "\n" * (p.MAX_BLANK_LINES + 1) + "d"
+        self.assertEqual(result, expected)

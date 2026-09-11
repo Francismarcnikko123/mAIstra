@@ -909,7 +909,7 @@ def _recognize_preprocessed(preprocessed_path: str) -> dict:
         average_confidence = sum(confidence_scores) / len(confidence_scores)
 
     return {
-        "raw_text": "\n".join(line["text"] for line in structured_lines),
+        "raw_text": _join_lines_with_vertical_gaps(structured_lines),
         "lines": structured_lines,
         "grouped_lines": [line["members"] for line in structured_lines],
         "average_confidence": average_confidence,
