@@ -244,23 +244,23 @@ def _is_definition_close(text: str) -> bool:
 def _sever_displaced_regions(lines, median_width):
     """Append aligned right clusters from consecutive rows using geometry only.
 
-    Fail closed on malformed geometry. Preserve line metadata and member
-    objects; only accepted split rows receive new line and member-list objects.
+    Reconstruct visual rows when boxes are available, because the baseline
+    sweep may already have separated the right fragments. Apply accepted
+    moves to the original lines so unrelated grouping and metadata survive.
+    X-only callers retain the existing pre-grouped-row contract.
     """
     width = finite_float(median_width)
     if width is None or width <= 0 or not isinstance(lines, (list, tuple)):
         return lines
 
-    gap_threshold = max(SEVER_GAP_MULTIPLIER * width, 40.0)
-    align_tolerance = SEVER_X_ALIGN_MULTIPLIER * width
-    candidates = []
+    items = []
+    source_lines = {}
     for line in lines:
         if not isinstance(line, dict):
             return lines
         members = line.get("members")
         if not isinstance(members, (list, tuple)) or not members:
             return lines
-        geometry = []
         for member in members:
             if not isinstance(member, dict):
                 return lines
@@ -268,7 +268,37 @@ def _sever_displaced_regions(lines, median_width):
             x_max = finite_float(member.get("x_max"))
             if x is None or x_max is None or x_max <= x:
                 return lines
-            geometry.append((member, x, x_max))
+            items.append(member)
+            source_lines[id(member)] = line
+
+    visual_lines = lines
+    if any(key in member for member in items for key in ("y", "y_min", "y_max")):
+        heights = []
+        for member in items:
+            y, y_min, y_max = (finite_float(member.get(key))
+                               for key in ("y", "y_min", "y_max"))
+            if (y is None or y_min is None or y_max is None
+                    or not y_min <= y <= y_max or y_max <= y_min
+                    or not math.isfinite(y_max - y_min)):
+                return lines
+            heights.append(y_max - y_min)
+        heights.sort()
+        line_tol = max(heights[len(heights) // 2] * 0.6, 1.0)
+        try:
+            visual_lines, _seed = _sweep_detection_records(
+                sorted(items, key=lambda member: member["y"]), line_tol,
+                max(REGION_GAP_MULTIPLIER * width, 1.0), float("inf"), set())
+        except (TypeError, ValueError, OverflowError):
+            return lines
+        if visual_lines is None:
+            return lines
+
+    gap_threshold = max(SEVER_GAP_MULTIPLIER * width, 40.0)
+    align_tolerance = SEVER_X_ALIGN_MULTIPLIER * width
+    candidates = []
+    for line in visual_lines:
+        geometry = [(member, finite_float(member["x"]), finite_float(member["x_max"]))
+                    for member in line["members"]]
         geometry.sort(key=lambda entry: entry[1])
         candidate = None
         for split in range(1, len(geometry)):
@@ -310,15 +340,17 @@ def _sever_displaced_regions(lines, median_width):
 
     if not accepted:
         return lines
-    remaining = []
     displaced = []
-    for index, line in enumerate(lines):
-        if index not in accepted:
-            remaining.append(line)
-            continue
-        geometry, split, _right_x = accepted[index]
-        remaining.append({**line, "members": [entry[0] for entry in geometry[:split]]})
-        displaced.append({**line, "members": [entry[0] for entry in geometry[split:]]})
+    for geometry, split, _right_x in accepted.values():
+        members = [entry[0] for entry in geometry[split:]]
+        displaced.append({**source_lines[id(members[0])], "members": members})
+    moved_ids = {id(member) for line in displaced for member in line["members"]}
+    remaining = []
+    for line in lines:
+        members = [member for member in line["members"] if id(member) not in moved_ids]
+        if members:
+            remaining.append(line if len(members) == len(line["members"])
+                             else {**line, "members": members})
     return remaining + displaced
 
 

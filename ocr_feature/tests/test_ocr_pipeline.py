@@ -380,9 +380,12 @@ class DynamicGutterGroupingTests(unittest.TestCase):
         cls.pipeline = load_pipeline_without_models()
 
     def inspect_grouping(self, texts, boxes):
-        # Observe the actual geometry flags independently of brace inference.
+        # Isolate trace flags from both later reordering passes. The geometry
+        # severance pass has its own end-to-end tests below.
         with patch.object(self.pipeline, "_reassemble_displaced_regions",
-                          side_effect=lambda lines: lines) as reassemble:
+                          side_effect=lambda lines: lines) as reassemble, \
+             patch.object(self.pipeline, "_sever_displaced_regions",
+                          side_effect=lambda lines, _width: lines):
             grouped, safe = self.pipeline._group_detection_records(
                 texts, [0.9] * len(texts), boxes
             )
@@ -832,6 +835,30 @@ class BraceDeltaTests(unittest.TestCase):
 
 
 class DisplacedSeveranceTests(unittest.TestCase):
+    # Frozen detection boxes from real pipeline debug artifacts. Index labels
+    # deliberately remove recognition content from these geometry regressions.
+    WRITER18_BOXES = [
+        [17, 61, 69, 111], [822, 110, 904, 155], [25, 120, 250, 166],
+        [829, 147, 939, 189], [25, 193, 160, 237], [828, 178, 1151, 231],
+        [845, 228, 882, 265], [25, 239, 57, 272], [878, 243, 1078, 300],
+        [63, 268, 248, 312], [893, 297, 929, 334], [934, 323, 1052, 369],
+        [70, 327, 460, 386], [904, 363, 941, 410], [81, 375, 294, 415],
+        [855, 400, 896, 445], [77, 397, 461, 460], [858, 438, 1293, 488],
+        [86, 449, 311, 491], [827, 483, 866, 519], [77, 517, 232, 559],
+        [820, 512, 920, 559], [81, 562, 113, 596], [798, 555, 855, 602],
+        [109, 558, 550, 628], [117, 620, 197, 663], [94, 656, 131, 694],
+        [73, 697, 314, 738], [92, 740, 127, 773], [124, 772, 564, 812],
+        [123, 812, 209, 854], [101, 844, 139, 882], [86, 891, 356, 931],
+        [97, 939, 131, 979], [138, 949, 859, 1005], [140, 995, 222, 1036],
+        [104, 1029, 149, 1076], [78, 1092, 147, 1140], [79, 1132, 128, 1184],
+    ]
+    WRITER27_BOXES = [
+        [17, 94, 142, 123], [522, 87, 602, 127], [12, 126, 227, 153],
+        [479, 121, 598, 149], [11, 142, 575, 187], [43, 177, 166, 209],
+        [284, 176, 504, 210], [302, 203, 591, 236], [270, 235, 354, 263],
+        [318, 255, 500, 291],
+    ]
+
     @classmethod
     def setUpClass(cls):
         cls.pipeline = load_pipeline_without_models()
@@ -912,6 +939,151 @@ class DisplacedSeveranceTests(unittest.TestCase):
         self.assertEqual(
             [member["text"] for line in lines for member in line],
             ["L0", "L1", "L2", "L3", "L4", "R1", "R2", "R3"])
+
+    def _separated_rows(self, count=3):
+        lines = []
+        for row in range(count):
+            for text, x, x_max in ((f"L{row}", 0, 180),
+                                   (f"R{row}", 340, 440)):
+                line = self._line((text, x, x_max))
+                line["members"][0].update(
+                    y=row * 40 + 10, y_min=row * 40, y_max=row * 40 + 20)
+                line["metadata"] = {"label": text}
+                lines.append(line)
+        return lines
+
+    def test_separated_three_row_cluster_preserves_original_left_lines(self):
+        lines = self._separated_rows()
+        result = self.pipeline._sever_displaced_regions(lines, 150)
+
+        self.assertEqual(self._texts(result),
+                         [["L0"], ["L1"], ["L2"], ["R0"], ["R1"], ["R2"]])
+        for row in range(3):
+            self.assertIs(result[row], lines[row * 2])
+            self.assertIs(result[row + 3]["members"][0],
+                          lines[row * 2 + 1]["members"][0])
+            self.assertIs(result[row + 3]["metadata"], lines[row * 2 + 1]["metadata"])
+        self.assertEqual(len(lines), 6)
+
+    def test_separated_two_row_cluster_returns_original_list(self):
+        lines = self._separated_rows(2)
+        self.assertIs(self.pipeline._sever_displaced_regions(lines, 150), lines)
+
+    def test_end_to_end_preseparated_cluster_without_wide_header(self):
+        texts, boxes = [], []
+        for row in range(5):
+            texts.append(f"L{row}")
+            boxes.append([0, row * 40, 180, row * 40 + 20])
+            if 1 <= row <= 3:
+                texts.append(f"R{row}")
+                boxes.append([340, row * 40, 480, row * 40 + 20])
+
+        grouped, safe = self.pipeline._group_detection_records(
+            texts, [0.9] * len(texts), boxes)
+
+        self.assertTrue(safe)
+        self.assertEqual([m["text"] for line in grouped for m in line],
+                         ["L0", "L1", "L2", "L3", "L4", "R1", "R2", "R3"])
+
+    def test_invalid_or_incomplete_vertical_geometry_returns_original_list(self):
+        def fused_rows():
+            separated = self._separated_rows()
+            return [{"members": separated[row * 2]["members"]
+                     + separated[row * 2 + 1]["members"]} for row in range(3)]
+
+        for fields in ({"y": float("nan")}, {"y_min": float("inf")},
+                       {"y_max": float("-inf")}, {"y_max": 0},
+                       {"y_min": 21}, {"y": 30}, {"y": "bad"},
+                       {"y_max": None}, {"y_max": 1e308, "y_min": -1e308}):
+            with self.subTest(fields=fields):
+                lines = fused_rows()
+                lines[0]["members"][0].update(fields)
+                self.assertIs(self.pipeline._sever_displaced_regions(lines, 150), lines)
+        for missing in ("y", "y_min", "y_max"):
+            with self.subTest(missing=missing):
+                lines = fused_rows()
+                del lines[0]["members"][0][missing]
+                self.assertIs(self.pipeline._sever_displaced_regions(lines, 150), lines)
+        lines = fused_rows()
+        for key in ("y", "y_min", "y_max"):
+            del lines[0]["members"][0][key]
+        self.assertIs(self.pipeline._sever_displaced_regions(lines, 150), lines)
+
+    def test_unsafe_visual_sweep_returns_original_list(self):
+        lines = self._separated_rows()
+        with patch.object(self.pipeline, "_sweep_detection_records",
+                          return_value=(None, None)) as sweep:
+            self.assertIs(self.pipeline._sever_displaced_regions(lines, 150), lines)
+        sweep.assert_called_once()
+
+    def test_invalid_horizontal_geometry_or_width_returns_original_list(self):
+        for fields in ({"x": float("nan")}, {"x_max": float("inf")},
+                       {"x_max": 0}, {"x_max": -1}, {"x": None}):
+            with self.subTest(fields=fields):
+                lines = [self._line(("L", 0, 180), ("R", 340, 440))
+                         for _ in range(3)]
+                lines[0]["members"][0].update(fields)
+                self.assertIs(self.pipeline._sever_displaced_regions(lines, 150), lines)
+        for width in (None, float("nan"), float("inf"), 0, -1):
+            with self.subTest(width=width):
+                lines = self._separated_rows()
+                self.assertIs(self.pipeline._sever_displaced_regions(lines, width), lines)
+
+    def test_same_row_right_pieces_keep_text_and_member_identity(self):
+        lines = self._separated_rows()
+        for row in range(3):
+            right = lines[row * 2 + 1]
+            right["members"].append({**right["members"][0],
+                                     "text": f"piece{row}", "x": 445, "x_max": 480})
+        original = [member for line in lines for member in line["members"]]
+        result = self.pipeline._sever_displaced_regions(lines, 150)
+
+        self.assertEqual(self._texts(result),
+                         [["L0"], ["L1"], ["L2"], ["R0", "piece0"],
+                          ["R1", "piece1"], ["R2", "piece2"]])
+        self.assertCountEqual([id(m) for line in result for m in line["members"]],
+                              [id(m) for m in original])
+
+    def test_crossed_zero_and_negative_shared_gutters_return_original_list(self):
+        for left_end in (340, 360):
+            with self.subTest(left_end=left_end):
+                lines = [self._line(("L0", 0, 180), ("R0", 340, 400)),
+                         self._line(("L1", 0, left_end), ("R1", 500, 560)),
+                         self._line(("L2", 0, 180), ("R2", 340, 400))]
+                self.assertIs(self.pipeline._sever_displaced_regions(lines, 150), lines)
+        lines = [self._line(("L0", 0, 150), ("R0", 340, 440)),
+                 self._line(("L1", 350, 400), ("R1", 570, 670)),
+                 self._line(("L2", 0, 150), ("R2", 340, 440))]
+        self.assertIs(self.pipeline._sever_displaced_regions(lines, 200), lines)
+
+    def test_real_writer18_geometry_appends_expected_right_rows(self):
+        texts = [str(i) for i in range(len(self.WRITER18_BOXES))]
+        grouped, safe = self.pipeline._group_detection_records(
+            texts, [0.9] * len(texts), self.WRITER18_BOXES)
+
+        self.assertTrue(safe)
+        self.assertEqual([[m["text"] for m in line] for line in grouped[-7:]],
+                         [["5"], ["6", "8"], ["10"], ["11"], ["13"], ["15"], ["17"]])
+        self.assertCountEqual([m["text"] for line in grouped for m in line], texts)
+
+    def test_real_writer27_geometry_retains_baseline_grouping(self):
+        texts = [str(i) for i in range(len(self.WRITER27_BOXES))]
+        args = (texts, [0.9] * len(texts), self.WRITER27_BOXES)
+        with patch.object(self.pipeline, "_sever_displaced_regions",
+                          side_effect=lambda lines, _: lines):
+            baseline = self.pipeline._group_detection_records(*args)
+        self.assertEqual(self.pipeline._group_detection_records(*args), baseline)
+
+    def test_real_two_column_page_never_calls_severance_helper(self):
+        fixture = Path(__file__).parent / "fixtures" / "green_writer10_detections.json"
+        detections = json.loads(fixture.read_text(encoding="utf-8"))
+        with patch.object(self.pipeline, "_sever_displaced_regions",
+                          wraps=self.pipeline._sever_displaced_regions) as sever:
+            _grouped, safe = self.pipeline._group_detection_records(
+                [d["text"] for d in detections], [d["score"] for d in detections],
+                [d["box"] for d in detections])
+        self.assertTrue(safe)
+        sever.assert_not_called()
 
 
 class ReassembleDisplacedRegionsTests(unittest.TestCase):
