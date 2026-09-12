@@ -1057,6 +1057,16 @@ def small_reassembly_lines():
     ]
 
 
+def load_green_writer10_fixture():
+    fixture = Path(__file__).parent / "fixtures" / "green_writer10_detections.json"
+    detections = json.loads(fixture.read_text(encoding="utf-8"))
+    return (
+        [d["text"] for d in detections],
+        [d["score"] for d in detections],
+        [d["box"] for d in detections],
+    )
+
+
 def demo_reassembly(case_name):
     pipeline = load_pipeline_without_models()
     cases = {
@@ -1086,6 +1096,50 @@ def demo_reassembly(case_name):
         print("\nAFTER: reassembled continuation")
         for index, line in enumerate(ordered, 1):
             print(f"{index}. {line['members'][0]['text']}")
+
+
+def demo_two_column():
+    pipeline = load_pipeline_without_models()
+    rec_texts, rec_scores, rec_boxes = load_green_writer10_fixture()
+    items = [
+        {
+            "text": text,
+            "x": x0,
+            "x_max": x1,
+            "y": (y0 + y1) / 2,
+            "y_min": y0,
+            "y_max": y1,
+        }
+        for text, (x0, y0, x1, y1) in zip(rec_texts, rec_boxes)
+    ]
+    page_top = min(item["y_min"] for item in items)
+    page_bot = max(item["y_max"] for item in items)
+    gutter = pipeline._detect_two_columns(items, page_top, page_bot)
+    left = [item for item in items if item["x_max"] <= gutter]
+    right = [item for item in items if item["x"] >= gutter]
+
+    print("DEMO: green_writer10_B2_1 two-column split")
+    print(f"GUTTER: x={gutter:.1f}")
+    print(f"LEFT COLUMN: {len(left)} detections")
+    for index, item in enumerate(left, 1):
+        print(f"{index}. {item['text']}")
+
+    print(f"\nRIGHT COLUMN: {len(right)} detections")
+    for index, item in enumerate(right, 1):
+        print(f"{index}. {item['text']}")
+
+    grouped, geometry_safe = pipeline._group_detection_records(
+        rec_texts, rec_scores, rec_boxes)
+    ordered = [member for line in grouped for member in line]
+
+    print("\nAFTER: final grouped reading order")
+    print(f"geometry_safe={geometry_safe}")
+    print("LEFT COLUMN FIRST")
+    for index, member in enumerate(ordered[:len(left)], 1):
+        print(f"{index}. {member['text']}")
+    print("\nRIGHT COLUMN SECOND")
+    for index, member in enumerate(ordered[len(left):], 1):
+        print(f"{index}. {member['text']}")
 
 
 class IndentationReconstructionTests(unittest.TestCase):
@@ -1247,5 +1301,9 @@ if __name__ == "__main__":
         case = sys.argv[flag_index + 1] if len(sys.argv) > flag_index + 1 else "rbnode"
         del sys.argv[flag_index:flag_index + 2]
         demo_reassembly(case)
+        raise SystemExit(0)
+    if "--demo-two-column" in sys.argv:
+        sys.argv.remove("--demo-two-column")
+        demo_two_column()
         raise SystemExit(0)
     unittest.main()
