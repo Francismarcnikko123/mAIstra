@@ -78,6 +78,22 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - Execution-source helpers remain responsible for building function-question test harnesses.
 - Linked Supabase questions are accepted in either object or array form.
 
+## OCR reading-order review fixes (2026-09-10)
+
+- Both OCR demo scripts default to the existing `samples/greenbook/green_writer10_B2_1.jpg`, resolved relative to each script. Explicit image arguments remain relative to the caller.
+- `compare_config.py` resolves CSV ground truth relative to its script directory, by image basename. (The loose-`.txt`-beside-the-image fallback was later removed — commit `d1a4a06` — so `labels.csv` is now the single ground-truth source.) The default recognizer directory is resolved relative to the pipeline file so demos can also run from the repository root; `MAISTRA_REC_MODEL_DIR` overrides are preserved.
+- Removed the redundant crossing check in `_detect_two_columns`: the widest coverage-gap midpoint already guarantees no crossing. Detection-count and vertical-span gates remain unchanged.
+- The tail-extension search remains intact for the legacy single-line-flag pattern covered by synthetic RBNode/Compressor fixtures. The current gutter trace flags the whole displaced block.
+- Historical recognition-only fine-tuning improved samples/ CER from 0.274 to 0.126 (WER 0.359). Current end-to-end results after two-column reading-order handling are clean_ws CER 0.099, clean WER 0.328, and clean token accuracy 0.716. Historical threshold/denoise ablation numbers refer to the earlier reading-order pipeline.
+- Demo commands, including the synthetic reassembly before/after selector, are documented in `docs/setup/RUNNING_LOCALLY.md`. These notes remain local and ignored by Git.
+
+## OCR layout reconstruction & suggestions cleanup (2026-09-11/12)
+
+- **Handwritten indentation reconstruction** (`_assign_indent_levels`): each detected line's box left-edge is turned into leading whitespace, quantized per column in `INDENT_STEP_CHARS` character-widths (character-scale, because a detection box spans a whole word and is ~10× too coarse). Recognition-independent; `clean_ws` CER stays 0.099 (whitespace-normalized), while the whitespace-sensitive raw CER improved 0.257 → 0.176 against the indentation-preserving ground truth.
+- **Vertical spacing reconstruction** (`_join_lines_with_vertical_gaps`): blank lines are reinserted where the vertical gap between consecutive lines exceeds the normal line pitch (quantized, capped at `MAX_BLANK_LINES`), so the extraction reproduces the student's blank-line layout. Also whitespace-neutral to `clean_ws`. Two-column pages are handled for free (the left→right seam is a negative gap → no blank lines).
+- **Removed the unused OCR-review suggestions backend** (commit `43addce`): `c_code_suggestions.py`, `_build_line_details`, `_attach_suggestion_reasons`, the `line_details`/`review_suggestions`/`review_diagnostics` API fields, the `evaluate_cer` suggestion report, and `suggestion_improves_reference`. The flagging UI it fed lives only on the unmerged experiment branch, so it was dead weight on this branch. Extraction output and CER are unchanged.
+- Full end-to-end held-out CER remains **clean_ws 0.099** through all of the above (verified via `evaluate_cer`).
+
 ## Code cleanup completed
 
 - Removed the unused Supabase realtime callback parameter.
