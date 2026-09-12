@@ -94,6 +94,16 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - **Removed the unused OCR-review suggestions backend** (commit `43addce`): `c_code_suggestions.py`, `_build_line_details`, `_attach_suggestion_reasons`, the `line_details`/`review_suggestions`/`review_diagnostics` API fields, the `evaluate_cer` suggestion report, and `suggestion_improves_reference`. The flagging UI it fed lives only on the unmerged experiment branch, so it was dead weight on this branch. Extraction output and CER are unchanged.
 - Full end-to-end held-out CER remains **clean_ws 0.099** through all of the above (verified via `evaluate_cer`).
 
+## OCR local-gutter continuations (2026-09-12)
+
+- `_sever_displaced_regions` runs only when `_detect_two_columns` does not find a column split. The existing two-column path, including the green_writer10 24-left / 23-right split, is retained.
+- A continuation requires at least three consecutive visual rows with aligned right fragments and a positive, uncrossed local gutter. The calibrated gap and alignment multipliers remain 0.8 and 1.2; two-row blocks remain unchanged.
+- The real pipeline already separates some distant pieces before this pass. Candidate visual rows are therefore reconstructed from detection geometry; only confirmed right pieces move, and the other original rows retain their order. Text and detection objects are preserved, and unsafe geometry produces no change.
+- The user approved this extension after fresh real-pipeline A/B extraction against `datasets/verified/labels.csv`: green_writer18_B2_2 clean_ws CER improved **0.515044 → 0.146903**, while green_writer27_B1_3 remained **0.342105 → 0.342105**, with identical cleaned text. These replace the simplified-row-grouper A/B numbers for claims about the live pipeline; the original spec numbers remain historical evidence.
+- A preserved 161-artifact replay of the final implementation changed nine pages, all within the independently reproduced candidate set, and preserved every detection. The historical scan's 16/145 classification could not be reproduced: its stated two-row criterion produced 20/141. The held-out 20-artifact replay was unchanged.
+- Final real extractions matched the measured prototype exactly, with identical before/after recognition payloads on both spot-check pages. The full Python suite passes 139 tests, including the two real-sample column tests. The legacy tracing test helper bypasses both downstream ordering passes to preserve its tracing-only scope.
+- Final live `evaluate_cer` retains clean_ws CER **0.099**, clean WER **0.328**, and clean token accuracy **0.716**. No constant calibration was required.
+
 ## Code cleanup completed
 
 - Removed the unused Supabase realtime callback parameter.
