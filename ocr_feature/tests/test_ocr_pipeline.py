@@ -127,6 +127,40 @@ def recognition_attempt(text, score=0.8, y_min=0.1, y_max=0.2):
     }
 
 
+# Frozen detection boxes from real pipeline debug artifacts, geometry only:
+# each is [x0, y0, x1, y1] with recognition content stripped and labeled by
+# index, so reading-order tests assert the GEOMETRIC split, never CER. Shared
+# by DisplacedSeveranceTests and BandedColumnDetectionTests so the two families
+# exercise the same real pages without duplicating the fixtures.
+#
+# WRITER18_BOXES: green_writer18_B2_2 (39 boxes) -- a two-page / side-by-side
+# capture whose right block (the 13 boxes with x0 >= 798) occupies only the
+# top-right quadrant; the correct reading order is left column fully then right
+# column fully (banded two-column). WRITER27_BOXES: green_writer27_B1_3 (10
+# boxes) -- a page whose short right cluster must NOT be banded-split.
+WRITER18_BOXES = [
+    [17, 61, 69, 111], [822, 110, 904, 155], [25, 120, 250, 166],
+    [829, 147, 939, 189], [25, 193, 160, 237], [828, 178, 1151, 231],
+    [845, 228, 882, 265], [25, 239, 57, 272], [878, 243, 1078, 300],
+    [63, 268, 248, 312], [893, 297, 929, 334], [934, 323, 1052, 369],
+    [70, 327, 460, 386], [904, 363, 941, 410], [81, 375, 294, 415],
+    [855, 400, 896, 445], [77, 397, 461, 460], [858, 438, 1293, 488],
+    [86, 449, 311, 491], [827, 483, 866, 519], [77, 517, 232, 559],
+    [820, 512, 920, 559], [81, 562, 113, 596], [798, 555, 855, 602],
+    [109, 558, 550, 628], [117, 620, 197, 663], [94, 656, 131, 694],
+    [73, 697, 314, 738], [92, 740, 127, 773], [124, 772, 564, 812],
+    [123, 812, 209, 854], [101, 844, 139, 882], [86, 891, 356, 931],
+    [97, 939, 131, 979], [138, 949, 859, 1005], [140, 995, 222, 1036],
+    [104, 1029, 149, 1076], [78, 1092, 147, 1140], [79, 1132, 128, 1184],
+]
+WRITER27_BOXES = [
+    [17, 94, 142, 123], [522, 87, 602, 127], [12, 126, 227, 153],
+    [479, 121, 598, 149], [11, 142, 575, 187], [43, 177, 166, 209],
+    [284, 176, 504, 210], [302, 203, 591, 236], [270, 235, 354, 263],
+    [318, 255, 500, 291],
+]
+
+
 class GroupDetectionRecordsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -835,29 +869,11 @@ class BraceDeltaTests(unittest.TestCase):
 
 
 class DisplacedSeveranceTests(unittest.TestCase):
-    # Frozen detection boxes from real pipeline debug artifacts. Index labels
-    # deliberately remove recognition content from these geometry regressions.
-    WRITER18_BOXES = [
-        [17, 61, 69, 111], [822, 110, 904, 155], [25, 120, 250, 166],
-        [829, 147, 939, 189], [25, 193, 160, 237], [828, 178, 1151, 231],
-        [845, 228, 882, 265], [25, 239, 57, 272], [878, 243, 1078, 300],
-        [63, 268, 248, 312], [893, 297, 929, 334], [934, 323, 1052, 369],
-        [70, 327, 460, 386], [904, 363, 941, 410], [81, 375, 294, 415],
-        [855, 400, 896, 445], [77, 397, 461, 460], [858, 438, 1293, 488],
-        [86, 449, 311, 491], [827, 483, 866, 519], [77, 517, 232, 559],
-        [820, 512, 920, 559], [81, 562, 113, 596], [798, 555, 855, 602],
-        [109, 558, 550, 628], [117, 620, 197, 663], [94, 656, 131, 694],
-        [73, 697, 314, 738], [92, 740, 127, 773], [124, 772, 564, 812],
-        [123, 812, 209, 854], [101, 844, 139, 882], [86, 891, 356, 931],
-        [97, 939, 131, 979], [138, 949, 859, 1005], [140, 995, 222, 1036],
-        [104, 1029, 149, 1076], [78, 1092, 147, 1140], [79, 1132, 128, 1184],
-    ]
-    WRITER27_BOXES = [
-        [17, 94, 142, 123], [522, 87, 602, 127], [12, 126, 227, 153],
-        [479, 121, 598, 149], [11, 142, 575, 187], [43, 177, 166, 209],
-        [284, 176, 504, 210], [302, 203, 591, 236], [270, 235, 354, 263],
-        [318, 255, 500, 291],
-    ]
+    # Geometry fixtures are shared at module level (see WRITER18_BOXES /
+    # WRITER27_BOXES above) so BandedColumnDetectionTests exercises the same
+    # real pages without duplicating them.
+    WRITER18_BOXES = WRITER18_BOXES
+    WRITER27_BOXES = WRITER27_BOXES
 
     @classmethod
     def setUpClass(cls):
@@ -1084,6 +1100,108 @@ class DisplacedSeveranceTests(unittest.TestCase):
                 [d["box"] for d in detections])
         self.assertTrue(safe)
         sever.assert_not_called()
+
+
+class BandedColumnDetectionTests(unittest.TestCase):
+    """Pure-geometry unit tests for _detect_banded_column: a persistent
+    right-side block occupying a contiguous y-band with a clean uncrossed
+    gutter WITHIN that band is read left column fully, then right column fully
+    -- even when the block spans less than half the page and a stray wide line
+    elsewhere bridges the full-page x-projection. Grade-safety: any
+    degenerate/ambiguous geometry returns None (today's behavior). See
+    docs/superpowers/specs/2026-09-12-banded-column-detection-design.md."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pipeline = load_pipeline_without_models()
+
+    @staticmethod
+    def _items(boxes):
+        return [{"x": float(x0), "x_max": float(x1), "y": (y0 + y1) / 2.0,
+                 "y_min": float(y0), "y_max": float(y1)}
+                for x0, y0, x1, y1 in boxes]
+
+    def _detect(self, boxes):
+        """Build items and call the detector the way _group_detection_records
+        does (median box width, 60%-of-median-height line tolerance)."""
+        items = self._items(boxes)
+        widths = sorted(it["x_max"] - it["x"] for it in items)
+        heights = sorted(it["y_max"] - it["y_min"] for it in items)
+        median_width = widths[len(widths) // 2] if widths else 0.0
+        median_h = heights[len(heights) // 2] if heights else 0.0
+        line_tol = max(median_h * 0.6, 1.0)
+        page_top = min(it["y_min"] for it in items)
+        page_bot = max(it["y_max"] for it in items)
+        result = self.pipeline._detect_banded_column(
+            items, page_top, page_bot, median_width, line_tol)
+        return items, result
+
+    def test_writer18_bands_the_top_right_block(self):
+        items, result = self._detect(WRITER18_BOXES)
+        self.assertIsNotNone(result)
+        gutter, left, right = result
+        # Gutter sits in the clean 248px band between left content (max x1=550)
+        # and the right cluster (min x0=798); the stray y~977 wide line that
+        # bridges the full-page projection lies OUTSIDE the band and is ignored.
+        self.assertTrue(550 < gutter < 798, msg=f"gutter={gutter}")
+        idx_of = {id(it): i for i, it in enumerate(items)}
+        right_idx = {idx_of[id(it)] for it in right}
+        left_idx = {idx_of[id(it)] for it in left}
+        expected_right = {i for i, b in enumerate(WRITER18_BOXES) if b[0] >= 798}
+        self.assertEqual(len(expected_right), 13)
+        self.assertEqual(right_idx, expected_right)
+        self.assertEqual(left_idx, set(range(len(WRITER18_BOXES))) - expected_right)
+        self.assertEqual(len(left), 26)
+        # Concatenating left then right places all 13 right boxes last, in
+        # ascending index order -- the left-fully-then-right-fully rule.
+        order = [idx_of[id(it)] for it in left + right]
+        self.assertEqual(order[-13:], sorted(expected_right))
+
+    def test_writer27_is_not_banded(self):
+        # green_writer27_B1_3 has no persistent right column separated by a
+        # clean gutter, so no banded split -> today's behavior (0.342).
+        _items, result = self._detect(WRITER27_BOXES)
+        self.assertIsNone(result)
+
+    def test_single_wide_line_does_not_band(self):
+        # A normal single column plus one wide bridging line: the wide line's
+        # x0 is on the left, so there is no persistent right cluster.
+        boxes = [[20, r * 40, 200, r * 40 + 20] for r in range(6)]
+        boxes.append([20, 240, 900, 260])
+        _items, result = self._detect(boxes)
+        self.assertIsNone(result)
+
+    def test_two_row_right_cluster_is_below_min_band_rows(self):
+        # A clean right cluster on only 2 rows must NOT band-split
+        # (MIN_BAND_ROWS = 3); this is the green_writer27 rule at unit level.
+        left = [[0, r * 40, 180, r * 40 + 20] for r in range(6)]
+        right = [[400, 0, 520, 20], [400, 200, 520, 220]]
+        _items, result = self._detect(left + right)
+        self.assertIsNone(result)
+
+    def test_crossed_gutter_is_not_banded(self):
+        # A member straddling the band collapses the gutter (no clean,
+        # uncrossed separation within the band) -> None.
+        left = [[0, r * 40, 100, r * 40 + 20] for r in range(4)]
+        right = [[400, 0, 500, 20], [400, 40, 500, 60], [400, 80, 500, 100]]
+        straddle = [[50, 40, 450, 60]]
+        _items, result = self._detect(left + right + straddle)
+        self.assertIsNone(result)
+
+    def test_normal_single_column_is_not_banded(self):
+        # Mild indentation, one column: the cluster spans the whole page, so
+        # there is no left complement and no banded split.
+        boxes = [[20 + (r % 3) * 15, r * 40, 220, r * 40 + 20] for r in range(8)]
+        _items, result = self._detect(boxes)
+        self.assertIsNone(result)
+
+    def test_too_few_items_is_not_banded(self):
+        # Fewer than 2 * MIN_BAND_ROWS detections cannot form two persistent
+        # columns.
+        boxes = [[0, 0, 100, 20], [400, 0, 500, 20], [0, 40, 100, 60],
+                 [400, 40, 500, 60], [0, 80, 100, 100]]
+        _items, result = self._detect(boxes)
+        self.assertIsNone(result)
 
 
 class ReassembleDisplacedRegionsTests(unittest.TestCase):

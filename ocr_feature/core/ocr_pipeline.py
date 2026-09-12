@@ -149,6 +149,20 @@ SEVER_X_ALIGN_MULTIPLIER = 1.2
 MIN_COLUMN_LINES = 4
 MIN_COLUMN_VSPAN_FRACTION = 0.5
 
+# Banded two-column split: a persistent right-side block occupying a contiguous
+# y-band with a clean, wide, uncrossed gutter WITHIN that band -- even when the
+# block spans less than half the page height and even when a wide line elsewhere
+# bridges the full-page x-projection (so _detect_two_columns reports gutter 0).
+# Generalizes _detect_two_columns to a partial-height right column; runs only
+# when that full-height split returns None. Grounded on green_writer18_B2_2
+# (median box width ~86px; real gutter 248px; right-cluster x0 spread 136px) and
+# confirmed on the corpus scan. See
+# docs/superpowers/specs/2026-09-12-banded-column-detection-design.md.
+MIN_BAND_ROWS = 3                 # distinct visual rows the right cluster must occupy
+BAND_X_ALIGN_MULTIPLIER = 2.0     # x0 drift from the cluster median to join the right cluster
+BAND_GUTTER_MIN_MULTIPLIER = 1.5  # min clean gutter within the band, in median widths
+BAND_GUTTER_MIN_FLOOR = 60.0      # px floor for the gutter
+
 # Reconstruct the student's handwritten indentation from box geometry -- NOT
 # brace depth. A line indented on paper has a larger left-edge x; one indent
 # level is INDENT_STEP_CHARS character-widths of rightward offset from the line's
@@ -681,6 +695,107 @@ def _detect_two_columns(items, page_top, page_bot):
             or vspan(right) < MIN_COLUMN_VSPAN_FRACTION):
         return None
     return best_x
+
+
+def _detect_banded_column(items, page_top, page_bot, median_width, line_tol):
+    """Return (gutter_x, left_items, right_items) if this page has a banded
+    right-side column, else None.
+
+    A banded right column is a persistent right cluster occupying a contiguous
+    y-band with a clean, wide, uncrossed gutter WITHIN that band. This
+    generalizes _detect_two_columns to a right block that spans less than half
+    the page height -- a two-page / side-by-side capture whose continuation
+    fills only the top-right quadrant, where the full-page x-projection is
+    bridged by a stray wide line elsewhere so _detect_two_columns reports no
+    gutter. Meant to run only when _detect_two_columns returns None.
+
+    page_top / page_bot are accepted for signature parity with
+    _detect_two_columns; the band is derived from the right cluster itself, so
+    no page-height gate is applied (the design deliberately has no minimum band
+    height -- that is the point: it catches sub-0.5 blocks).
+
+    Pure geometry and grade-safe: only whole detected pieces are partitioned by
+    position; no character is added, edited, split, or dropped. Any degenerate
+    or ambiguous geometry (missing boxes, too few items, no clean band, a
+    crossed gutter) returns None, i.e. today's behavior. See
+    docs/superpowers/specs/2026-09-12-banded-column-detection-design.md.
+    """
+    width = finite_float(median_width)
+    tol = finite_float(line_tol)
+    if width is None or width <= 0 or tol is None or tol <= 0:
+        return None
+    if not isinstance(items, (list, tuple)) or len(items) < 2 * MIN_BAND_ROWS:
+        return None
+    # Every item needs finite, well-formed horizontal and vertical geometry;
+    # otherwise regrouping is unsafe -> decline.
+    for it in items:
+        x, x_max = finite_float(it.get("x")), finite_float(it.get("x_max"))
+        y = finite_float(it.get("y"))
+        y_min, y_max = finite_float(it.get("y_min")), finite_float(it.get("y_max"))
+        if (x is None or x_max is None or y is None
+                or y_min is None or y_max is None
+                or x_max <= x or y_max <= y_min):
+            return None
+
+    band_x_align = BAND_X_ALIGN_MULTIPLIER * width
+    band_gutter_min = max(BAND_GUTTER_MIN_MULTIPLIER * width, BAND_GUTTER_MIN_FLOOR)
+
+    # Build the right cluster by x0: seed from the largest-x0 item and, walking
+    # items by descending x0, admit one whose x0 is within band_x_align of the
+    # cluster's running MEDIAN x0. Cluster-median membership (not pairwise)
+    # tolerates the gradual right-margin drift of handwriting. Stop at the first
+    # item out of tolerance -- everything at or below it is the left set.
+    ordered = sorted(items, key=lambda it: it["x"], reverse=True)
+    cluster_ids = {id(ordered[0])}
+    cluster_x0s = [ordered[0]["x"]]
+    for it in ordered[1:]:
+        median_x0 = sorted(cluster_x0s)[len(cluster_x0s) // 2]
+        if abs(it["x"] - median_x0) <= band_x_align:
+            cluster_ids.add(id(it))
+            cluster_x0s.append(it["x"])
+        else:
+            break
+    # Preserve the caller's item order (y-sorted in the live pipeline) in both
+    # partitions so the column ordering sweep reads top-to-bottom.
+    right = [it for it in items if id(it) in cluster_ids]
+    left = [it for it in items if id(it) not in cluster_ids]
+    if not left:
+        return None
+
+    # Persistence: the right cluster must occupy at least MIN_BAND_ROWS distinct
+    # visual rows (grouped by line_tol on the y-center).
+    rows = 0
+    last_y = None
+    for member in sorted(right, key=lambda m: m["y"]):
+        if last_y is None or member["y"] - last_y > tol:
+            rows += 1
+            last_y = member["y"]
+    if rows < MIN_BAND_ROWS:
+        return None
+
+    # Clean banded gutter: WITHIN the right cluster's y-band, the widest left
+    # reach must clear the leftmost right edge by at least band_gutter_min.
+    band_top = min(member["y_min"] for member in right)
+    band_bot = max(member["y_max"] for member in right)
+
+    def intersects_band(it):
+        return it["y_max"] >= band_top and it["y_min"] <= band_bot
+
+    left_in_band = [it for it in left if intersects_band(it)]
+    if not left_in_band:
+        return None
+    left_max = max(it["x_max"] for it in left_in_band)
+    right_min = min(member["x"] for member in right)
+    if right_min - left_max < band_gutter_min:
+        return None
+
+    # Uncrossed: no item may straddle the gutter within the band -- the same
+    # veto the full-height split applies.
+    gutter = (left_max + right_min) / 2.0
+    if any(it["x"] < gutter < it["x_max"]
+           for it in items if intersects_band(it)):
+        return None
+    return gutter, left, right
 
 
 def _group_detection_records(rec_texts, rec_scores, rec_boxes):
