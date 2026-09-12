@@ -22,7 +22,6 @@ def load_pipeline_without_models():
     core_pkg = types.ModuleType("core")
     preprocess = types.ModuleType("core.preprocess")
     c_code_cleanup = types.ModuleType("core.c_code_cleanup")
-    c_code_suggestions = types.ModuleType("core.c_code_suggestions")
 
     class StubPaddleOCR:
         def __init__(self, **_kwargs):
@@ -41,10 +40,8 @@ def load_pipeline_without_models():
     preprocess.PreprocessConfig = StubPreprocessConfig
     preprocess.DEFAULT_CONFIG = StubPreprocessConfig()
     c_code_cleanup.clean_c_code = lambda text: text
-    c_code_suggestions.suggest_c_code = lambda _text, _details=None: []
     core_pkg.preprocess = preprocess
     core_pkg.c_code_cleanup = c_code_cleanup
-    core_pkg.c_code_suggestions = c_code_suggestions
 
     # core.numeric and core.debug_artifact are pure-stdlib (math / json +
     # pathlib) and ocr_pipeline imports from both, so load the REAL modules
@@ -76,7 +73,6 @@ def load_pipeline_without_models():
         "core.debug_artifact": debug_artifact,
         "core.c_code_cleanup": c_code_cleanup,
         "core.c_literals": c_literals,
-        "core.c_code_suggestions": c_code_suggestions,
         module_name: module,
     }
     with patch.dict(sys.modules, stubs):
@@ -768,38 +764,6 @@ class ExtractionOutputDirectoryTests(unittest.TestCase):
         self.assertEqual(result["cleaned_text"], "")
         self.assertIn("average_confidence", result)
         self.assertIn("preprocessed_image", result)
-        self.assertEqual(result["line_details"], [])
-        self.assertEqual(result["review_suggestions"], [])
-        self.assertEqual(result["review_diagnostics"], [])
-
-    def test_suggestion_failure_is_diagnostic_and_does_not_fail_ocr(self):
-        pipeline = load_pipeline_without_models()
-
-        def fail_suggestions(_text, _details=None):
-            raise RuntimeError("suggestion failure")
-
-        class EmptyOCR:
-            @staticmethod
-            def predict(_path):
-                return []
-
-        pipeline.preprocess_image = lambda **kwargs: str(
-            Path(kwargs["output_dir"]) / "source_preprocessed.jpg"
-        )
-        pipeline.suggest_c_code = fail_suggestions
-        pipeline.ocr = EmptyOCR()
-
-        with tempfile.TemporaryDirectory() as output_dir:
-            result = pipeline.extract_text_from_image(
-                "source.jpg",
-                output_dir=output_dir,
-            )
-
-        self.assertEqual(result["review_suggestions"], [])
-        self.assertEqual(
-            result["review_diagnostics"],
-            ["suggestion engine failed: RuntimeError"],
-        )
 
 
 class RecognitionConsensusPipelineTests(unittest.TestCase):
@@ -831,77 +795,7 @@ class RecognitionConsensusPipelineTests(unittest.TestCase):
             "cleaned_text": "return o;",
             "average_confidence": 0.6,
             "preprocessed_image": recognize.call_args.args[0],
-            "line_details": [{
-                "line": 1,
-                "text": "return o;",
-                "scores": [0.6],
-                "min_confidence": 0.6,
-                "mean_confidence": 0.6,
-                "review_reasons": [],
-            }],
-            "review_suggestions": [],
-            "review_diagnostics": [],
         })
-
-
-class LineDetailsTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.pipeline = load_pipeline_without_models()
-
-    def test_builds_finite_score_summary_and_ignores_bad_scores(self):
-        grouped_lines = [
-            [("int", 0.8), ("main()", 0.6)],
-            [("return 0;", "bad"), ("}", math.inf)],
-        ]
-
-        details = self.pipeline._build_line_details(grouped_lines)
-
-        self.assertEqual(details[0], {
-            "line": 1,
-            "text": "int main()",
-            "scores": [0.8, 0.6],
-            "min_confidence": 0.6,
-            "mean_confidence": 0.7,
-            "review_reasons": [],
-        })
-        self.assertEqual(details[1], {
-            "line": 2,
-            "text": "return 0; }",
-            "scores": [],
-            "min_confidence": None,
-            "mean_confidence": None,
-            "review_reasons": [],
-        })
-
-    def test_skips_empty_line_groups_to_match_raw_text_line_numbers(self):
-        details = self.pipeline._build_line_details([
-            [("", 0.9)],
-            [("return 0;", 0.8)],
-        ])
-
-        self.assertEqual(len(details), 1)
-        self.assertEqual(details[0]["line"], 1)
-        self.assertEqual(details[0]["text"], "return 0;")
-
-    def test_attaches_unique_suggestion_rule_ids_to_the_matching_line(self):
-        details = self.pipeline._build_line_details([
-            [("printe();", 0.9)],
-            [("return 0;", 0.8)],
-        ])
-        suggestions = [
-            {"line": 1, "rule_id": "function-call-printf"},
-            {"line": 1, "rule_id": "function-call-printf"},
-            {"line": 2, "rule_id": "function-call-scanf"},
-            {"line": "bad", "rule_id": "ignored"},
-        ]
-
-        self.pipeline._attach_suggestion_reasons(details, suggestions)
-
-        self.assertEqual(
-            details[0]["review_reasons"], ["function-call-printf"]
-        )
-        self.assertEqual(details[1]["review_reasons"], ["function-call-scanf"])
 
 
 class BraceDeltaTests(unittest.TestCase):

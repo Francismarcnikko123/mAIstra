@@ -61,9 +61,6 @@ async def extract_from_upload(file: UploadFile = File(...)):
         "raw_text": result["raw_text"],
         "cleaned_text": result["cleaned_text"],
         "average_confidence": result["average_confidence"],
-        "line_details": result["line_details"],
-        "review_suggestions": result["review_suggestions"],
-        "review_diagnostics": result["review_diagnostics"],
     }
 
 
@@ -122,8 +119,5 @@ def extract_from_url(request: ImageUrlRequest):
         "raw_text": result["raw_text"],
         "cleaned_text": result["cleaned_text"],
         "average_confidence": result["average_confidence"],
-        "line_details": result["line_details"],
-        "review_suggestions": result["review_suggestions"],
-        "review_diagnostics": result["review_diagnostics"],
         "saved_to_db": False,
     }

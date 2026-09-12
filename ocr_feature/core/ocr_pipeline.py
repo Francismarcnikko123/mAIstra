@@ -12,7 +12,6 @@ from core.numeric import finite_float
 from core.debug_artifact import write_debug_artifact
 from core.c_code_cleanup import clean_c_code
 from core.c_literals import C_LITERAL
-from core.c_code_suggestions import suggest_c_code
 
 
 # Detection is pinned by name -- passing a model name makes PaddleOCR
@@ -812,51 +811,6 @@ def _group_structured_lines(rec_texts, rec_scores, rec_boxes, image_height):
     return structured
 
 
-def _build_line_details(grouped_lines):
-    """Build additive per-line review data without judging correctness."""
-    details = []
-    for members in grouped_lines:
-        parts = [text.strip() for text, _ in members if text and text.strip()]
-        if not parts:
-            continue
-
-        scores = []
-        for _, score in members:
-            numeric_score = finite_float(score)
-            if numeric_score is not None:
-                scores.append(numeric_score)
-
-        details.append({
-            "line": len(details) + 1,
-            "text": " ".join(parts),
-            "scores": scores,
-            "min_confidence": min(scores) if scores else None,
-            "mean_confidence": (
-                sum(scores) / len(scores) if scores else None
-            ),
-            "review_reasons": [],
-        })
-    return details
-
-
-def _attach_suggestion_reasons(line_details, suggestions) -> None:
-    """Attach rule identifiers to line details for teacher navigation."""
-    details_by_line = {detail["line"]: detail for detail in line_details}
-    for suggestion in suggestions:
-        if not isinstance(suggestion, dict):
-            continue
-        try:
-            line_number = int(suggestion.get("line"))
-        except (TypeError, ValueError, OverflowError):
-            continue
-        rule_id = suggestion.get("rule_id")
-        detail = details_by_line.get(line_number)
-        if not detail or not isinstance(rule_id, str) or not rule_id:
-            continue
-        if rule_id not in detail["review_reasons"]:
-            detail["review_reasons"].append(rule_id)
-
-
 def _recognize_preprocessed(preprocessed_path: str) -> dict:
     """Recognize one preprocessed image and preserve per-line geometry."""
     try:
@@ -948,21 +902,6 @@ def extract_text_from_image(
     # kept separately; cleaning never touches string literals or arbitrary
     # content. See c_code_cleanup.py.
     cleaned_text = clean_c_code(raw_text)
-    line_details = _build_line_details(grouped_lines)
-
-    # Suggestions are teacher-review hints only. They never modify either OCR
-    # text field, and a failure here must not turn a successful extraction into
-    # an API error.
-    try:
-        review_suggestions = suggest_c_code(raw_text, line_details)
-        review_diagnostics = []
-    except Exception as exc:
-        review_suggestions = []
-        review_diagnostics = [
-            f"suggestion engine failed: {type(exc).__name__}"
-        ]
-    _attach_suggestion_reasons(line_details, review_suggestions)
-
     average_confidence = selected_attempt["average_confidence"]
 
     debug = {
@@ -975,9 +914,6 @@ def extract_text_from_image(
         "detections": selected_attempt["detections"],
         "dropped_low_confidence": selected_attempt["dropped_low_confidence"],
         "grouped_lines": selected_attempt["debug_lines"],
-        "line_details": line_details,
-        "review_suggestions": review_suggestions,
-        "review_diagnostics": review_diagnostics,
     }
     write_debug_artifact(preprocessed_path, debug)
 
@@ -986,8 +922,5 @@ def extract_text_from_image(
         "cleaned_text": cleaned_text,
         "average_confidence": average_confidence,
         "preprocessed_image": preprocessed_path,
-        "line_details": line_details,
-        "review_suggestions": review_suggestions,
-        "review_diagnostics": review_diagnostics,
     }
     return result

@@ -31,7 +31,6 @@ from evaluators.evaluation import (
     evaluate_text_pair,
     evaluate_word_token_pair,
     literal_provenance_issues,
-    suggestion_improves_reference,
     summarize_metrics,
 )
 
@@ -122,8 +121,6 @@ def main() -> int:
 
     evaluated = []
     exact_matches = []
-    suggestion_results = []
-    samples_with_suggestions = 0
 
     for row in rows:
         fname = row["filename"].strip()
@@ -147,19 +144,6 @@ def main() -> int:
             "metrics": metrics,
             "word_token_metrics": word_token_metrics,
         })
-        suggestions = result.get("review_suggestions") or []
-        if suggestions:
-            samples_with_suggestions += 1
-        for suggestion in suggestions:
-            suggestion_results.append({
-                "filename": fname,
-                "suggestion": suggestion,
-                "helpful": suggestion_improves_reference(
-                    raw,
-                    truth,
-                    suggestion,
-                ),
-            })
         if raw == truth:
             exact_matches.append(f"{fname} (raw)")
         if clean == truth:
@@ -193,31 +177,6 @@ def main() -> int:
     print(_format_word_token_row("AVERAGE WER/TOKEN-ACC", overall_word_token))
     _print_word_token_group_summary("BY PAPER TYPE (WER/token-acc)", evaluated, "paper_type")
     _print_word_token_group_summary("BY WRITER (WER/token-acc)", evaluated, "writer")
-
-    helpful_count = sum(item["helpful"] for item in suggestion_results)
-    suggestion_count = len(suggestion_results)
-    non_improving = [
-        item for item in suggestion_results if not item["helpful"]
-    ]
-    precision = (
-        helpful_count / suggestion_count if suggestion_count else None
-    )
-    print("\nREVIEW SUGGESTIONS")
-    precision_text = f"{precision:.3f}" if precision is not None else "n/a"
-    print(
-        f"total: {suggestion_count}  helpful: {helpful_count}  "
-        f"non-improving: {len(non_improving)}  precision: {precision_text}"
-    )
-    print(
-        f"sample coverage: {samples_with_suggestions}/{len(evaluated)}"
-    )
-    for item in non_improving:
-        suggestion = item["suggestion"]
-        print(
-            f"  {item['filename']}: {suggestion.get('original')!r} -> "
-            f"{suggestion.get('candidate')!r} "
-            f"({suggestion.get('rule_id')})"
-        )
 
     if exact_matches:
         print("\nWARNING: exact prediction/reference matches require "
