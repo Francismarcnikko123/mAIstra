@@ -831,6 +831,70 @@ class BraceDeltaTests(unittest.TestCase):
         )
 
 
+class DisplacedSeveranceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pipeline = load_pipeline_without_models()
+
+    @staticmethod
+    def _line(*members):
+        return {"members": [
+            {"text": text, "x": x, "x_max": x_max, "score": 0.9}
+            for text, x, x_max in members
+        ]}
+
+    @staticmethod
+    def _texts(lines):
+        return [[member["text"] for member in line["members"]]
+                for line in lines]
+
+    def test_severs_a_three_row_right_cluster_to_the_end(self):
+        lines = [
+            self._line(("L0", 0, 180), ("R0", 340, 440)),
+            self._line(("L1", 0, 180), ("R1", 345, 445)),
+            self._line(("L2", 0, 180), ("R2", 340, 440)),
+            self._line(("L3", 0, 180)),
+        ]
+        lines[0]["metadata"] = {"row": 0}
+        original_texts = self._texts(lines)
+
+        result = self.pipeline._sever_displaced_regions(lines, 150)
+
+        self.assertEqual(self._texts(result),
+                         [["L0"], ["L1"], ["L2"], ["L3"],
+                          ["R0"], ["R1"], ["R2"]])
+        self.assertEqual(self._texts(lines), original_texts)
+        self.assertIs(result[3], lines[3])
+        self.assertIs(result[0]["metadata"], lines[0]["metadata"])
+        self.assertIs(result[4]["metadata"], lines[0]["metadata"])
+        for row in range(3):
+            self.assertIs(result[row]["members"][0], lines[row]["members"][0])
+            self.assertIs(result[row + 4]["members"][0], lines[row]["members"][1])
+
+    def test_does_not_sever_a_two_row_cluster(self):
+        lines = [
+            self._line(("L0", 0, 180), ("R0", 340, 440)),
+            self._line(("L1", 0, 180), ("R1", 345, 445)),
+        ]
+
+        self.assertIs(self.pipeline._sever_displaced_regions(lines, 150), lines)
+
+    def test_does_not_sever_when_right_x0_not_aligned(self):
+        lines = [
+            self._line(("L0", 0, 180), ("R0", 340, 440)),
+            self._line(("L1", 0, 180), ("R1", 600, 700)),
+            self._line(("L2", 0, 180), ("R2", 340, 440)),
+        ]
+
+        self.assertIs(self.pipeline._sever_displaced_regions(lines, 150), lines)
+
+    def test_small_internal_gap_is_not_a_right_fragment(self):
+        lines = [self._line(("a", 0, 180), ("b", 190, 260))
+                 for _ in range(3)]
+
+        self.assertIs(self.pipeline._sever_displaced_regions(lines, 150), lines)
+
+
 class ReassembleDisplacedRegionsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

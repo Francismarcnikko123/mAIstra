@@ -132,6 +132,14 @@ BASELINE_REGION_GAP_MULTIPLIER = 6.0
 MAX_DISPLACED_REGION_LINES = 12
 MAX_DISPLACED_REGION_SPAN = 300.0
 
+# Repeated, aligned gaps can identify a displaced block after row grouping.
+# A/B testing selected three rows: two regressed a spatial-layout page.
+# This changes order/grouping only, never characters. See
+# docs/superpowers/specs/2026-09-12-local-gutter-reading-order-design.md.
+SEVER_GAP_MULTIPLIER = 0.8
+MIN_SEVER_ROWS = 3
+SEVER_X_ALIGN_MULTIPLIER = 1.2
+
 # Two-column split (two independent programs written side by side to save
 # paper). Detection is deliberately conservative: a vertical gutter that NO
 # detection crosses, with substantial vertically-distributed content on both
@@ -231,6 +239,87 @@ def _is_definition_close(text: str) -> bool:
         if not re.match(r"\s*;", stripped[match.end():]):
             return False
     return True
+
+
+def _sever_displaced_regions(lines, median_width):
+    """Append aligned right clusters from consecutive rows using geometry only.
+
+    Fail closed on malformed geometry. Preserve line metadata and member
+    objects; only accepted split rows receive new line and member-list objects.
+    """
+    width = finite_float(median_width)
+    if width is None or width <= 0 or not isinstance(lines, (list, tuple)):
+        return lines
+
+    gap_threshold = max(SEVER_GAP_MULTIPLIER * width, 40.0)
+    align_tolerance = SEVER_X_ALIGN_MULTIPLIER * width
+    candidates = []
+    for line in lines:
+        if not isinstance(line, dict):
+            return lines
+        members = line.get("members")
+        if not isinstance(members, (list, tuple)) or not members:
+            return lines
+        geometry = []
+        for member in members:
+            if not isinstance(member, dict):
+                return lines
+            x = finite_float(member.get("x"))
+            x_max = finite_float(member.get("x_max"))
+            if x is None or x_max is None or x_max <= x:
+                return lines
+            geometry.append((member, x, x_max))
+        geometry.sort(key=lambda entry: entry[1])
+        candidate = None
+        for split in range(1, len(geometry)):
+            if geometry[split][1] - geometry[split - 1][2] > gap_threshold:
+                candidate = (geometry, split, geometry[split][1])
+                break
+        candidates.append(candidate)
+
+    accepted = {}
+    start = 0
+    while start < len(candidates):
+        first = candidates[start]
+        if first is None:
+            start += 1
+            continue
+        end = start + 1
+        while (end < len(candidates)
+               and candidates[end] is not None
+               and abs(candidates[end][2] - first[2]) <= align_tolerance):
+            end += 1
+        if end - start >= MIN_SEVER_ROWS:
+            gutter = min(candidate[2] for candidate in candidates[start:end])
+            left_max = max(
+                x_max
+                for geometry, split, _right_x in candidates[start:end]
+                for _member, _x, x_max in geometry[:split]
+            )
+            crossed = any(
+                x < gutter < x_max
+                for geometry, _split, _right_x in candidates[start:end]
+                for _member, x, x_max in geometry
+            )
+            # A shared gutter needs positive width, including when a left
+            # fragment touches or lies entirely beyond the right boundary.
+            if left_max < gutter and not crossed:
+                accepted.update((index, candidates[index])
+                                for index in range(start, end))
+        start = end
+
+    if not accepted:
+        return lines
+    remaining = []
+    displaced = []
+    for index, line in enumerate(lines):
+        if index not in accepted:
+            remaining.append(line)
+            continue
+        geometry, split, _right_x = accepted[index]
+        remaining.append({**line, "members": [entry[0] for entry in geometry[:split]]})
+        displaced.append({**line, "members": [entry[0] for entry in geometry[split:]]})
+    return remaining + displaced
 
 
 def _reassemble_displaced_regions(lines: list) -> list:
