@@ -894,6 +894,25 @@ class DisplacedSeveranceTests(unittest.TestCase):
 
         self.assertIs(self.pipeline._sever_displaced_regions(lines, 150), lines)
 
+    def test_end_to_end_single_column_appends_displaced_block(self):
+        texts = []
+        boxes = []
+        for row in range(5):
+            texts.append(f"L{row}")
+            # A wide header keeps the existing global-gutter trace inactive.
+            boxes.append([0, row * 40, 500 if row == 0 else 180, row * 40 + 20])
+            if 1 <= row <= 3:
+                texts.append(f"R{row}")
+                boxes.append([340, row * 40, 480, row * 40 + 20])
+
+        lines, safe = self.pipeline._group_detection_records(
+            texts, [0.9] * len(texts), boxes)
+
+        self.assertTrue(safe)
+        self.assertEqual(
+            [member["text"] for line in lines for member in line],
+            ["L0", "L1", "L2", "L3", "L4", "R1", "R2", "R3"])
+
 
 class ReassembleDisplacedRegionsTests(unittest.TestCase):
     @classmethod

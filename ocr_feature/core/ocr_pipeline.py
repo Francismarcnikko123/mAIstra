@@ -748,6 +748,8 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
         items, line_tol, region_gap_threshold, baseline_gap_threshold)
     if lines is None:
         return _original_detection_records(rec_texts, rec_scores), False
+    if gutter_x is None:
+        lines = _sever_displaced_regions(lines, median_width)
     _assign_indent_levels(lines, median_char_width)
     ordered_lines = [
         sorted(line["members"], key=lambda member: member["x"])
