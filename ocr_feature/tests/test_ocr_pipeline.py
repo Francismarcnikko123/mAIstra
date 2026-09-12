@@ -488,13 +488,19 @@ class DynamicGutterGroupingTests(unittest.TestCase):
         )
 
     def test_confirmed_window_respects_line_count_cap(self):
+        # A narrow (125px, ~1.25x median width) gutter keeps this a
+        # single-column margin-fragment trace: it is below BAND_GUTTER_MIN
+        # (1.5x median width) so the banded column detector declines, leaving
+        # the displaced-region trace and its line-count cap under test. A wide,
+        # clean gutter here is a real second column and is exercised by
+        # BandedColumnDetectionTests instead.
         for count in (12, 13):
             with self.subTest(count=count):
                 texts, boxes = [], []
                 for row in range(count):
                     texts.extend([f"L{row}", f"R{row}"])
                     boxes.extend([[0, row * 20, 100, row * 20 + 10],
-                                  [300, row * 20, 400, row * 20 + 10]])
+                                  [225, row * 20, 325, row * 20 + 10]])
                 texts.append("bridge")
                 boxes.append([0, count * 20, 400, count * 20 + 10])
                 _, flagged = self.inspect_grouping(texts, boxes)
@@ -1072,15 +1078,11 @@ class DisplacedSeveranceTests(unittest.TestCase):
                  self._line(("L2", 0, 150), ("R2", 340, 440))]
         self.assertIs(self.pipeline._sever_displaced_regions(lines, 200), lines)
 
-    def test_real_writer18_geometry_appends_expected_right_rows(self):
-        texts = [str(i) for i in range(len(self.WRITER18_BOXES))]
-        grouped, safe = self.pipeline._group_detection_records(
-            texts, [0.9] * len(texts), self.WRITER18_BOXES)
-
-        self.assertTrue(safe)
-        self.assertEqual([[m["text"] for m in line] for line in grouped[-7:]],
-                         [["5"], ["6", "8"], ["10"], ["11"], ["13"], ["15"], ["17"]])
-        self.assertCountEqual([m["text"] for line in grouped for m in line], texts)
+    # green_writer18 end-to-end is now handled by the banded column detector
+    # (the partial-height right block is read left-fully-then-right-fully, all
+    # 13 right boxes trailing), not by the partial severance subset this class
+    # used to assert. That behavior is covered by
+    # BandedColumnDetectionTests.test_group_detection_reads_writer18_left_then_right.
 
     def test_real_writer27_geometry_retains_baseline_grouping(self):
         texts = [str(i) for i in range(len(self.WRITER27_BOXES))]
@@ -1202,6 +1204,38 @@ class BandedColumnDetectionTests(unittest.TestCase):
                  [400, 40, 500, 60], [0, 80, 100, 100]]
         _items, result = self._detect(boxes)
         self.assertIsNone(result)
+
+    def test_group_detection_reads_writer18_left_then_right(self):
+        # Wired end-to-end through _group_detection_records: green_writer18 now
+        # reads as the 26 left boxes fully, then the 13 right boxes fully (the
+        # banded split), superseding the partial severance subset the
+        # single-column path produced before. No detection is added or dropped.
+        texts = [str(i) for i in range(len(WRITER18_BOXES))]
+        grouped, safe = self.pipeline._group_detection_records(
+            texts, [0.9] * len(texts), WRITER18_BOXES)
+        self.assertTrue(safe)
+        order = [int(m["text"]) for line in grouped for m in line]
+        self.assertCountEqual(order, range(len(WRITER18_BOXES)))
+        expected_right = sorted(
+            i for i, b in enumerate(WRITER18_BOXES) if b[0] >= 798)
+        self.assertEqual(len(expected_right), 13)
+        self.assertEqual(set(order[-13:]), set(expected_right))
+        self.assertEqual(set(order[:26]),
+                         set(range(len(WRITER18_BOXES))) - set(expected_right))
+
+    def test_group_detection_leaves_writer27_to_the_single_column_path(self):
+        # green_writer27 is not banded (verified above), so it still takes the
+        # single-column + severance path. Banded is consulted but declines.
+        texts = [str(i) for i in range(len(WRITER27_BOXES))]
+        with patch.object(self.pipeline, "_detect_banded_column",
+                          wraps=self.pipeline._detect_banded_column) as banded:
+            grouped, safe = self.pipeline._group_detection_records(
+                texts, [0.9] * len(texts), WRITER27_BOXES)
+        self.assertTrue(safe)
+        self.assertTrue(banded.called)
+        self.assertCountEqual(
+            [int(m["text"]) for line in grouped for m in line],
+            range(len(WRITER27_BOXES)))
 
 
 class ReassembleDisplacedRegionsTests(unittest.TestCase):

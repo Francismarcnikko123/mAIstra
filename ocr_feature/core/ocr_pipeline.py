@@ -890,6 +890,30 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
             ]
             return ordered_lines, True
         # Either column had unsafe geometry -- fall through to single-column.
+    else:
+        # No full-height split. Try the banded generalization: a partial-height
+        # right column (a two-page / side-by-side capture whose continuation
+        # fills only the top-right quadrant). Read it left column fully, then
+        # right column fully -- the same rule as the full-height split, applied
+        # to a right block that spans less than half the page. If it fires,
+        # severance is skipped; otherwise the single-column path runs unchanged.
+        banded = _detect_banded_column(
+            items, page_top, page_bot, median_width, line_tol)
+        if banded is not None:
+            _gutter_b, left, right = banded
+            left_lines = _order_column_items(
+                left, line_tol, region_gap_threshold, baseline_gap_threshold)
+            right_lines = _order_column_items(
+                right, line_tol, region_gap_threshold, baseline_gap_threshold)
+            if left_lines is not None and right_lines is not None:
+                _assign_indent_levels(left_lines, median_char_width)
+                _assign_indent_levels(right_lines, median_char_width)
+                ordered_lines = [
+                    sorted(line["members"], key=lambda member: member["x"])
+                    for line in left_lines + right_lines
+                ]
+                return ordered_lines, True
+            # Either column had unsafe geometry -- fall through to single-column.
 
     lines = _order_column_items(
         items, line_tol, region_gap_threshold, baseline_gap_threshold)
