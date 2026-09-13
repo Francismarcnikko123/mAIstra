@@ -740,37 +740,50 @@ def _detect_banded_column(items, page_top, page_bot, median_width, line_tol):
     band_x_align = BAND_X_ALIGN_MULTIPLIER * width
     band_gutter_min = max(BAND_GUTTER_MIN_MULTIPLIER * width, BAND_GUTTER_MIN_FLOOR)
 
-    # Build the right cluster by x0: seed from the largest-x0 item and, walking
-    # items by descending x0, admit one whose x0 is within band_x_align of the
-    # cluster's running MEDIAN x0. Cluster-median membership (not pairwise)
-    # tolerates the gradual right-margin drift of handwriting. Stop at the first
-    # item out of tolerance -- everything at or below it is the left set.
+    # Count distinct visual rows in a set of members, grouping by line_tol on the
+    # y-center (each row anchored at its first member). This is the persistence
+    # measure for the right cluster.
+    def distinct_rows(members):
+        count, anchor = 0, None
+        for member in sorted(members, key=lambda m: m["y"]):
+            if anchor is None or member["y"] - anchor > tol:
+                count += 1
+                anchor = member["y"]
+        return count
+
+    # Build the right cluster by x0. Seeding from the single largest-x0 item is
+    # fragile: a lone far-right stray (a page-edge mark) beyond band_x_align of a
+    # real right column would seed a one-item cluster and hide that column. So
+    # try each item as a seed in descending-x0 order and take the first whose
+    # greedy median-aligned group is a persistent column (>= MIN_BAND_ROWS
+    # distinct rows). Any higher-x0 strays sitting above the chosen seed are
+    # folded into the right cluster, so no content is dropped and a stray cannot
+    # inflate the left column's reach. Cluster-median membership (not pairwise)
+    # tolerates the gradual right-margin drift of handwriting.
     ordered = sorted(items, key=lambda it: it["x"], reverse=True)
-    cluster_ids = {id(ordered[0])}
-    cluster_x0s = [ordered[0]["x"]]
-    for it in ordered[1:]:
-        median_x0 = sorted(cluster_x0s)[len(cluster_x0s) // 2]
-        if abs(it["x"] - median_x0) <= band_x_align:
-            cluster_ids.add(id(it))
-            cluster_x0s.append(it["x"])
-        else:
+    cluster_ids = None
+    for start in range(len(ordered) - MIN_BAND_ROWS + 1):
+        ids = {id(ordered[start])}
+        cluster_x0s = [ordered[start]["x"]]
+        for it in ordered[start + 1:]:
+            median_x0 = sorted(cluster_x0s)[len(cluster_x0s) // 2]
+            if abs(it["x"] - median_x0) <= band_x_align:
+                ids.add(id(it))
+                cluster_x0s.append(it["x"])
+            else:
+                break
+        if distinct_rows([it for it in ordered if id(it) in ids]) >= MIN_BAND_ROWS:
+            for j in range(start):
+                ids.add(id(ordered[j]))
+            cluster_ids = ids
             break
+    if cluster_ids is None:
+        return None
     # Preserve the caller's item order (y-sorted in the live pipeline) in both
     # partitions so the column ordering sweep reads top-to-bottom.
     right = [it for it in items if id(it) in cluster_ids]
     left = [it for it in items if id(it) not in cluster_ids]
     if not left:
-        return None
-
-    # Persistence: the right cluster must occupy at least MIN_BAND_ROWS distinct
-    # visual rows (grouped by line_tol on the y-center).
-    rows = 0
-    last_y = None
-    for member in sorted(right, key=lambda m: m["y"]):
-        if last_y is None or member["y"] - last_y > tol:
-            rows += 1
-            last_y = member["y"]
-    if rows < MIN_BAND_ROWS:
         return None
 
     # Clean banded gutter: WITHIN the right cluster's y-band, the widest left
@@ -789,12 +802,11 @@ def _detect_banded_column(items, page_top, page_bot, median_width, line_tol):
     if right_min - left_max < band_gutter_min:
         return None
 
-    # Uncrossed: no item may straddle the gutter within the band -- the same
-    # veto the full-height split applies.
+    # The gutter is the midpoint of the clean band gap gated just above. By
+    # construction every band item lies wholly on one side of it (a left-in-band
+    # reach <= left_max < gutter < right_min <= every right x0), so no band item
+    # can straddle it -- the band-gap gate already rejects any crossing.
     gutter = (left_max + right_min) / 2.0
-    if any(it["x"] < gutter < it["x_max"]
-           for it in items if intersects_band(it)):
-        return None
     return gutter, left, right
 
 

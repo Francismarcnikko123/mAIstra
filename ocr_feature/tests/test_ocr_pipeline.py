@@ -1190,6 +1190,27 @@ class BandedColumnDetectionTests(unittest.TestCase):
         _items, result = self._detect(left + right + straddle)
         self.assertIsNone(result)
 
+    def test_far_right_stray_does_not_hide_a_real_column(self):
+        # Robustness: a lone stray detection farther right than the true column
+        # (a page-edge mark whose x0 is beyond band_x_align of the column) must
+        # NOT hide the column. Seeding from the single largest x0 would seed a
+        # one-row cluster on the stray and decline; the seed-iteration folds the
+        # stray into the right cluster instead, so banded still fires and no box
+        # is dropped.
+        left = [[0, r * 40, 100, r * 40 + 20] for r in range(6)]
+        right = [[400, r * 40, 500, r * 40 + 20] for r in range(4)]
+        stray = [[650, 0, 750, 20]]
+        items, result = self._detect(left + right + stray)
+        self.assertIsNotNone(result)
+        gutter, left_items, right_items = result
+        self.assertTrue(100 < gutter < 400, msg=f"gutter={gutter}")
+        self.assertEqual(len(left_items), 6)
+        # the 4 column boxes AND the stray are all on the right; nothing dropped
+        self.assertEqual(len(right_items), 5)
+        self.assertEqual(len(left_items) + len(right_items), len(items))
+        self.assertEqual(sorted(it["x"] for it in right_items),
+                         [400, 400, 400, 400, 650])
+
     def test_normal_single_column_is_not_banded(self):
         # Mild indentation, one column: the cluster spans the whole page, so
         # there is no left complement and no banded split.
