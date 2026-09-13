@@ -167,6 +167,16 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - Full Python suite **157 passed** (148 + 9). The trace-only test helper now disables banded interception; the original 12/13-line cap inputs and assertions are unchanged. Live 20-sample evaluator retains clean_ws CER **0.099**, clean WER **0.328**, clean token accuracy **0.716**, green_writer10 clean_ws **0.061**, with identical printed per-file tables.
 - Complete boxes, raw/cleaned extractions, mechanism traces, brace audit, gap measurements and reproduction steps: [real margin validation](../ocr_feature/reports/2026-09-13-real-margin-validation.md).
 
+## OCR brace-assisted margin fallback (2026-09-13)
+
+> **Owner:** Nombrado
+
+- Added `_reassemble_margin_candidates` as a conservative fallback after full-column, banded-column, trace, and severance ordering have failed to change a single-column page. It proposes only whole-line, visibly right-shifted, x-aligned margin clusters with a positive local gutter, then reuses `_reassemble_displaced_regions` as the final gate.
+- The fallback is still grade-safe: it never edits OCR text, never inserts a missing brace, and never splits a detection. A readable `}` can prove that a right-margin block is a continuation; a misread `)` remains a `)` and the candidate stays in visual order.
+- Acceptance requires exactly one brace-balanced move that preserves the line multiset. Ambiguous tail placement, missing geometry, crossed gutters, no closing-brace signal, or multiple possible candidate clusters all leave the original order unchanged.
+- The A/B/C real handwriting photos still use geometric ordering (A full two-column, B/C banded). This fallback covers the adjacent failure class learned from that validation: OCR may read the braces correctly while strict geometry still fails to mark the exact displaced block.
+- Tests add the fallback's two critical cases: readable braces can prove a missed right-margin candidate, while the same layout with a misread brace stays unchanged. Full OCR unit suite: **159 passed**. Live `evaluate_cer` remains clean_ws CER **0.099**, clean WER **0.328**, clean token accuracy **0.716**, green_writer10 clean_ws **0.061**. Disabling/enabling the fallback changes **zero** groupings across the existing **315 debug artifacts / 262 distinct detection payloads**.
+
 ## Code cleanup completed
 
 > **Owner:** Shared (Jayrald + Nombrado)

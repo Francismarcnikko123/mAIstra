@@ -249,11 +249,22 @@ The complete printed per-file and aggregate evaluator tables match, not only the
 
 Scope limit: these are three controlled scenarios from one pseudonymous writer, with no same-line multi-box samples. The unchanged historical replays and held-out gates support this narrow band adjustment; they do not establish universal separation thresholds or prove brace reassembly on arbitrary handwriting. Keep the existing grade-safe geometry guards and teacher verification.
 
+## Follow-up: brace-assisted missed-candidate fallback
+
+After the validation discussion, the pipeline gained a narrow fallback for the adjacent case these photos exposed: OCR can read the braces correctly while strict geometry still fails to mark the exact continuation block. The A/B/C photos themselves remain geometric successes (A full two-column, B/C banded); the new fallback is for single-column pages where those paths and severance leave the order unchanged.
+
+`_reassemble_margin_candidates` proposes only whole-line right-margin clusters that are visibly right-shifted, x-aligned, and separated by a positive local gutter. It then marks that proposed cluster as `severed_by_gap` and reuses `_reassemble_displaced_regions`; the move is accepted only when exactly one candidate produces a brace-balanced order and preserves the same line identities. Ambiguous tail placement, crossed geometry, missing boxes, no closing-brace signal, or multiple possible moves decline to current behavior.
+
+This still does not correct OCR symbols. If a handwritten `}` is recognized as `)`, the fallback does not edit it into `}` and should not treat the candidate as proven. The added tests cover both sides: readable braces can prove a missed right-margin continuation, while the same layout with a misread closing brace stays in visual order.
+
+Fresh verification after this follow-up: full OCR unit suite **159 passed**; live `evaluate_cer` stayed at clean_ws CER **0.099**, clean WER **0.328**, clean token accuracy **0.716**, and green_writer10 clean_ws **0.061**. A fallback-disabled vs enabled replay over the existing **315 debug artifacts / 262 distinct detection payloads** changed **zero** groupings, so the new path did not affect the stored historical corpus.
+
 ## Reproduction
 
 From `ocr_feature/`:
 
 ```bash
+.venv/bin/python -m unittest tests.test_ocr_pipeline.BraceAssistedMarginCandidateTests -v
 .venv/bin/python -m unittest tests.test_real_margin_layout -v
 .venv/bin/python -m unittest discover -s tests
 PYTHONPATH=. .venv/bin/python -m evaluators.evaluate_cer

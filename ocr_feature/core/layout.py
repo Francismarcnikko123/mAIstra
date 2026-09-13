@@ -48,6 +48,13 @@ SEVER_GAP_MULTIPLIER = 0.8
 MIN_SEVER_ROWS = 3
 SEVER_X_ALIGN_MULTIPLIER = 1.2
 
+# Brace-assisted fallback: when strict gutter geometry does not mark a block,
+# try a visibly right-shifted, aligned margin cluster only if C brace depth
+# uniquely proves that moving it to the end restores structure.
+BRACE_CANDIDATE_MIN_ROWS = 2
+BRACE_CANDIDATE_X_SHIFT_MULTIPLIER = 2.0
+BRACE_CANDIDATE_X_SHIFT_FLOOR = 80.0
+
 # Two-column split (two independent programs written side by side to save
 # paper). Detection is deliberately conservative: a vertical gutter that NO
 # detection crosses, with substantial vertically-distributed content on both
@@ -362,6 +369,123 @@ def _reassemble_displaced_regions(lines: list) -> list:
            for line in normal):
         return lines
     return reordering
+
+
+def _line_identity_order(lines):
+    return tuple(tuple(id(member) for member in line["members"])
+                 for line in lines)
+
+
+def _reassemble_margin_candidates(lines, median_width):
+    """Brace-assisted fallback for missed right-margin continuation blocks.
+
+    This deliberately does not correct symbols. It only marks whole existing
+    lines as a candidate displaced block, then reuses _reassemble_displaced_regions
+    to accept a unique brace-balanced move.
+    """
+    width = finite_float(median_width)
+    if width is None or width <= 0 or not isinstance(lines, (list, tuple)):
+        return lines
+
+    bounds = []
+    for line in lines:
+        members = line.get("members") if isinstance(line, dict) else None
+        if not members:
+            return lines
+        try:
+            x0, y0, x1, y1 = line_member_bounds(members)
+        except (TypeError, KeyError, ValueError, OverflowError):
+            return lines
+        values = (finite_float(x0), finite_float(y0),
+                  finite_float(x1), finite_float(y1))
+        if any(value is None for value in values):
+            return lines
+        x0, y0, x1, y1 = values
+        if x1 <= x0 or y1 <= y0:
+            return lines
+        bounds.append((x0, y0, x1, y1))
+
+    page_left = min(x0 for x0, _y0, _x1, _y1 in bounds)
+    min_shift = max(BRACE_CANDIDATE_X_SHIFT_MULTIPLIER * width,
+                    BRACE_CANDIDATE_X_SHIFT_FLOOR)
+    align_tolerance = SEVER_X_ALIGN_MULTIPLIER * width
+    right_indices = [
+        i for i, (x0, _y0, _x1, _y1) in enumerate(bounds)
+        if x0 - page_left >= min_shift
+    ]
+    if len(right_indices) < BRACE_CANDIDATE_MIN_ROWS:
+        return lines
+
+    clusters = []
+    current = []
+    current_x0s = []
+    for index in right_indices:
+        x0 = bounds[index][0]
+        if not current:
+            current = [index]
+            current_x0s = [x0]
+            continue
+        median_x0 = sorted(current_x0s)[len(current_x0s) // 2]
+        if abs(x0 - median_x0) <= align_tolerance:
+            current.append(index)
+            current_x0s.append(x0)
+        else:
+            clusters.append(current)
+            current = [index]
+            current_x0s = [x0]
+    if current:
+        clusters.append(current)
+
+    original_order = _line_identity_order(lines)
+    accepted = []
+    for cluster in clusters:
+        if len(cluster) < BRACE_CANDIDATE_MIN_ROWS:
+            continue
+        cluster_set = set(cluster)
+        block_text = "\n".join(
+            "\n".join(member["text"] for member in lines[i]["members"])
+            for i in cluster
+        )
+        if _brace_delta(block_text) >= 0:
+            continue
+
+        band_top = min(bounds[i][1] for i in cluster)
+        band_bot = max(bounds[i][3] for i in cluster)
+        right_min = min(bounds[i][0] for i in cluster)
+        complement_in_band = [
+            i for i, (_x0, y0, _x1, y1) in enumerate(bounds)
+            if i not in cluster_set and y1 >= band_top and y0 <= band_bot
+        ]
+        if not complement_in_band:
+            continue
+        if any(bounds[i][0] < right_min < bounds[i][2]
+               for i in complement_in_band):
+            continue
+        left_in_band = [i for i in complement_in_band
+                        if bounds[i][2] < right_min]
+        if not left_in_band:
+            continue
+        if max(bounds[i][2] for i in left_in_band) >= right_min:
+            continue
+
+        trial = []
+        for i, line in enumerate(lines):
+            copy = {key: value for key, value in line.items()
+                    if key != "severed_by_gap"}
+            if i in cluster_set:
+                copy["severed_by_gap"] = True
+            trial.append(copy)
+        reassembled = _reassemble_displaced_regions(trial)
+        new_order = _line_identity_order(reassembled)
+        if new_order == original_order:
+            continue
+        if (len(new_order) == len(original_order)
+                and set(new_order) == set(original_order)):
+            accepted.append(reassembled)
+
+    if len(accepted) == 1:
+        return accepted[0]
+    return lines
 
 
 def _expected_line_y(members, candidate_x):
@@ -817,7 +941,10 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
     if lines is None:
         return _original_detection_records(rec_texts, rec_scores), False
     if gutter_x is None:
+        before_severance = _line_identity_order(lines)
         lines = _sever_displaced_regions(lines, median_width)
+        if _line_identity_order(lines) == before_severance:
+            lines = _reassemble_margin_candidates(lines, median_width)
     _assign_indent_levels(lines, median_char_width)
     ordered_lines = [
         sorted(line["members"], key=lambda member: member["x"])

@@ -1490,6 +1490,73 @@ class ReassembleDisplacedRegionsTests(unittest.TestCase):
         self.assertEqual(result, lines)
 
 
+class BraceAssistedMarginCandidateTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pipeline = load_layout()
+
+    def group_with_strict_geometry_disabled(self, texts):
+        boxes = [
+            [50, 0, 200, 10],
+            [450, 12, 530, 22],
+            [50, 24, 250, 34],
+            [450, 36, 530, 46],
+            [80, 48, 230, 58],
+            [450, 60, 570, 70],
+            [450, 72, 530, 82],
+        ]
+        with (patch.object(self.pipeline, "_detect_two_columns", return_value=None),
+              patch.object(self.pipeline, "_detect_banded_column", return_value=None),
+              patch.object(self.pipeline, "_sever_displaced_regions",
+                           side_effect=lambda lines, _width: lines)):
+            grouped, safe = self.pipeline._group_detection_records(
+                texts, [0.9] * len(texts), boxes)
+        return [[member["text"] for member in row] for row in grouped], safe
+
+    def test_braces_can_prove_a_missed_right_margin_candidate(self):
+        texts = [
+            "#include <stdio.h>",
+            "work();",
+            "int main(void) {",
+            "}",
+            "if (x) {",
+            "return 0;",
+            "}",
+        ]
+
+        grouped, safe = self.group_with_strict_geometry_disabled(texts)
+
+        self.assertTrue(safe)
+        self.assertEqual(
+            grouped,
+            [
+                ["#include <stdio.h>"],
+                ["int main(void) {"],
+                ["if (x) {"],
+                ["work();"],
+                ["}"],
+                ["return 0;"],
+                ["}"],
+            ],
+        )
+
+    def test_misread_brace_keeps_the_candidate_in_visual_order(self):
+        texts = [
+            "#include <stdio.h>",
+            "work();",
+            "int main(void) {",
+            ")",
+            "if (x) {",
+            "return 0;",
+            "}",
+        ]
+
+        grouped, safe = self.group_with_strict_geometry_disabled(texts)
+
+        self.assertTrue(safe)
+        self.assertEqual(grouped, [[text] for text in texts])
+
+
 def rbnode_reassembly_lines():
     return [
         _line("struct RBNode { int val; int color; struct RBNode *child[2]; };"),
