@@ -1,5 +1,7 @@
 # mAIstra Project Overview and Change Log
 
+> **Ownership labels.** Each section below is tagged with its primary contributor(s): **Nikko** (mobile capture), **Jayrald** (web submissions/review UI, Judge0, Supabase), **Nombrado** (OCR pipeline & extraction). *Shared* marks cross-cutting sections. Labels reflect git authorship of the described work.
+
 ## Project purpose
 
 mAIstra is a vision-based assessment system for handwritten C programming submissions. It captures student work, stores submission images, extracts C code through OCR, allows a teacher to verify the extracted code, executes it against question test cases with Judge0, and presents grading feedback.
@@ -8,25 +10,37 @@ mAIstra is a vision-based assessment system for handwritten C programming submis
 
 ### `maistra_mobile`
 
+> **Owner:** Nikko
+
 The Flutter mobile application captures handwritten submissions, performs a basic image-quality check, uploads images to Supabase Storage, and creates submission records.
 
 ### `maistra_web`
+
+> **Owner:** Jayrald (submissions list, review UI, grading); Nombrado (OCR extraction + review highlighting)
 
 The Angular teacher application manages questions and submissions. Teachers can review uploaded images, run OCR, correct extracted code, select the related question, execute code, and inspect test-case and logic results.
 
 ### `ocr_feature`
 
+> **Owner:** Nombrado
+
 The Python FastAPI OCR service downloads or accepts submission images, preprocesses them, runs PaddleOCR, cleans recognized C tokens conservatively, and returns review suggestions and confidence information.
 
 ### `judge0_api`
+
+> **Owner:** Jayrald
 
 The Python FastAPI Judge0 wrapper submits C code to Judge0, polls for results, decodes output, and provides the grading endpoint consumed by the Angular application.
 
 ### `supabase`
 
+> **Owner:** Jayrald
+
 This directory contains local Supabase configuration, schema migrations, seed data, and database exports. Supabase provides PostgreSQL storage, realtime submission notifications, and submission image storage.
 
 ## Submission review workflow
+
+> **Owner:** Jayrald (review workflow + **Re-extract** control); Nombrado (OCR extraction backend + the guard stopping Re-extract from overwriting teacher edits, `144f340`)
 
 The Angular submission review uses one existing `SubmissionsListComponent`; no additional visual components were introduced.
 
@@ -51,6 +65,8 @@ The Angular submission review uses one existing `SubmissionsListComponent`; no a
 
 ## Submission interface changes
 
+> **Owner:** Jayrald
+
 The submission interface was redesigned to make its workflow easier to discover and navigate:
 
 - Added search by student, topic, or question.
@@ -68,6 +84,8 @@ The submission interface was redesigned to make its workflow easier to discover 
 
 ## State and reliability decisions
 
+> **Owner:** Shared — Jayrald (Judge0 result maps, execution-source harness, question linking); Nombrado (save-race/destruction guards, OCR-text separation)
+
 The following state is intentionally retained in `SubmissionsListComponent`:
 
 - Save generations prevent an older request from overwriting the result of a newer save.
@@ -80,6 +98,8 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 
 ## OCR reading-order review fixes (2026-09-10)
 
+> **Owner:** Nombrado
+
 - Both OCR demo scripts default to the existing `samples/greenbook/green_writer10_B2_1.jpg`, resolved relative to each script. Explicit image arguments remain relative to the caller.
 - `compare_config.py` resolves CSV ground truth relative to its script directory, by image basename. (The loose-`.txt`-beside-the-image fallback was later removed — commit `d1a4a06` — so `labels.csv` is now the single ground-truth source.) The default recognizer directory is resolved relative to the pipeline file so demos can also run from the repository root; `MAISTRA_REC_MODEL_DIR` overrides are preserved.
 - Removed the redundant crossing check in `_detect_two_columns`: the widest coverage-gap midpoint already guarantees no crossing. Detection-count and vertical-span gates remain unchanged.
@@ -89,12 +109,16 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 
 ## OCR layout reconstruction & suggestions cleanup (2026-09-11/12)
 
+> **Owner:** Nombrado
+
 - **Handwritten indentation reconstruction** (`_assign_indent_levels`): each detected line's box left-edge is turned into leading whitespace, quantized per column in `INDENT_STEP_CHARS` character-widths (character-scale, because a detection box spans a whole word and is ~10× too coarse). Recognition-independent; `clean_ws` CER stays 0.099 (whitespace-normalized), while the whitespace-sensitive raw CER improved 0.257 → 0.176 against the indentation-preserving ground truth.
 - **Vertical spacing reconstruction** (`_join_lines_with_vertical_gaps`): blank lines are reinserted where the vertical gap between consecutive lines exceeds the normal line pitch (quantized, capped at `MAX_BLANK_LINES`), so the extraction reproduces the student's blank-line layout. Also whitespace-neutral to `clean_ws`. Two-column pages are handled for free (the left→right seam is a negative gap → no blank lines).
 - **Removed the unused OCR-review suggestions backend** (commit `43addce`): `c_code_suggestions.py`, `_build_line_details`, `_attach_suggestion_reasons`, the `line_details`/`review_suggestions`/`review_diagnostics` API fields, the `evaluate_cer` suggestion report, and `suggestion_improves_reference`. The flagging UI it fed lives only on the unmerged experiment branch, so it was dead weight on this branch. Extraction output and CER are unchanged.
 - Full end-to-end held-out CER remains **clean_ws 0.099** through all of the above (verified via `evaluate_cer`).
 
 ## OCR local-gutter continuations (2026-09-12)
+
+> **Owner:** Nombrado
 
 - `_sever_displaced_regions` runs only when `_detect_two_columns` does not find a column split. The existing two-column path, including the green_writer10 24-left / 23-right split, is retained.
 - A continuation requires at least three consecutive visual rows with aligned right fragments and a positive, uncrossed local gutter. The calibrated gap and alignment multipliers remain 0.8 and 1.2; two-row blocks remain unchanged.
@@ -106,6 +130,8 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 
 ## OCR banded column detection (2026-09-13)
 
+> **Owner:** Nombrado
+
 - `_detect_banded_column` generalizes the two-column split to a **partial-height** right block — a two-page / side-by-side capture whose continuation fills only the top-right quadrant, where a stray wide line bridges the full-page x-projection so `_detect_two_columns` reports no gutter. It runs **only when `_detect_two_columns` returns None**, so green_writer10 keeps the full-height path (24-left / 23-right, unchanged) and banded never runs on it.
 - Pure geometry and grade-safe: it builds a right cluster by x0 (running-median membership, `BAND_X_ALIGN_MULTIPLIER = 2.0` × median width), requires ≥ `MIN_BAND_ROWS = 3` distinct visual rows, and requires a clean, uncrossed gutter within the cluster's own y-band (`BAND_GUTTER_MIN = max(1.5 × median width, 60px)`). If all hold it reads left column fully, then right column fully. Only whole detected pieces move by position — no character is added, edited, split, or dropped — and any degenerate/ambiguous geometry (missing boxes, no clean band, a crossed/negative gutter) returns None, i.e. today's behavior.
 - Measured on the real pipeline against `datasets/verified/labels.csv`: `green_writer18_B2_2` clean_ws CER improved **0.147 → 0.042** (ordering only; the residual is recognition error), while `green_writer27_B1_3` stayed **0.342 → 0.342** (its right cluster is short of the row/gutter thresholds). Live `evaluate_cer` is unchanged at clean_ws **0.099**, clean WER **0.328**, clean token accuracy **0.716** — no held-out `samples/` page has this layout, so this is a real-submission-fidelity win, not a headline mover.
@@ -114,6 +140,8 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 
 ## Format button: complete C indentation (2026-09-13)
 
+> **Owner:** Nombrado
+
 - The teacher's Format button (`CodeEditorComponent.reindent()` in `maistra_web`) was extended from brace-depth-only to **all of C's indentation rules**: (1) brace nesting, (2) `switch`/`case` — labels at the switch's content level, bodies one deeper (tracked as a per-switch case-body level; handles nesting and Allman brace placement), (3) line continuation — a line reached with unbalanced `(`/`[` indents one deeper, (4) `goto` labels — one level out, (5) preprocessor (`#…`) — column 0.
 - **Whitespace-only and grade-safe by construction.** It strips ONLY leading whitespace; trailing and every other character are emitted verbatim, so Format re-derives indentation purely from the braces already in the buffer and can never change the student's code content. The original extraction (`extractedText`) is untouched — Format edits only the editable working copy (`editableText`) as one undoable edit. It is a predictable reindenter, not a beautifier: no line reflow, brace insertion, or intra-line spacing changes (that would alter code characters, which a grading app must not do).
 - Extraction is now paper-faithful (it reconstructs the student's handwritten indentation/spacing), so Format is the on-demand "make it IDE-structured" normalization on top of that — and it is only as correct as the braces in the buffer, so the teacher's edit pass remains the correctness guarantee.
@@ -121,11 +149,15 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 
 ## OCR pipeline split into `core/layout.py` (2026-09-13)
 
+> **Owner:** Nombrado
+
 - `core/ocr_pipeline.py` had grown past **1,200 lines**, so the pure reading-order / indentation geometry was extracted into a new sibling module `core/layout.py` along the file's natural dependency seam (commit `f99732c`). **`ocr_pipeline.py`** (~275 lines) keeps recognition + orchestration (model construction, `warmup`, `REC_SCORE_FLOOR`, `_filter_low_confidence`, `_recognize_preprocessed`, `extract_text_from_image`) and is the only half that imports `cv2`/`numpy`/`paddleocr`. **`core/layout.py`** (~960 lines) holds all the geometry: `_group_detection_records`, the two-column / banded / severance detectors, brace-depth reassembly, `_group_structured_lines`, `line_member_bounds`, and indentation/blank-line reconstruction — pure stdlib + `core.numeric`/`core.c_literals`, so it loads in tests without the recognizer.
 - **Behavior-preserving, not a rewrite:** function bodies were moved by exact line range, never retyped; no logic changed. `ocr_pipeline.py` re-exports the geometry names, so `from core.ocr_pipeline import _group_detection_records` (tests, `evaluators/build_recognition_dataset.py`) still works. Geometry unit tests load `core.layout` directly (`load_layout()`) so `patch.object` targets the module where the functions call one another — patching a re-export would not intercept those internal calls.
 - Verified four ways: (1) an AST check confirms all **41** top-level definitions are byte-for-byte identical between the pre-split file and the post-split `ocr_pipeline.py` + `layout.py`; (2) running the real fine-tuned OCR on the gate set with the pre-split vs post-split code produced **byte-for-byte identical** `evaluate_cer` output (every per-file row and aggregate — clean_ws CER **0.099**, clean WER **0.328**, clean token accuracy **0.716**, green_writer10 clean_ws **0.061**); (3) full Python suite **148/148**; (4) all pipeline callers (`main`, `try_config`, `compare_config`, the three evaluators, `build_recognition_dataset`) import cleanly and the re-exports are the same objects as `layout`'s definitions.
 
 ## Code cleanup completed
+
+> **Owner:** Shared (Jayrald + Nombrado)
 
 - Removed the unused Supabase realtime callback parameter.
 - Replaced `questions: any[]` with a typed question collection.
@@ -137,6 +169,8 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - Added a method-level guard so grading cannot be opened without both student code and a question.
 
 ## Submission tests
+
+> **Owner:** Jayrald (submissions workflow tests); Nombrado (OCR-failure / extraction test cases)
 
 Focused tests now cover:
 
@@ -158,11 +192,15 @@ Focused tests now cover:
 
 ## Setup documentation
 
+> **Owner:** Jayrald
+
 - `JUDGE0_UBUNTU_DOCKER_SETUP.md` explains how to deploy Judge0 CE on an Ubuntu VM with Docker, connect through SSH, configure cgroups, set `AUTHN_TOKEN` and `AUTHZ_TOKEN`, and connect mAIstra.
 - `SUPABASE_LOCAL_SETUP.md` explains local Supabase development.
 - `SUPABASE_CLOUD_LOCAL_SWITCHING.md` explains switching between local and hosted Supabase environments.
 
 ## Verification status
+
+> **Owner:** Shared
 
 - Angular application TypeScript compilation passes.
 - The focused submission-list test file passes isolated TypeScript validation.
@@ -171,6 +209,8 @@ Focused tests now cover:
 - Repository-wide spec type-checking currently also reports an unrelated missing Node `fs` type used by `question-form.spec.ts`.
 
 ## Important security work
+
+> **Owner:** Shared
 
 Before deploying mAIstra beyond a trusted development environment:
 
@@ -184,6 +224,8 @@ Before deploying mAIstra beyond a trusted development environment:
 - Add missing migrations for application columns such as `question_type`, `topic`, and `question_id`.
 
 ## Recommended next steps
+
+> **Owner:** Shared
 
 1. Rotate the exposed Supabase service-role key and correct the frontend key.
 2. Add and verify Supabase migrations and RLS policies.
