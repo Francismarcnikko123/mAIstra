@@ -63,6 +63,18 @@ def load_pipeline_without_models():
     module_name = "ocr_pipeline_grouping_test_module"
     spec = importlib.util.spec_from_file_location(module_name, PIPELINE_PATH)
     module = importlib.util.module_from_spec(spec)
+
+    # The reading-order/indentation geometry lives in core.layout, which
+    # ocr_pipeline imports (and re-exports) at module load. layout is pure --
+    # it only pulls core.numeric / core.c_literals (registered below) -- so it
+    # loads without the recognizer. Exec it inside the patched sys.modules,
+    # before ocr_pipeline, so its `from core.numeric import ...` and
+    # ocr_pipeline's `from core.layout import ...` both resolve to real modules.
+    layout_spec = importlib.util.spec_from_file_location(
+        "core.layout", PIPELINE_PATH.parent / "layout.py"
+    )
+    layout = importlib.util.module_from_spec(layout_spec)
+
     stubs = {
         "cv2": cv2,
         "numpy": numpy,
@@ -73,12 +85,55 @@ def load_pipeline_without_models():
         "core.debug_artifact": debug_artifact,
         "core.c_code_cleanup": c_code_cleanup,
         "core.c_literals": c_literals,
+        "core.layout": layout,
         module_name: module,
     }
     with patch.dict(sys.modules, stubs):
+        assert layout_spec.loader is not None
+        layout_spec.loader.exec_module(layout)
+        setattr(core_pkg, "layout", layout)
         assert spec.loader is not None
         spec.loader.exec_module(module)
     return module
+
+
+def load_layout():
+    """Load core.layout (the pure reading-order / indentation geometry) in
+    isolation, without the recognizer. layout imports only core.numeric and
+    core.c_literals, so no cv2/numpy/paddleocr stubs are needed.
+
+    Geometry test classes load THIS module rather than ocr_pipeline: ocr_pipeline
+    only re-exports these functions, and patch.object on a re-export would not
+    intercept layout's internal calls (e.g. _group_detection_records calling
+    _detect_banded_column). Patching on layout targets the real call site."""
+    core_pkg = types.ModuleType("core")
+
+    def load_real(name):
+        spec = importlib.util.spec_from_file_location(
+            f"core.{name}", PIPELINE_PATH.parent / f"{name}.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        setattr(core_pkg, name, module)
+        return module
+
+    numeric = load_real("numeric")
+    c_literals = load_real("c_literals")
+
+    layout_spec = importlib.util.spec_from_file_location(
+        "core.layout", PIPELINE_PATH.parent / "layout.py"
+    )
+    layout = importlib.util.module_from_spec(layout_spec)
+    stubs = {
+        "core": core_pkg,
+        "core.numeric": numeric,
+        "core.c_literals": c_literals,
+        "core.layout": layout,
+    }
+    with patch.dict(sys.modules, stubs):
+        assert layout_spec.loader is not None
+        layout_spec.loader.exec_module(layout)
+    return layout
 
 
 def box(x, y_center):
@@ -164,7 +219,7 @@ WRITER27_BOXES = [
 class GroupDetectionRecordsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.pipeline = load_pipeline_without_models()
+        cls.pipeline = load_layout()
 
     def group_lines(self, texts, boxes, scores=None):
         if scores is None:
@@ -411,7 +466,7 @@ class GroupDetectionRecordsTests(unittest.TestCase):
 class DynamicGutterGroupingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.pipeline = load_pipeline_without_models()
+        cls.pipeline = load_layout()
 
     def inspect_grouping(self, texts, boxes):
         # Isolate trace flags from both later reordering passes. The geometry
@@ -564,7 +619,7 @@ class DynamicGutterGroupingTests(unittest.TestCase):
 class TwoColumnDetectionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.pipeline = load_pipeline_without_models()
+        cls.pipeline = load_layout()
 
     @staticmethod
     def _col(x0, x1, rows, y0=0, step=40):
@@ -604,7 +659,7 @@ class TwoColumnDetectionTests(unittest.TestCase):
 class RealSampleTwoColumnTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.pipeline = load_pipeline_without_models()
+        cls.pipeline = load_layout()
         # Frozen from the debug artifact for samples/greenbook/
         # green_writer10_B2_1.jpg; no models or ignored outputs are needed.
         fixture = Path(__file__).parent / "fixtures" / "green_writer10_detections.json"
@@ -844,7 +899,7 @@ class RecognitionConsensusPipelineTests(unittest.TestCase):
 class BraceDeltaTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.pipeline = load_pipeline_without_models()
+        cls.pipeline = load_layout()
 
     def test_counts_a_single_opener(self):
         self.assertEqual(self.pipeline._brace_delta("void f() {"), 1)
@@ -883,7 +938,7 @@ class DisplacedSeveranceTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.pipeline = load_pipeline_without_models()
+        cls.pipeline = load_layout()
 
     @staticmethod
     def _line(*members):
@@ -1115,7 +1170,7 @@ class BandedColumnDetectionTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.pipeline = load_pipeline_without_models()
+        cls.pipeline = load_layout()
 
     @staticmethod
     def _items(boxes):
@@ -1260,7 +1315,7 @@ class BandedColumnDetectionTests(unittest.TestCase):
 class ReassembleDisplacedRegionsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.pipeline = load_pipeline_without_models()
+        cls.pipeline = load_layout()
 
     def texts_of(self, lines):
         return [line["members"][0]["text"] for line in lines]
@@ -1494,7 +1549,7 @@ def load_green_writer10_fixture():
 
 
 def demo_reassembly(case_name):
-    pipeline = load_pipeline_without_models()
+    pipeline = load_layout()
     cases = {
         "rbnode": ("RBNode rotate_rb", rbnode_reassembly_lines),
         "compressor": ("Compressor pack_flags", compressor_reassembly_lines),
@@ -1525,7 +1580,7 @@ def demo_reassembly(case_name):
 
 
 def demo_two_column():
-    pipeline = load_pipeline_without_models()
+    pipeline = load_layout()
     rec_texts, rec_scores, rec_boxes = load_green_writer10_fixture()
     items = [
         {
@@ -1571,7 +1626,7 @@ def demo_two_column():
 class IndentationReconstructionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.pipeline = load_pipeline_without_models()
+        cls.pipeline = load_layout()
 
     def test_assign_indent_levels_measures_from_column_left(self):
         p = self.pipeline
@@ -1668,7 +1723,7 @@ class IndentationReconstructionTests(unittest.TestCase):
 class VerticalSpacingReconstructionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.pipeline = load_pipeline_without_models()
+        cls.pipeline = load_layout()
 
     @staticmethod
     def sline(text, y_center, h=0.02):
