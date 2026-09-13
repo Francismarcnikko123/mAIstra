@@ -578,6 +578,11 @@ describe('SubmissionsListComponent save feedback', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     selectSubmission(component, 'submission-1');
     component.reviewStep = 2;
+    // selectSubmission seeds editableText but not extractedText; mark them equal
+    // so there are no unsaved edits and extractText() proceeds to the OCR call
+    // instead of opening the re-extract confirmation dialog.
+    component.extractedText['submission-1'] =
+      component.editableText['submission-1'];
 
     await component.extractText();
 
