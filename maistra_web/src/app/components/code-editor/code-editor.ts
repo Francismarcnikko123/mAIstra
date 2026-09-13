@@ -92,9 +92,10 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
    * single undoable edit (Ctrl+Z reverts it). Because it keys off braces, it's
    * only as correct as the braces in the buffer; OCR frequently misreads `}`
    * (see the OCR brace error profile), so it's most useful after the teacher
-   * has fixed the braces, not before. Not brace-aware of `switch`/`case`
-   * labels or line-continuations — a simple, predictable reindent, not a full
-   * C beautifier.
+   * has fixed the braces, not before. It covers all of C's indentation (brace
+   * depth, `switch`/`case`, line continuations, labels, preprocessor) but stays
+   * a predictable reindent, not a full C beautifier — it never changes
+   * intra-line spacing, wraps lines, or inserts/removes braces.
    */
   format(): void {
     if (!this.editor) return;
@@ -113,29 +114,86 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   /**
-   * Pure brace-depth reindenter. Braces inside string/char literals and `//`
-   * or block comments are ignored so they don't shift the indent level. A line
-   * that starts by closing a block dedents itself.
+   * Complete C indentation reindenter -- whitespace-only. It rewrites ONLY the
+   * leading whitespace of each line; every other character is emitted verbatim,
+   * so it can never change the student's code content. It covers all of C's
+   * indentation rules:
+   *   1. Brace nesting: `{` opens a level, `}` closes; a line starting with `}`
+   *      dedents itself.
+   *   2. switch/case: `case`/`default:` labels sit at the switch's content
+   *      level, their bodies one level deeper (case labels are not brace-scoped,
+   *      so they are tracked as a per-switch "case body open" level).
+   *   3. Line continuation: a line reached with unbalanced `(`/`[` open from
+   *      prior lines is a continuation and indents one level deeper.
+   *   4. Labels: a bare `goto` target (`name:`) sits one level out.
+   *   5. Preprocessor: a line starting with `#` sits at column 0 and is opaque
+   *      (does not affect brace/continuation state).
+   * Braces/parens inside string/char literals and `//` or block comments are
+   * ignored. Degenerate input (unbalanced braces) never throws. It remains a
+   * predictable reindenter, NOT a full beautifier: it never reflows lines,
+   * inserts/removes braces, or changes intra-line spacing.
    */
+  private static readonly CASE_LABEL = /^(case\b[^:]*|default)\s*:/;
+  private static readonly GOTO_LABEL = /^[A-Za-z_]\w*\s*:\s*$/;
+
   private static reindent(source: string, unit = '  '): string {
     const out: string[] = [];
-    let depth = 0;
+    // One frame per open `{ }` block; caseOpen adds a body level inside a switch.
+    const frames: { isSwitch: boolean; caseOpen: boolean }[] = [];
+    let contDepth = 0; // net unclosed ( or [ carried from prior lines
+    let pendingSwitch = false; // a `switch` whose `{` is on a later line
     let inBlockComment = false;
 
     for (const raw of source.split('\n')) {
-      const trimmed = raw.trim();
+      // Strip ONLY leading whitespace -- trailing whitespace and every other
+      // character are preserved verbatim, so reindent changes nothing but a
+      // line's indentation.
+      const trimmed = raw.replace(/^\s+/, '');
       if (trimmed === '') {
         out.push('');
         continue;
       }
 
-      // A line whose first real character closes a block sits one level out.
+      const caseOpen = frames.reduce((n, f) => n + (f.caseOpen ? 1 : 0), 0);
+      const blockLevel = frames.length + caseOpen;
+      const top = frames[frames.length - 1];
       const startsWithClose = !inBlockComment && trimmed[0] === '}';
-      const lineDepth = Math.max(0, depth - (startsWithClose ? 1 : 0));
-      out.push(unit.repeat(lineDepth) + trimmed);
+      const isCaseLabel = CodeEditorComponent.CASE_LABEL.test(trimmed);
 
-      // Walk the line to update depth for the lines below, skipping any braces
-      // that live inside literals or comments.
+      let level: number;
+      if (!inBlockComment && trimmed[0] === '#') {
+        // Rule 5: preprocessor -> column 0, opaque (no state change).
+        out.push(trimmed);
+        continue;
+      } else if (startsWithClose) {
+        // Rule 1 close: dedent for the brace, and for an open case body if this
+        // `}` closes the switch.
+        const closesCaseBody = !!top && top.isSwitch && top.caseOpen;
+        level = Math.max(0, blockLevel - 1 - (closesCaseBody ? 1 : 0));
+      } else if (top && top.isSwitch && isCaseLabel) {
+        // Rule 2: label at the switch's content level; dedent past a body that
+        // is already open.
+        level = Math.max(0, blockLevel - (top.caseOpen ? 1 : 0));
+      } else if (CodeEditorComponent.GOTO_LABEL.test(trimmed)) {
+        // Rule 4: a goto label sits one level out.
+        level = Math.max(0, blockLevel - 1);
+      } else {
+        // Rule 1 statement + Rule 3 continuation.
+        level = Math.max(0, blockLevel + (contDepth > 0 ? 1 : 0));
+      }
+      out.push(unit.repeat(level) + trimmed);
+
+      // A case/default label opens a body level for the lines beneath it.
+      if (top && top.isSwitch && isCaseLabel) {
+        top.caseOpen = true;
+      }
+
+      // Walk the line to update block/continuation state for the lines below,
+      // skipping braces/parens inside literals and comments. A `switch` keyword
+      // on this line (or pending from a prior line) marks the next `{` as a
+      // switch body.
+      let switchMark: boolean =
+        !inBlockComment && (/\bswitch\b/.test(trimmed) || pendingSwitch);
       let inString: string | null = null;
       for (let i = 0; i < trimmed.length; i++) {
         const ch = trimmed[i];
@@ -165,9 +223,19 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
           inString = ch;
           continue;
         }
-        if (ch === '{') depth++;
-        else if (ch === '}') depth = Math.max(0, depth - 1);
+        if (ch === '{') {
+          frames.push({ isSwitch: switchMark, caseOpen: false });
+          switchMark = false; // only the first brace after `switch` is its body
+        } else if (ch === '}') {
+          frames.pop();
+        } else if (ch === '(' || ch === '[') {
+          contDepth++;
+        } else if (ch === ')' || ch === ']') {
+          contDepth = Math.max(0, contDepth - 1);
+        }
       }
+      // A `switch` seen with no `{` yet stays pending for a later-line brace.
+      pendingSwitch = switchMark;
     }
     return out.join('\n');
   }
