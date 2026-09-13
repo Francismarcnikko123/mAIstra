@@ -15,6 +15,7 @@ mAIstra captures handwritten C programming submissions, extracts code through OC
 ## Documentation
 
 - [Project overview and changes](docs/PROJECT_OVERVIEW_AND_CHANGES.md)
+- [Real handwriting margin validation](ocr_feature/reports/2026-09-13-real-margin-validation.md)
 - [Judge0 Ubuntu Docker setup](docs/setup/JUDGE0_UBUNTU_DOCKER_SETUP.md)
 - [Supabase local setup](docs/setup/SUPABASE_LOCAL_SETUP.md)
 - [Switching between local and cloud Supabase](docs/setup/SUPABASE_CLOUD_LOCAL_SWITCHING.md)

@@ -155,6 +155,18 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - **Behavior-preserving, not a rewrite:** function bodies were moved by exact line range, never retyped; no logic changed. `ocr_pipeline.py` re-exports the geometry names, so `from core.ocr_pipeline import _group_detection_records` (tests, `evaluators/build_recognition_dataset.py`) still works. Geometry unit tests load `core.layout` directly (`load_layout()`) so `patch.object` targets the module where the functions call one another — patching a re-export would not intercept those internal calls.
 - Verified four ways: (1) an AST check confirms all **41** top-level definitions are byte-for-byte identical between the pre-split file and the post-split `ocr_pipeline.py` + `layout.py`; (2) running the real fine-tuned OCR on the gate set with the pre-split vs post-split code produced **byte-for-byte identical** `evaluate_cer` output (every per-file row and aggregate — clean_ws CER **0.099**, clean WER **0.328**, clean token accuracy **0.716**, green_writer10 clean_ws **0.061**); (3) full Python suite **148/148**; (4) all pipeline callers (`main`, `try_config`, `compare_config`, the three evaluators, `build_recognition_dataset`) import cleanly and the re-exports are the same objects as `layout`'s definitions.
 
+## OCR real handwriting margin calibration (2026-09-13)
+
+> **Owner:** Nombrado
+
+- Validated three original 1536×2048 handwriting photos through the live fine-tuned pipeline, preserving unedited detections as `writerX_marginA/B/C_detections.json`. A already reads left-then-margin via two-column detection; B/C now do so through banded detection.
+- Changed only `BAND_GUTTER_MIN_MULTIPLIER` **1.5 → 0.5**, retaining its 60px floor, three-row persistence, x-alignment and uncrossed-band guards. B/C's confirmed band gutters are **108px / 189px = 0.571** and **171px / 138px = 1.239** median widths. Full-page gutters are A/B/C **157/67/48 processed px**; these must not be confused with band gutters.
+- Kept `REGION_GAP_MULTIPLIER=0.75`, the historical 6.0 merge threshold, and every severance constant. Lowering the region seed did not fix these captures. All handwritten rows are single OCR boxes, so the confirmed within-line gap distribution is empty and provides no new seed calibration evidence.
+- **16/16 braces survived OCR**, including B's initializer pair, but brace reassembly still made no move. The old B trace missed the final margin close; C's left-drifting closers collapsed its trace gutter. Recognition is necessary but not sufficient for this path.
+- Old/new grouping is identical across **315 historical artifacts / 262 distinct detection payloads**; live detections on the three new photos also match exactly before/after. Fabric false positives and OCR spelling errors remain untouched for teacher verification.
+- Full Python suite **157 passed** (148 + 9). The trace-only test helper now disables banded interception; the original 12/13-line cap inputs and assertions are unchanged. Live 20-sample evaluator retains clean_ws CER **0.099**, clean WER **0.328**, clean token accuracy **0.716**, green_writer10 clean_ws **0.061**, with identical printed per-file tables.
+- Complete boxes, raw/cleaned extractions, mechanism traces, brace audit, gap measurements and reproduction steps: [real margin validation](../ocr_feature/reports/2026-09-13-real-margin-validation.md).
+
 ## Code cleanup completed
 
 > **Owner:** Shared (Jayrald + Nombrado)

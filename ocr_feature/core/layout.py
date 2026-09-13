@@ -68,7 +68,14 @@ MIN_COLUMN_VSPAN_FRACTION = 0.5
 # docs/superpowers/specs/2026-09-12-banded-column-detection-design.md.
 MIN_BAND_ROWS = 3                 # distinct visual rows the right cluster must occupy
 BAND_X_ALIGN_MULTIPLIER = 2.0     # x0 drift from the cluster median to join the right cluster
-BAND_GUTTER_MIN_MULTIPLIER = 1.5  # min clean gutter within the band, in median widths
+# Real writerX margin B/C photos (2026-09-13): clean band gutters are
+# 108px / 189px = 0.571 widths and 171px / 138px = 1.239 widths. The former
+# 1.5 rejected both despite intact braces and confirmed separate columns.
+# Use 0.5 with the unchanged 60px floor, persistence and uncrossed-band gates.
+# All 315 historical artifact replays and live held-out metrics are unchanged.
+# REGION_GAP_MULTIPLIER remains 0.75: it only seeds tracing and lowering it
+# does not fix these pages. See reports/2026-09-13-real-margin-validation.md.
+BAND_GUTTER_MIN_MULTIPLIER = 0.5  # min clean gutter within the band, in median widths
 BAND_GUTTER_MIN_FLOOR = 60.0      # px floor for the gutter
 
 # Reconstruct the student's handwritten indentation from box geometry -- NOT

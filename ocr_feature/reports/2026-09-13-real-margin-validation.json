@@ -1,0 +1,638 @@
+{
+  "date": "2026-09-13",
+  "baseline_commit": "4b94869",
+  "model": "models/fine_tuned_rec/inference",
+  "recognition_weights_sha256": "b5fa28ffa3e22066787f7a8bd2f4cba2c3b808922acc20a6eb1dded3e45b97b7",
+  "change": {
+    "BAND_GUTTER_MIN_MULTIPLIER": {
+      "before": 1.5,
+      "after": 0.5
+    }
+  },
+  "unchanged": {
+    "REGION_GAP_MULTIPLIER": 0.75,
+    "BASELINE_REGION_GAP_MULTIPLIER": 6.0,
+    "BAND_GUTTER_MIN_FLOOR": 60.0,
+    "MIN_BAND_ROWS": 3,
+    "BAND_X_ALIGN_MULTIPLIER": 2.0,
+    "SEVER_GAP_MULTIPLIER": 0.8,
+    "SEVER_X_ALIGN_MULTIPLIER": 1.2,
+    "MIN_SEVER_ROWS": 3
+  },
+  "corpus": {
+    "artifacts": 315,
+    "distinct_detection_payloads": 262,
+    "changed": [],
+    "manifest_sha256": "9d40add8e557e484a8ce2fdecc84b2b1dca65bb3fd5f678550a9b30679e5cdc0"
+  },
+  "photos": [
+    {
+      "photo": "writerX_marginA",
+      "source_basename": "Unknown-3.jpg",
+      "source_sha256": "8568332d376c4ab691655a04d96bf7410289fb09e42190b49f73f016c4df7211",
+      "original_size": [
+        1536,
+        2048
+      ],
+      "processed_size": [
+        1200,
+        1600
+      ],
+      "left_ids": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        9,
+        11,
+        12,
+        13,
+        14
+      ],
+      "margin_ids": [
+        1,
+        3,
+        5,
+        7,
+        10
+      ],
+      "fabric_ids": [],
+      "median_width_px": 120,
+      "left_right_edge_px": 688,
+      "margin_left_edge_px": 845,
+      "cross_region_gap_px": 157,
+      "cross_region_gap_original_px": 200.96,
+      "cross_region_gap_widths": 1.3083333333333333,
+      "band_y_px": [
+        262,
+        500
+      ],
+      "band_left_right_edge_px": 678,
+      "band_gap_px": 167,
+      "band_gap_widths": 1.3916666666666666,
+      "within_column_same_handwritten_line_gaps_px": [],
+      "brace_detection_ids": {
+        "open": [
+          2,
+          6
+        ],
+        "close": [
+          5,
+          10
+        ]
+      },
+      "before": {
+        "events": [
+          {
+            "function": "_detect_two_columns",
+            "accepted": true,
+            "gutter": 766.5
+          },
+          {
+            "function": "_reassemble_displaced_regions",
+            "changed": false,
+            "flagged_lines": 0
+          },
+          {
+            "function": "_reassemble_displaced_regions",
+            "changed": false,
+            "flagged_lines": 0
+          },
+          {
+            "function": "_group_detection_records",
+            "safe": true,
+            "line_count": 15
+          }
+        ],
+        "row_ids": [
+          [
+            0
+          ],
+          [
+            2
+          ],
+          [
+            4
+          ],
+          [
+            6
+          ],
+          [
+            8
+          ],
+          [
+            9
+          ],
+          [
+            11
+          ],
+          [
+            12
+          ],
+          [
+            13
+          ],
+          [
+            14
+          ],
+          [
+            1
+          ],
+          [
+            3
+          ],
+          [
+            5
+          ],
+          [
+            7
+          ],
+          [
+            10
+          ]
+        ],
+        "raw_text": "#include <stdio.h>\n  int main(void) {\n      int n = 2\n      swstch (n) {\n      case 1\n          printf(\"onte\\n\");\n          break;\n      case 2;\n          printf(\"two\\n\");\n          breask;\n  depault\n\n  printf(\"none\\n\");\n  }\n  return 0;\n}",
+        "cleaned_text": "#include <stdio.h>\n  int main(void) {\n      int n = 2\n      swstch (n) {\n      case 1\n          printf(\"onte\\n\");\n          break;\n      case 2;\n          printf(\"two\\n\");\n          breask;\n  depault\n\n  printf(\"none\\n\");\n  }\n  return 0;\n}"
+      },
+      "after": {
+        "events": [
+          {
+            "function": "_detect_two_columns",
+            "accepted": true,
+            "gutter": 766.5
+          },
+          {
+            "function": "_reassemble_displaced_regions",
+            "changed": false,
+            "flagged_lines": 0
+          },
+          {
+            "function": "_reassemble_displaced_regions",
+            "changed": false,
+            "flagged_lines": 0
+          },
+          {
+            "function": "_group_detection_records",
+            "safe": true,
+            "line_count": 15
+          }
+        ],
+        "row_ids": [
+          [
+            0
+          ],
+          [
+            2
+          ],
+          [
+            4
+          ],
+          [
+            6
+          ],
+          [
+            8
+          ],
+          [
+            9
+          ],
+          [
+            11
+          ],
+          [
+            12
+          ],
+          [
+            13
+          ],
+          [
+            14
+          ],
+          [
+            1
+          ],
+          [
+            3
+          ],
+          [
+            5
+          ],
+          [
+            7
+          ],
+          [
+            10
+          ]
+        ],
+        "raw_text": "#include <stdio.h>\n  int main(void) {\n      int n = 2\n      swstch (n) {\n      case 1\n          printf(\"onte\\n\");\n          break;\n      case 2;\n          printf(\"two\\n\");\n          breask;\n  depault\n\n  printf(\"none\\n\");\n  }\n  return 0;\n}",
+        "cleaned_text": "#include <stdio.h>\n  int main(void) {\n      int n = 2\n      swstch (n) {\n      case 1\n          printf(\"onte\\n\");\n          break;\n      case 2;\n          printf(\"two\\n\");\n          breask;\n  depault\n\n  printf(\"none\\n\");\n  }\n  return 0;\n}"
+      },
+      "dropped_low_confidence": [
+        {
+          "text": "",
+          "score": 0.0,
+          "box": [
+            941,
+            293,
+            1124,
+            336
+          ]
+        },
+        {
+          "text": "",
+          "score": 0.0,
+          "box": [
+            4,
+            632,
+            13,
+            645
+          ]
+        }
+      ]
+    },
+    {
+      "photo": "writerX_marginB",
+      "source_basename": "Unknown-2.jpg",
+      "source_sha256": "7f0bd776510ff460a0513c23f8e67cb29fb53fe1a0858189b8b7514272164351",
+      "original_size": [
+        1536,
+        2048
+      ],
+      "processed_size": [
+        1200,
+        1600
+      ],
+      "left_ids": [
+        1,
+        3,
+        5,
+        8,
+        9,
+        10
+      ],
+      "margin_ids": [
+        0,
+        2,
+        4,
+        6
+      ],
+      "fabric_ids": [
+        7
+      ],
+      "median_width_px": 189,
+      "left_right_edge_px": 802,
+      "margin_left_edge_px": 869,
+      "cross_region_gap_px": 67,
+      "cross_region_gap_original_px": 85.76,
+      "cross_region_gap_widths": 0.3544973544973545,
+      "band_y_px": [
+        247,
+        398
+      ],
+      "band_left_right_edge_px": 761,
+      "band_gap_px": 108,
+      "band_gap_widths": 0.5714285714285714,
+      "within_column_same_handwritten_line_gaps_px": [],
+      "brace_detection_ids": {
+        "open": [
+          3,
+          5,
+          9
+        ],
+        "close": [
+          5,
+          0,
+          6
+        ]
+      },
+      "before": {
+        "events": [
+          {
+            "function": "_detect_two_columns",
+            "accepted": false,
+            "gutter": null
+          },
+          {
+            "function": "_detect_banded_column",
+            "accepted": false,
+            "gutter": null
+          },
+          {
+            "function": "_trace_displaced_region",
+            "accepted_detections": 3
+          },
+          {
+            "function": "_reassemble_displaced_regions",
+            "changed": false,
+            "flagged_lines": 3
+          },
+          {
+            "function": "_sever_displaced_regions",
+            "changed": false,
+            "flagged_lines": 3
+          },
+          {
+            "function": "_group_detection_records",
+            "safe": true,
+            "line_count": 9
+          }
+        ],
+        "row_ids": [
+          [
+            0
+          ],
+          [
+            1
+          ],
+          [
+            2
+          ],
+          [
+            4
+          ],
+          [
+            3
+          ],
+          [
+            7,
+            5,
+            6
+          ],
+          [
+            8
+          ],
+          [
+            9
+          ],
+          [
+            10
+          ]
+        ],
+        "raw_text": "                }\n        # include <stdio.h>\n                printf(\"%d\\n\", sunt);\n                return 0;\n          int main(void) {\ndd; int a[5] = {2, 4, 6, 8, 70}; }\n              int sum = 0;\n              for (int i = 0; i < 5; i++) {\n\n                sum + = a[i];",
+        "cleaned_text": "                }\n#include <stdio.h>\n                printf(\"%d\\n\", sunt);\n                return 0;\n          int main(void) {\ndd; int a[5] = {2, 4, 6, 8, 70}; }\n              int sum = 0;\n              for (int i = 0; i < 5; i++) {\n\n                sum + = a[i];"
+      },
+      "after": {
+        "events": [
+          {
+            "function": "_detect_two_columns",
+            "accepted": false,
+            "gutter": null
+          },
+          {
+            "function": "_detect_banded_column",
+            "accepted": true,
+            "gutter": 815.0
+          },
+          {
+            "function": "_trace_displaced_region",
+            "accepted_detections": 0
+          },
+          {
+            "function": "_reassemble_displaced_regions",
+            "changed": false,
+            "flagged_lines": 0
+          },
+          {
+            "function": "_reassemble_displaced_regions",
+            "changed": false,
+            "flagged_lines": 0
+          },
+          {
+            "function": "_group_detection_records",
+            "safe": true,
+            "line_count": 10
+          }
+        ],
+        "row_ids": [
+          [
+            1
+          ],
+          [
+            3
+          ],
+          [
+            7,
+            5
+          ],
+          [
+            8
+          ],
+          [
+            9
+          ],
+          [
+            10
+          ],
+          [
+            0
+          ],
+          [
+            2
+          ],
+          [
+            4
+          ],
+          [
+            6
+          ]
+        ],
+        "raw_text": "        # include <stdio.h>\n          int main(void) {\ndd; int a[5] = {2, 4, 6, 8, 70};\n              int sum = 0;\n              for (int i = 0; i < 5; i++) {\n                sum + = a[i];\n  }\n  printf(\"%d\\n\", sunt);\n  return 0;\n}",
+        "cleaned_text": "#include <stdio.h>\n          int main(void) {\ndd; int a[5] = {2, 4, 6, 8, 70};\n              int sum = 0;\n              for (int i = 0; i < 5; i++) {\n                sum + = a[i];\n  }\n  printf(\"%d\\n\", sunt);\n  return 0;\n}"
+      },
+      "dropped_low_confidence": []
+    },
+    {
+      "photo": "writerX_marginC",
+      "source_basename": "Unknown.jpg",
+      "source_sha256": "9ee7f44674078b71a3dbadc87fe575f40bf30c61564db68bb0cb0b527108f051",
+      "original_size": [
+        1536,
+        2048
+      ],
+      "processed_size": [
+        1200,
+        1600
+      ],
+      "left_ids": [
+        2,
+        4,
+        6,
+        8,
+        10,
+        11
+      ],
+      "margin_ids": [
+        1,
+        3,
+        5,
+        7,
+        9
+      ],
+      "fabric_ids": [
+        0
+      ],
+      "median_width_px": 138,
+      "left_right_edge_px": 782,
+      "margin_left_edge_px": 830,
+      "cross_region_gap_px": 48,
+      "cross_region_gap_original_px": 61.44,
+      "cross_region_gap_widths": 0.34782608695652173,
+      "band_y_px": [
+        240,
+        437
+      ],
+      "band_left_right_edge_px": 659,
+      "band_gap_px": 171,
+      "band_gap_widths": 1.2391304347826086,
+      "within_column_same_handwritten_line_gaps_px": [],
+      "brace_detection_ids": {
+        "open": [
+          4,
+          8,
+          10
+        ],
+        "close": [
+          1,
+          5,
+          9
+        ]
+      },
+      "before": {
+        "events": [
+          {
+            "function": "_detect_two_columns",
+            "accepted": false,
+            "gutter": null
+          },
+          {
+            "function": "_detect_banded_column",
+            "accepted": false,
+            "gutter": null
+          },
+          {
+            "function": "_trace_displaced_region",
+            "accepted_detections": 0
+          },
+          {
+            "function": "_reassemble_displaced_regions",
+            "changed": false,
+            "flagged_lines": 0
+          },
+          {
+            "function": "_sever_displaced_regions",
+            "changed": false,
+            "flagged_lines": 0
+          },
+          {
+            "function": "_group_detection_records",
+            "safe": true,
+            "line_count": 8
+          }
+        ],
+        "row_ids": [
+          [
+            0
+          ],
+          [
+            2,
+            1
+          ],
+          [
+            4,
+            3
+          ],
+          [
+            5
+          ],
+          [
+            6,
+            7
+          ],
+          [
+            8,
+            9
+          ],
+          [
+            10
+          ],
+          [
+            11
+          ]
+        ],
+        "raw_text": "od;\n          # inclde <stdio.h> }\n            int main(void) { x++;\n                }\n              int x = 1; return 0;\n              while (+ <= 3) { }\n                if (x % 2 == 0) {\n                printf(\"even %d\\n\", x);",
+        "cleaned_text": "od;\n          # inclde <stdio.h> }\n            int main(void) { x++;\n                }\n              int x = 1; return 0;\n              while (+ <= 3) { }\n                if (x % 2 == 0) {\n                printf(\"even %d\\n\", x);"
+      },
+      "after": {
+        "events": [
+          {
+            "function": "_detect_two_columns",
+            "accepted": false,
+            "gutter": null
+          },
+          {
+            "function": "_detect_banded_column",
+            "accepted": true,
+            "gutter": 744.5
+          },
+          {
+            "function": "_reassemble_displaced_regions",
+            "changed": false,
+            "flagged_lines": 0
+          },
+          {
+            "function": "_reassemble_displaced_regions",
+            "changed": false,
+            "flagged_lines": 0
+          },
+          {
+            "function": "_group_detection_records",
+            "safe": true,
+            "line_count": 12
+          }
+        ],
+        "row_ids": [
+          [
+            0
+          ],
+          [
+            2
+          ],
+          [
+            4
+          ],
+          [
+            6
+          ],
+          [
+            8
+          ],
+          [
+            10
+          ],
+          [
+            11
+          ],
+          [
+            1
+          ],
+          [
+            3
+          ],
+          [
+            5
+          ],
+          [
+            7
+          ],
+          [
+            9
+          ]
+        ],
+        "raw_text": "od;\n          # inclde <stdio.h>\n            int main(void) {\n              int x = 1;\n              while (+ <= 3) {\n                if (x % 2 == 0) {\n                printf(\"even %d\\n\", x);\n    }\n    x++;\n  }\n  return 0;\n}",
+        "cleaned_text": "od;\n          # inclde <stdio.h>\n            int main(void) {\n              int x = 1;\n              while (+ <= 3) {\n                if (x % 2 == 0) {\n                printf(\"even %d\\n\", x);\n    }\n    x++;\n  }\n  return 0;\n}"
+      },
+      "dropped_low_confidence": []
+    }
+  ]
+}

@@ -469,12 +469,13 @@ class DynamicGutterGroupingTests(unittest.TestCase):
         cls.pipeline = load_layout()
 
     def inspect_grouping(self, texts, boxes):
-        # Isolate trace flags from both later reordering passes. The geometry
-        # severance pass has its own end-to-end tests below.
+        # Isolate trace flags from column detection and later reordering.
+        # Banded detection and severance have their own end-to-end tests.
         with patch.object(self.pipeline, "_reassemble_displaced_regions",
                           side_effect=lambda lines: lines) as reassemble, \
              patch.object(self.pipeline, "_sever_displaced_regions",
-                          side_effect=lambda lines, _width: lines):
+                          side_effect=lambda lines, _width: lines), \
+             patch.object(self.pipeline, "_detect_banded_column", return_value=None):
             grouped, safe = self.pipeline._group_detection_records(
                 texts, [0.9] * len(texts), boxes
             )
@@ -543,12 +544,9 @@ class DynamicGutterGroupingTests(unittest.TestCase):
         )
 
     def test_confirmed_window_respects_line_count_cap(self):
-        # A narrow (125px, ~1.25x median width) gutter keeps this a
-        # single-column margin-fragment trace: it is below BAND_GUTTER_MIN
-        # (1.5x median width) so the banded column detector declines, leaving
-        # the displaced-region trace and its line-count cap under test. A wide,
-        # clean gutter here is a real second column and is exercised by
-        # BandedColumnDetectionTests instead.
+        # inspect_grouping disables banded detection so this fixture tests
+        # the trace cap at 12/13 detections independently of band calibration.
+        # Keep the 125px gutter and both original cap assertions unchanged.
         for count in (12, 13):
             with self.subTest(count=count):
                 texts, boxes = [], []
