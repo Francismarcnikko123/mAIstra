@@ -177,6 +177,31 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - The A/B/C real handwriting photos still use geometric ordering (A full two-column, B/C banded). This fallback covers the adjacent failure class learned from that validation: OCR may read the braces correctly while strict geometry still fails to mark the exact displaced block.
 - Tests add the fallback's two critical cases: readable braces can prove a missed right-margin candidate, while the same layout with a misread brace stays unchanged. Full OCR unit suite: **159 passed**. Live `evaluate_cer` remains clean_ws CER **0.099**, clean WER **0.328**, clean token accuracy **0.716**, green_writer10 clean_ws **0.061**. Disabling/enabling the fallback changes **zero** groupings across the existing **315 debug artifacts / 262 distinct detection payloads**.
 
+## OCR continuation association planning (2026-09-14)
+
+> **Owner:** Nombrado
+
+- Planning and tests only; production behavior remains unchanged. The exact live
+  detections from the two-question margin screenshot are preserved as
+  `writerX_two_question_margin_detections.json` (20 unedited detections).
+- Reproduced wrong ordering: the upper-right continuation follows the lower-left
+  question. Full two-column ordering returns before the brace candidate fallback.
+  Correcting only the misread `{else {` in a counterfactual replay does not fix order.
+- Clarification of the earlier brace wording: balanced braces support a hypothesis;
+  they do not prove intended continuation or answer membership. The A/B/C ordering
+  successes do not establish continuation-versus-independent-program classification.
+- Two desired-order tests were run red and are marked expected failures during
+  planning; preservation and early-return characterization tests pass. These markers
+  must be removed when the production fix is implemented, not treated as successes.
+- The proposed next step compares local continuation and independent-answer
+  hypotheses, preserving recognized characters and abstaining on ambiguity. Real
+  independent-answer controls and held-out writers are required before integration.
+- Research sources, exact detection order, test matrix and implementation gates:
+  [continuation association plan](../ocr_feature/reports/2026-09-14-continuation-association-plan.md).
+- Fresh verification: 163 tests executed, 161 passed and 2 expected failures.
+  Live evaluator retains clean_ws CER 0.099, clean WER 0.328, clean token accuracy
+  0.716 and green_writer10 clean_ws CER 0.061.
+
 ## Code cleanup completed
 
 > **Owner:** Shared (Jayrald + Nombrado)
