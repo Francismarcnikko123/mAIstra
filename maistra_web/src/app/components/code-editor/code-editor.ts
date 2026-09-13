@@ -79,11 +79,14 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   /**
-   * Re-indent the current buffer by C brace depth. This is a *display*
-   * convenience for the teacher's editing pass, not part of OCR extraction:
-   * OCR deliberately outputs a faithful, flat transcription (line structure
-   * only, no indentation), and this lets the teacher make it readable on
-   * demand without asserting anything about the student's handwriting.
+   * Re-indent the current buffer to canonical C by brace depth. This is a
+   * *display* normalization the teacher runs on demand, not part of OCR
+   * extraction. Extraction is paper-faithful: it reconstructs the student's
+   * own handwritten indentation and blank-line spacing, so the editor mirrors
+   * the paper -- which need not match how C is written in an IDE. Format
+   * overrides that layout with brace-depth structure so the teacher can read
+   * it as IDE-style C. The original OCR text is kept separately; Format only
+   * touches the editable working copy.
    *
    * It only rewrites leading whitespace — never any other character — and is a
    * single undoable edit (Ctrl+Z reverts it). Because it keys off braces, it's
