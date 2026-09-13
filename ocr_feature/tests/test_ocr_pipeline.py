@@ -1132,10 +1132,8 @@ class BandedColumnDetectionTests(unittest.TestCase):
         median_width = widths[len(widths) // 2] if widths else 0.0
         median_h = heights[len(heights) // 2] if heights else 0.0
         line_tol = max(median_h * 0.6, 1.0)
-        page_top = min(it["y_min"] for it in items)
-        page_bot = max(it["y_max"] for it in items)
         result = self.pipeline._detect_banded_column(
-            items, page_top, page_bot, median_width, line_tol)
+            items, median_width, line_tol)
         return items, result
 
     def test_writer18_bands_the_top_right_block(self):

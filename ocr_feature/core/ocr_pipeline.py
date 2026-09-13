@@ -1,3 +1,4 @@
+import bisect
 import math
 import os
 import re
@@ -697,7 +698,7 @@ def _detect_two_columns(items, page_top, page_bot):
     return best_x
 
 
-def _detect_banded_column(items, page_top, page_bot, median_width, line_tol):
+def _detect_banded_column(items, median_width, line_tol):
     """Return (gutter_x, left_items, right_items) if this page has a banded
     right-side column, else None.
 
@@ -709,10 +710,9 @@ def _detect_banded_column(items, page_top, page_bot, median_width, line_tol):
     bridged by a stray wide line elsewhere so _detect_two_columns reports no
     gutter. Meant to run only when _detect_two_columns returns None.
 
-    page_top / page_bot are accepted for signature parity with
-    _detect_two_columns; the band is derived from the right cluster itself, so
-    no page-height gate is applied (the design deliberately has no minimum band
-    height -- that is the point: it catches sub-0.5 blocks).
+    The band is derived from the right cluster itself, so no page-height gate is
+    applied (the design deliberately has no minimum band height -- that is the
+    point: it catches sub-0.5 blocks).
 
     Pure geometry and grade-safe: only whole detected pieces are partitioned by
     position; no character is added, edited, split, or dropped. Any degenerate
@@ -764,12 +764,12 @@ def _detect_banded_column(items, page_top, page_bot, median_width, line_tol):
     cluster_ids = None
     for start in range(len(ordered) - MIN_BAND_ROWS + 1):
         ids = {id(ordered[start])}
-        cluster_x0s = [ordered[start]["x"]]
+        cluster_x0s = [ordered[start]["x"]]  # kept sorted via bisect.insort
         for it in ordered[start + 1:]:
-            median_x0 = sorted(cluster_x0s)[len(cluster_x0s) // 2]
+            median_x0 = cluster_x0s[len(cluster_x0s) // 2]
             if abs(it["x"] - median_x0) <= band_x_align:
                 ids.add(id(it))
-                cluster_x0s.append(it["x"])
+                bisect.insort(cluster_x0s, it["x"])
             else:
                 break
         if distinct_rows([it for it in ordered if id(it) in ids]) >= MIN_BAND_ROWS:
@@ -909,8 +909,7 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
         # right column fully -- the same rule as the full-height split, applied
         # to a right block that spans less than half the page. If it fires,
         # severance is skipped; otherwise the single-column path runs unchanged.
-        banded = _detect_banded_column(
-            items, page_top, page_bot, median_width, line_tol)
+        banded = _detect_banded_column(items, median_width, line_tol)
         if banded is not None:
             _gutter_b, left, right = banded
             left_lines = _order_column_items(
