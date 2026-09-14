@@ -1,5 +1,10 @@
 # Handwritten continuation development baseline
 
+> Session update: the offline prototype and manual tester are now implemented;
+> see the [current handoff](2026-09-14-continuation-session-handoff.md).
+> All 11 supplied photos were used. Historical “Example 7 missing” wording below
+> reflects an unresolved numbering mismatch, not a confirmed missing upload.
+
 ## Scope and split
 
 Eight supplied development photos were processed with the existing fine-tuned

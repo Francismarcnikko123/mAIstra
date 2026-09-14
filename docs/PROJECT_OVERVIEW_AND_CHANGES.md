@@ -208,7 +208,9 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 
 - Completed live extraction and manual block/detection annotation for writerX
   Examples 1, 2, 4, 5, 6, 8, 9 and 11. Reserved Examples 3, 10 and 12 were not
-  extracted or used for tuning; missing Example 7 remains reserved when received.
+  extracted or used for tuning at this baseline stage. The intake called ID 7
+  missing; subsequent user clarification makes it unresolved numbering, not a
+  confirmed missing photo. All 11 supplied photographs were included.
 - Saved eight unedited detection fixtures and a sidecar with answer membership,
   continuation edges, intended order, photo regions and recognition-loss notes.
   Writer intent and image-only ambiguity are distinguished for unnumbered answers.
@@ -246,7 +248,8 @@ The following state is intentionally retained in `SubmissionsListComponent`:
   function and the main start. That block-boundary error stays within one answer.
   No predicted continuation crosses annotated answers. Two cases are ambiguous.
 - A SHA-256 freeze precedes reserved evaluation. Reserved results cannot be used
-  to tune this version; Example 7 is missing, and all supplied pages use one writer.
+  to tune this version; Example 7 is an unresolved ID mapping, and all supplied
+  pages use one writer. The historical frozen manifests are retained unchanged.
   The five known production-order expected failures remain unresolved by design.
 - Frozen reserved order matches 3/3 available pages (baseline 2/3). Example 10's
   left→right→left ordering improves, but its final return association edge is not
@@ -258,6 +261,32 @@ The following state is intentionally retained in `SubmissionsListComponent`:
   live integration; this prototype has not changed teacher-visible output.
 - Results, limitations, frozen evaluation and reproduction:
   [offline association experiment](../ocr_feature/reports/2026-09-14-offline-association.md).
+
+## Manual continuation tester and session handoff (2026-09-14)
+
+> **Owner:** Nombrado
+
+- Added `ocr_feature/tests/manual_continuation.py` with a runnable module docstring.
+  It takes a local image, runs fresh fine-tuned OCR, compares the frozen prototype,
+  prints raw/proposed text and association reasons, and saves `comparison.json`
+  in a unique output folder. It never writes fixtures or enables web behavior.
+- `--help`, invalid-file handling and normal unit discovery do not load OCR models.
+  The manual display uses one retained record per line rather than final production
+  indentation. An ambiguous result is not evidence of correct fallback order.
+- A real development page05 run recovered both local continuations, matched the
+  annotated order and preserved all 15 retained records. The frozen rule file was
+  unchanged. Focused runner tests cover lazy imports and duplicate preservation.
+- Clarified this session: all 11 supplied photos were processed. Do not request a
+  rewrite of “Example 7” without reconciling the revised writing instructions with
+  the skipped intake ID. Additional writers are future evaluation data, not a
+  prerequisite to use the tester; testing photos does not train the OCR model.
+- Updated local OCR guides, command reference, setup and maintainer entry points.
+  Most are gitignored; the committed source of truth is the
+  [session handoff](../ocr_feature/reports/2026-09-14-continuation-session-handoff.md),
+  including current findings, terminal commands, limitations and next work.
+- Verification: 187 tests executed, 182 passed and the same 5 expected failures.
+  Fresh live evaluation retained clean_ws CER 0.099, clean WER 0.328, clean token
+  accuracy 0.716 and green_writer10 clean_ws CER 0.061. No production changes.
 
 ## Code cleanup completed
 

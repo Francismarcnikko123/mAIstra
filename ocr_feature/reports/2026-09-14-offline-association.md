@@ -3,6 +3,15 @@
 Status: frozen prototype, not integrated into OCR or the web app. This is an
 experiment with one writer, not a general handwriting accuracy claim.
 
+## Session correction and manual testing
+
+All 11 supplied photos were included. The user confirms completing the revised
+writing instructions; the skipped Example 7 ID is unresolved numbering, not a
+confirmed missing paper. Frozen manifests retain the historical missing-ID field
+for reproducibility. No rewrite is requested on that basis. Fresh photo testing is
+now available through `tests/manual_continuation.py`; see the
+[session handoff](2026-09-14-continuation-session-handoff.md).
+
 ## What was implemented
 
 `evaluators/continuation_prototype.py` accepts only retained OCR records
@@ -72,7 +81,7 @@ Full decisions, unchanged OCR text, orders and per-page scores:
 ## Frozen evaluation protocol
 
 The [freeze record](2026-09-14-offline-association-freeze.json) records the rule-file
-SHA-256, development/held-out split, missing Example 7 and expected reserved layouts.
+SHA-256, development/held-out split, unresolved Example 7 numbering and expected reserved layouts.
 Rules were frozen before running reserved OCR. Examples 3, 10 and 12 were visually
 identified at intake, so they are held out from tuning, not wholly unseen images.
 Reserved results must not be used to tune this version. Future revisions that use
@@ -109,7 +118,7 @@ acceptance tests and must be resolved before a production fix is claimed.
 | 3 | Yes | Yes | Ambiguous: 45 px local gutter, 1.364 median heights, below 2.0 gate |
 | 10 | No | Yes | Upper-left → right continuation → lower-left |
 | 12 | Yes | Yes | Ambiguous: two complete unnumbered functions |
-| 7 | Missing | Not evaluated | Keep reserved when supplied |
+| 7 | Unmapped ID | Not evaluated | Reconcile numbering; no missing photo established |
 
 All three available reserved pages have correct retained-detection order, versus
 2/3 for the baseline. All 28 retained detections are preserved verbatim. Only one
@@ -165,7 +174,7 @@ right-to-left continuation edges (Example 10), abstention on a narrow but real g
 (Example 3), unreliable recognition, and ambiguous unnumbered functions.
 
 Keep this version frozen as the recorded experiment. Before another version,
-collect Example 7 and additional writers, with a fresh evaluation split. Test explicit
+reconcile the example numbering and collect additional writers with a fresh evaluation split. Test explicit
 multi-block answer chains and ambiguity handling offline. Then test a production
 integration in shadow mode, where proposed associations are recorded without
 changing teacher-visible text, before enabling automatic reordering. A new model is

@@ -1,5 +1,10 @@
 # Continuation association: test-first plan and findings
 
+> Session update: the offline prototype and manual tester are now implemented;
+> see the [current handoff](2026-09-14-continuation-session-handoff.md).
+> All 11 supplied photos were used. Historical “Example 7 missing” wording below
+> reflects an unresolved numbering mismatch, not a confirmed missing upload.
+
 Status: planning and baseline testing only. No production ordering changes.
 
 ## Requirement
