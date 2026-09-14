@@ -202,6 +202,34 @@ The following state is intentionally retained in `SubmissionsListComponent`:
   Live evaluator retains clean_ws CER 0.099, clean WER 0.328, clean token accuracy
   0.716 and green_writer10 clean_ws CER 0.061.
 
+## OCR development-photo annotation and baseline (2026-09-14)
+
+> **Owner:** Nombrado
+
+- Completed live extraction and manual block/detection annotation for writerX
+  Examples 1, 2, 4, 5, 6, 8, 9 and 11. Reserved Examples 3, 10 and 12 were not
+  extracted or used for tuning; missing Example 7 remains reserved when received.
+- Saved eight unedited detection fixtures and a sidecar with answer membership,
+  continuation edges, intended order, photo regions and recognition-loss notes.
+  Writer intent and image-only ambiguity are distinguished for unnumbered answers.
+- Current retained-detection order matches 5/8 pages. Examples 5, 6 and 8 reproduce
+  the full-column early-return failure, placing an upper continuation after the
+  next answer's left block. All 90 retained detections survive grouping unchanged.
+- Example 4's left closing brace was recognized as empty text and filtered before
+  grouping. Correct order on retained text does not imply complete transcription.
+- Example 11 is a confirmed real-photo activation of the brace-assisted fallback
+  with correct ordering. Its comment delimiters are misrecognized; this does not
+  prove general code understanding or reliable answer association.
+- Added a development-only offline evaluator with explicit reserved-example
+  rejection, pairwise order measurement and multiplicity checks. Association
+  accuracy remains unavailable because the production pipeline emits no membership
+  decisions. Three newly reproduced desired-order failures are marked expected
+  failures during planning, pending implementation. No production changes.
+- Full evidence and reproduction: [development baseline](../ocr_feature/reports/2026-09-14-development-baseline.md).
+- Verification: 171 tests executed, 166 passed and 5 expected failures; live
+  clean_ws CER 0.099, clean WER 0.328, clean token accuracy 0.716 and
+  green_writer10 clean_ws CER 0.061. Offline replay matches live extraction rows.
+
 ## Code cleanup completed
 
 > **Owner:** Shared (Jayrald + Nombrado)

@@ -1,0 +1,161 @@
+{
+  "scope": "Only the eleven files attached in this batch, Unknown-4.jpg through Unknown-14.jpg.",
+  "identification": "Manual visual match to agreed examples; no OCR or rule evaluation performed.",
+  "reserved_examples": [
+    3,
+    7,
+    10,
+    12
+  ],
+  "missing_examples": [
+    7
+  ],
+  "duplicate_groups": [],
+  "duplicate_check": "No byte-identical or decoded-pixel-identical images; visual inspection identifies eleven distinct example pages.",
+  "evaluation_policy": "Exclude reserved examples and all future duplicate/recapture variants from development and threshold calibration. Visual intake identification only has occurred; these are same-writer reserved examples, not an unseen-writer evaluation.",
+  "entries": [
+    {
+      "example": 1,
+      "writer": "writerX",
+      "source_filename": "Unknown-4.jpg",
+      "path": "outputs/continuation_association_intake/development/writerX_page01.jpg",
+      "split": "development",
+      "sha256": "a0e3c898eb05597f03a8dfa6ea49e91b8d38b25ac681ed5e44cb82e0f1c37665",
+      "decoded_rgb_sha256": "62a419c331ce1e6ba873679b3b639cae7492700ec46877483df0132f17a8b141",
+      "image_size": [
+        1536,
+        2048
+      ]
+    },
+    {
+      "example": 2,
+      "writer": "writerX",
+      "source_filename": "Unknown-6.jpg",
+      "path": "outputs/continuation_association_intake/development/writerX_page02.jpg",
+      "split": "development",
+      "sha256": "ba3f7b69fea5f335cc28e4c660a59b69e7385ff95fb8fedba9bd03636ea94a67",
+      "decoded_rgb_sha256": "e991f4214201aa17dc375893abe149787b76c55bca77f983b2a27892db945ca9",
+      "image_size": [
+        1536,
+        2048
+      ]
+    },
+    {
+      "example": 3,
+      "writer": "writerX",
+      "source_filename": "Unknown-5.jpg",
+      "path": "outputs/continuation_association_intake/reserved_evaluation/writerX_page03.jpg",
+      "split": "reserved_evaluation",
+      "sha256": "1e1f84cb2a1ac0a2ff0113eee15692bbc7c49914032d4c78bcec792f409c9547",
+      "decoded_rgb_sha256": "ae12095c6adb0344f517594b3206ce6516329f7e62babf5713e4220adbb9023e",
+      "image_size": [
+        1536,
+        2048
+      ]
+    },
+    {
+      "example": 4,
+      "writer": "writerX",
+      "source_filename": "Unknown-7.jpg",
+      "path": "outputs/continuation_association_intake/development/writerX_page04.jpg",
+      "split": "development",
+      "sha256": "92bc2e519b1b074e7da7ea5880f2d6e8ae2275ece9cd75c31333bf6a3187b816",
+      "decoded_rgb_sha256": "f08334511d4473ef4aabacba722703d6683c33f43a721c5f6711b1b16b1a48a4",
+      "image_size": [
+        1536,
+        2048
+      ]
+    },
+    {
+      "example": 5,
+      "writer": "writerX",
+      "source_filename": "Unknown-14.jpg",
+      "path": "outputs/continuation_association_intake/development/writerX_page05.jpg",
+      "split": "development",
+      "sha256": "f001ce0856cd3ca20fad5a1fee113cf609e31e58fa5c1d348ca4c06e4ddf7660",
+      "decoded_rgb_sha256": "ec2174ae6deb0a8d0a7b86eb1f5a537e491b3835025de349cbf6d3eb115f9cfc",
+      "image_size": [
+        1536,
+        2048
+      ]
+    },
+    {
+      "example": 6,
+      "writer": "writerX",
+      "source_filename": "Unknown-12.jpg",
+      "path": "outputs/continuation_association_intake/development/writerX_page06.jpg",
+      "split": "development",
+      "sha256": "375feaea38a7c08a139e22bd5d928a591acb81d0f487eac3fb591ef3bfa62986",
+      "decoded_rgb_sha256": "21dba703b30202267d646caa838f4a3f750dac41bd6e9d731b63438415457392",
+      "image_size": [
+        1536,
+        2048
+      ]
+    },
+    {
+      "example": 8,
+      "writer": "writerX",
+      "source_filename": "Unknown-13.jpg",
+      "path": "outputs/continuation_association_intake/development/writerX_page08.jpg",
+      "split": "development",
+      "sha256": "816a97c7c8e9de8e015abb9f79ba7c04d117a1ae8d13e64177138d9890d9d232",
+      "decoded_rgb_sha256": "6a66144d873ef8239871e5887b3ae941e50f98dd6117b3875b0c953406812d25",
+      "image_size": [
+        1536,
+        2048
+      ]
+    },
+    {
+      "example": 9,
+      "writer": "writerX",
+      "source_filename": "Unknown-11.jpg",
+      "path": "outputs/continuation_association_intake/development/writerX_page09.jpg",
+      "split": "development",
+      "sha256": "76111e9f50b7a153505a17a59b5008ab66ab22c7f2d0067ca1279655f5a2d2b9",
+      "decoded_rgb_sha256": "243d4d7315b03d41aab2bff02409dc86b49e03f2c105b5ea77f439d43e1371b1",
+      "image_size": [
+        1536,
+        2048
+      ]
+    },
+    {
+      "example": 10,
+      "writer": "writerX",
+      "source_filename": "Unknown-10.jpg",
+      "path": "outputs/continuation_association_intake/reserved_evaluation/writerX_page10.jpg",
+      "split": "reserved_evaluation",
+      "sha256": "3d3f585002ec0c6415a6eef4ede16a0886a023772c220131791869fd6d5fc0a0",
+      "decoded_rgb_sha256": "b5fd5f82ec4c390ecf3d31c7cb61f634b632786b379981771f99c1db91cdbcf4",
+      "image_size": [
+        1536,
+        2048
+      ]
+    },
+    {
+      "example": 11,
+      "writer": "writerX",
+      "source_filename": "Unknown-8.jpg",
+      "path": "outputs/continuation_association_intake/development/writerX_page11.jpg",
+      "split": "development",
+      "sha256": "011c4f296ee2264ced89838aa4af03bbddc83a2d929c81e40e2ed7dfe6252371",
+      "decoded_rgb_sha256": "c0ebf2a6ae19bc879f9baa596783922aace0374b1d6077ee05779c1690b927e5",
+      "image_size": [
+        1536,
+        2048
+      ]
+    },
+    {
+      "example": 12,
+      "writer": "writerX",
+      "source_filename": "Unknown-9.jpg",
+      "path": "outputs/continuation_association_intake/reserved_evaluation/writerX_page12.jpg",
+      "split": "reserved_evaluation",
+      "sha256": "d4afc844cb72f9b6bae7f069054536bf500b2f0cfd3582ca22844ee5b4e401b4",
+      "decoded_rgb_sha256": "2ded1bcd118299b591e8095bc5ec81eb74ddc1af6aa8761e72dd005ae10bac47",
+      "image_size": [
+        1536,
+        2048
+      ]
+    }
+  ]
+}
