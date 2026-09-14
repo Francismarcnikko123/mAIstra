@@ -230,6 +230,35 @@ The following state is intentionally retained in `SubmissionsListComponent`:
   clean_ws CER 0.099, clean WER 0.328, clean token accuracy 0.716 and
   green_writer10 clean_ws CER 0.061. Offline replay matches live extraction rows.
 
+## Offline continuation prototype (2026-09-14)
+
+> **Owner:** Nombrado
+
+- Added an experimental records-only module under `ocr_feature/evaluators/`, not
+  `core/`. Neither the OCR backend nor web app imports it. Original recognition,
+  cleanup, production grouping and thresholds remain unchanged.
+- It discovers spatial bands, evaluates local gutter and recognized C-scope
+  evidence, and emits continuation/independent/ambiguous relationships with reasons.
+  Accepted links move retained detection IDs; no recognized character is edited,
+  inserted or removed. An abstention preserves baseline order, which can be wrong.
+- Development retained-detection order improves from 5/8 to 8/8. Six exact
+  continuation links are correct; another targets a region containing both a helper
+  function and the main start. That block-boundary error stays within one answer.
+  No predicted continuation crosses annotated answers. Two cases are ambiguous.
+- A SHA-256 freeze precedes reserved evaluation. Reserved results cannot be used
+  to tune this version; Example 7 is missing, and all supplied pages use one writer.
+  The five known production-order expected failures remain unresolved by design.
+- Frozen reserved order matches 3/3 available pages (baseline 2/3). Example 10's
+  left→right→left ordering improves, but its final return association edge is not
+  predicted. Examples 3 and 12 abstain. This is not three correct membership
+  classifications. All 28 retained records survive; two braces were lost upstream.
+- Verification: 185 tests, 180 passing and 5 expected failures; live baseline
+  clean_ws CER 0.099, clean WER 0.328, clean token accuracy 0.716 and
+  green_writer10 clean_ws CER 0.061. Further offline evaluation is required before
+  live integration; this prototype has not changed teacher-visible output.
+- Results, limitations, frozen evaluation and reproduction:
+  [offline association experiment](../ocr_feature/reports/2026-09-14-offline-association.md).
+
 ## Code cleanup completed
 
 > **Owner:** Shared (Jayrald + Nombrado)

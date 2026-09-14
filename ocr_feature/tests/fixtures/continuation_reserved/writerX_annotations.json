@@ -1,0 +1,352 @@
+{
+  "schema_version": 1,
+  "writer": "writerX",
+  "split": "reserved_evaluation",
+  "annotation_basis": "Manual photo topology and writer exercise intent recorded in freeze before reserved OCR; retained IDs assigned by observed text/position after extraction, never inferred from prototype order.",
+  "box_coordinates": "Manual coarse regions normalized to original upright photo; detection unions are separate processed-coordinate measurements.",
+  "edge_definition": "A continues-to B. Example 10 includes both upper-left to right and right back to lower-left; the prototype only proposes right-to-left-target associations and therefore misses the second edge despite correct order.",
+  "pages": [
+    {
+      "example": 3,
+      "layout": "independent_numbered_columns",
+      "blocks": [
+        {
+          "id": "left",
+          "answer_id": "q1",
+          "detection_ids": [
+            0,
+            2,
+            4,
+            6,
+            8,
+            10,
+            11,
+            13
+          ],
+          "box_normalized": [
+            0.15,
+            0.1,
+            0.53,
+            0.32
+          ],
+          "detection_union_processed_px": [
+            236,
+            188,
+            618,
+            465
+          ]
+        },
+        {
+          "id": "right",
+          "answer_id": "q2",
+          "detection_ids": [
+            1,
+            3,
+            5,
+            7,
+            9,
+            12,
+            14
+          ],
+          "box_normalized": [
+            0.53,
+            0.11,
+            0.87,
+            0.32
+          ],
+          "detection_union_processed_px": [
+            663,
+            200,
+            994,
+            473
+          ]
+        }
+      ],
+      "continuation_edges": [],
+      "expected_block_order": [
+        "left",
+        "right"
+      ],
+      "expected_detection_rows": [
+        [
+          0
+        ],
+        [
+          2
+        ],
+        [
+          4
+        ],
+        [
+          6
+        ],
+        [
+          8
+        ],
+        [
+          10
+        ],
+        [
+          11
+        ],
+        [
+          13
+        ],
+        [
+          1
+        ],
+        [
+          3
+        ],
+        [
+          5
+        ],
+        [
+          7
+        ],
+        [
+          9
+        ],
+        [
+          12
+        ],
+        [
+          14
+        ]
+      ],
+      "answer_membership_visually_ambiguous": false,
+      "fixture_sha256": "7b73b03259524b4c4c39565e2114fec4d41ccc3769938d42ed589f2f5b939043",
+      "source_image_sha256": "1e1f84cb2a1ac0a2ff0113eee15692bbc7c49914032d4c78bcec792f409c9547",
+      "source_image_relative_path": "outputs/continuation_association_intake/reserved_evaluation/writerX_page03.jpg",
+      "processed_image_size": [
+        1200,
+        1600
+      ],
+      "dropped_low_confidence": [
+        {
+          "text": "",
+          "score": 0.0,
+          "box": [
+            698,
+            353,
+            722,
+            390
+          ]
+        }
+      ],
+      "live_raw_text": "Question 1\nint sum_to(int n) {\n  int renult = 0;\n    for (int i = 1; i< = n; i++) {\n      result += i;\n  }\n    return result;\n}\n  Qwestion 2\nint procluct_to(int n) {\n  int result = 1;\n  for (int i = 1; i <= n; i++) {\n    result *= i;\n\n  return repult;\n}",
+      "live_cleaned_text": "Question 1\nint sum_to(int n) {\n  int renult = 0;\n    for (int i = 1; i< = n; i++) {\n      result += i;\n  }\n    return result;\n}\n  Qwestion 2\nint procluct_to(int n) {\n  int result = 1;\n  for (int i = 1; i <= n; i++) {\n    result *= i;\n\n  return repult;\n}"
+    },
+    {
+      "example": 10,
+      "layout": "left_right_left_continuation",
+      "blocks": [
+        {
+          "id": "upper_left",
+          "answer_id": "q1",
+          "detection_ids": [
+            0,
+            1,
+            3,
+            5
+          ],
+          "box_normalized": [
+            0.16,
+            0.13,
+            0.43,
+            0.25
+          ],
+          "detection_union_processed_px": [
+            225,
+            234,
+            490,
+            388
+          ]
+        },
+        {
+          "id": "right",
+          "answer_id": "q1",
+          "detection_ids": [
+            2,
+            4
+          ],
+          "box_normalized": [
+            0.58,
+            0.15,
+            0.7,
+            0.24
+          ],
+          "detection_union_processed_px": [
+            726,
+            278,
+            812,
+            347
+          ]
+        },
+        {
+          "id": "lower_left",
+          "answer_id": "q1",
+          "detection_ids": [
+            6
+          ],
+          "box_normalized": [
+            0.14,
+            0.26,
+            0.32,
+            0.34
+          ],
+          "detection_union_processed_px": [
+            245,
+            439,
+            346,
+            470
+          ]
+        }
+      ],
+      "continuation_edges": [
+        [
+          "upper_left",
+          "right"
+        ],
+        [
+          "right",
+          "lower_left"
+        ]
+      ],
+      "expected_block_order": [
+        "upper_left",
+        "right",
+        "lower_left"
+      ],
+      "expected_detection_rows": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          3
+        ],
+        [
+          5
+        ],
+        [
+          2
+        ],
+        [
+          4
+        ],
+        [
+          6
+        ]
+      ],
+      "answer_membership_visually_ambiguous": false,
+      "fixture_sha256": "c9bd15504de3f95354d8353fd5cfcadd37e16a973957a3b8b1fba8f7cba74e7c",
+      "source_image_sha256": "3d3f585002ec0c6415a6eef4ede16a0886a023772c220131791869fd6d5fc0a0",
+      "source_image_relative_path": "outputs/continuation_association_intake/reserved_evaluation/writerX_page10.jpg",
+      "processed_image_size": [
+        1200,
+        1600
+      ],
+      "dropped_low_confidence": [
+        {
+          "text": "",
+          "score": 0.0,
+          "box": [
+            211,
+            484,
+            234,
+            522
+          ]
+        }
+      ],
+      "live_raw_text": "Qwestion 1;\nint adjuct Cint x) {\n                }\n    if (x < 0) {\n                x+ = 2;\n    x = = x;\n\n  return +;",
+      "live_cleaned_text": "Qwestion 1;\nint adjuct Cint x) {\n                }\n    if (x < 0) {\n                x+ = 2;\n    x = = x;\n\n  return +;"
+    },
+    {
+      "example": 12,
+      "layout": "unnumbered_complete_functions",
+      "blocks": [
+        {
+          "id": "left",
+          "answer_id": "q1",
+          "detection_ids": [
+            0,
+            2,
+            4
+          ],
+          "box_normalized": [
+            0.15,
+            0.13,
+            0.42,
+            0.24
+          ],
+          "detection_union_processed_px": [
+            237,
+            247,
+            481,
+            360
+          ]
+        },
+        {
+          "id": "right",
+          "answer_id": "q2",
+          "detection_ids": [
+            1,
+            3,
+            5
+          ],
+          "box_normalized": [
+            0.55,
+            0.13,
+            0.79,
+            0.24
+          ],
+          "detection_union_processed_px": [
+            676,
+            257,
+            929,
+            356
+          ]
+        }
+      ],
+      "continuation_edges": [],
+      "expected_block_order": [
+        "left",
+        "right"
+      ],
+      "expected_detection_rows": [
+        [
+          0
+        ],
+        [
+          2
+        ],
+        [
+          4
+        ],
+        [
+          1
+        ],
+        [
+          3
+        ],
+        [
+          5
+        ]
+      ],
+      "answer_membership_visually_ambiguous": true,
+      "fixture_sha256": "d6d807da2f2691add66e277897f9a19560c0b5e5d72e0548733291a5fa5d751d",
+      "source_image_sha256": "d4afc844cb72f9b6bae7f069054536bf500b2f0cfd3582ca22844ee5b4e401b4",
+      "source_image_relative_path": "outputs/continuation_association_intake/reserved_evaluation/writerX_page12.jpg",
+      "processed_image_size": [
+        1200,
+        1600
+      ],
+      "dropped_low_confidence": [],
+      "live_raw_text": "int first (int x) {\n  return x + 3;\n}\n  int secound(int x) {\n  return x = 1;\n}",
+      "live_cleaned_text": "int first (int x) {\n  return x + 3;\n}\n  int secound(int x) {\n  return x = 1;\n}"
+    }
+  ]
+}

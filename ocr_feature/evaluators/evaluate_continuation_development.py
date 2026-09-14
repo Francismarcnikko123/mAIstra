@@ -2,11 +2,13 @@
 
 This measures ordering only. The current pipeline emits no answer-membership
 decision, so association accuracy is unavailable, not inferred from line order.
+With --prototype, also measure experimental association edges separately.
 Run from ocr_feature: PYTHONPATH=. .venv/bin/python -m
 evaluators.evaluate_continuation_development
 """
 from collections import Counter, defaultdict, deque
 from contextlib import ExitStack
+import argparse
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -79,7 +81,48 @@ def replay(records):
     return ordered_rows, events
 
 
-def evaluate():
+def score_association(page, prediction):
+    """Score predicted edges against labels, which never enter the prototype.
+
+    A predicted region must match a complete annotated block to earn edge credit.
+    Correct flat ordering alone earns no association credit.
+    """
+    blocks = page['blocks']
+    by_ids = {frozenset(b['detection_ids']): b for b in blocks}
+    gold = {tuple(edge) for edge in page['continuation_edges']}
+    found = set()
+    wrong = cross = independent_correct = independent_wrong = ambiguous = 0
+    for relation in prediction['relations']:
+        decision = relation['decision']
+        if decision == 'ambiguous':
+            ambiguous += 1
+            continue
+        left = by_ids.get(frozenset(relation['target_detection_ids']))
+        right = by_ids.get(frozenset(relation['source_detection_ids']))
+        if decision == 'continuation':
+            edge = (left['id'], right['id']) if left and right else None
+            if edge in gold and edge not in found:
+                found.add(edge)
+            else:
+                wrong += 1
+            answers = {b['answer_id'] for b in blocks
+                       if set(b['detection_ids']) & set(relation['target_detection_ids']
+                                                       + relation['source_detection_ids'])}
+            cross += len(answers) > 1
+        elif decision == 'independent':
+            correct = bool(left and right and left['answer_id'] != right['answer_id'])
+            independent_correct += correct
+            independent_wrong += not correct
+    return dict(true_continuation_links=len(found), false_continuation_links=wrong,
+                missed_continuation_links=len(gold - found), false_cross_answer_links=cross,
+                continuation_precision=len(found)/(len(found)+wrong) if found or wrong else None,
+                continuation_recall=len(found)/len(gold) if gold else None,
+                correct_independent_links=independent_correct,
+                incorrect_independent_links=independent_wrong, ambiguous_relations=ambiguous,
+                no_candidate_relationships=not prediction['relations'])
+
+
+def evaluate(prototype=False):
     annotations = json.loads((FIXTURES / "writerX_development_annotations.json").read_text())
     if annotations["split"] != "development":
         raise ValueError("Development annotations required")
@@ -105,9 +148,19 @@ def evaluate():
             actual_text_rows=[" ".join(records[i]["text"] for i in row) for row in rows],
             intended_text_rows=[" ".join(records[i]["text"] for i in row)
                                 for row in page["expected_detection_rows"]]))
+        if prototype:
+            from evaluators.continuation_prototype import associate
+            prediction = associate(records)
+            results[-1]['prototype'] = dict(
+                prediction=prediction, exact_order=prediction['ordered_ids'] == expected,
+                pairwise_order_accuracy=pairwise_order_accuracy(expected, prediction['ordered_ids']),
+                association=score_association(page, prediction),
+                ordered_text=[records[i]['text'] for i in prediction['ordered_ids']])
     return {"scope": "development only; frozen OCR detections",
             "reserved_examples_excluded": sorted(RESERVED), "pages": results}
 
 
 if __name__ == "__main__":
-    print(json.dumps(evaluate(), indent=2))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--prototype', action='store_true', help='Score experimental association offline')
+    print(json.dumps(evaluate(prototype=parser.parse_args().prototype), indent=2))
