@@ -1,2 +1,14 @@
 # Local-only documentation/notes, not tracked or pushed
 docs/
+
+# Quality-gate accuracy test scratch: re-captured images and their labels copy.
+# Disposable per QUALITY_GATE_ACCURACY_TEST_HANDOFF.md — results get reported,
+# the files never do.
+ocr_gate_test/
+
+# Fine-tuned recognition weights (~74MB). Distributed outside git.
+ocr_feature/models/
+
+# Demo animation shipped with the vendored WeScan source (~10MB, iOS-only,
+# never referenced by the app).
+maistra_mobile/packages/edge_detection/ios/WeScan-3.0.0/Assets/WeScan.gif

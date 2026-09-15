@@ -1,197 +1,272 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CALIBRATION THRESHOLDS
+// All thresholds live here. Adjust during testing without touching logic.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Blur (Laplacian variance) — higher = sharper
+const double kBlurRetake = 200.0; // below → RETAKE
+
+// Dark clip (fraction of pixels ≤ 40/255)
+const double kDarkRetake  = 0.15; // above → RETAKE
+const double kDarkFixable = 0.08; // above → FIXABLE
+
+// Bright clip (fraction of pixels ≥ 240/255 — glare/overexposure only, not paper background)
+const double kBrightRetake  = 0.20; // above → RETAKE
+const double kBrightFixable = 0.10; // above → FIXABLE
+
+// Contrast (pixel value standard deviation, 0–255)
+// Documents have white background so whole-image stddev is naturally low.
+// Calibrated from real scans: visually acceptable ~15+, washed-out ~12-14,
+// truly faded <10. Threshold 15 catches soft-looking ink without being too strict.
+const double kContrastFixable = 15.0; // below → FIXABLE (ink looks washed-out)
+
+// Shadow (max − min of 3×3 regional brightness averages)
+// Clean even-lit scans sit at 13-20. Anything above 25 has a visible gradient.
+// Do NOT try to fix shadows — send clean scans to JC's pipeline unchanged.
+const double kShadowRetake  = 25.0; // above → RETAKE (rescan with better lighting)
+const double kShadowFixable = 999.0; // disabled — shadow is never auto-fixed
+
+// Skew — DISABLED. warpPerspective corrects physical paper tilt before this
+// check runs. OCR handles residual text-line skew natively, and empirical
+// testing showed our de-skew correction degrades OCR accuracy.
+const double kSkewPass   = 999.0; // disabled
+const double kSkewRetake = 999.0; // disabled (see kSkewPass comment above)
+
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum QualityDecision { pass, fixable, retake }
+
+class QualityMetrics {
+  final double blurScore;
+  final double darkClipFraction;
+  final double brightClipFraction;
+  final double contrastScore;
+  final double shadowScore;
+  final double skewAngleDeg;
+
+  const QualityMetrics({
+    required this.blurScore,
+    required this.darkClipFraction,
+    required this.brightClipFraction,
+    required this.contrastScore,
+    required this.shadowScore,
+    required this.skewAngleDeg,
+  });
+}
+
 class QualityResult {
-  final bool passed;
+  final QualityDecision decision;
   final List<String> issues;
-  QualityResult({required this.passed, required this.issues});
+  final QualityMetrics metrics;
+  final bool autoFixed;
+
+  const QualityResult({
+    required this.decision,
+    required this.issues,
+    required this.metrics,
+    this.autoFixed = false,
+  });
+
+  // PASS and FIXABLE are both acceptable (FIXABLE gets auto-corrected before use)
+  bool get passed => decision != QualityDecision.retake;
 }
 
-// % of near-black pixels. More reliable than average brightness, since
-// phone auto-exposure hides genuine darkness by brightening the average.
-double computeDarkClipFraction(img.Image grayscale, {int threshold = 50}) {
+// ── Metric computations ───────────────────────────────────────────────────
+
+double computeBlurScore(img.Image grayscale) {
+  double sum = 0, sumSq = 0;
+  int count = 0;
+  for (int y = 1; y < grayscale.height - 1; y++) {
+    for (int x = 1; x < grayscale.width - 1; x++) {
+      final c = grayscale.getPixel(x, y).r.toDouble();
+      final t = grayscale.getPixel(x, y - 1).r.toDouble();
+      final b = grayscale.getPixel(x, y + 1).r.toDouble();
+      final l = grayscale.getPixel(x - 1, y).r.toDouble();
+      final r = grayscale.getPixel(x + 1, y).r.toDouble();
+      final lap = 4 * c - t - b - l - r;
+      sum += lap;
+      sumSq += lap * lap;
+      count++;
+    }
+  }
+  if (count == 0) return 0;
+  final mean = sum / count;
+  return (sumSq / count) - (mean * mean);
+}
+
+double computeDarkClipFraction(img.Image grayscale, {int threshold = 40}) {
   int clipped = 0;
-  for (int y = 0; y < grayscale.height; y++) {
-    for (int x = 0; x < grayscale.width; x++) {
+  for (int y = 0; y < grayscale.height; y++)
+    for (int x = 0; x < grayscale.width; x++)
       if (grayscale.getPixel(x, y).r <= threshold) clipped++;
-    }
-  }
   return clipped / (grayscale.width * grayscale.height);
 }
 
-// Same idea, mirrored for overexposure (flash glare, direct light).
-double computeBrightClipFraction(img.Image grayscale, {int threshold = 200}) {
+double computeBrightClipFraction(img.Image grayscale, {int threshold = 240}) {
   int clipped = 0;
-  for (int y = 0; y < grayscale.height; y++) {
-    for (int x = 0; x < grayscale.width; x++) {
+  for (int y = 0; y < grayscale.height; y++)
+    for (int x = 0; x < grayscale.width; x++)
       if (grayscale.getPixel(x, y).r >= threshold) clipped++;
-    }
-  }
   return clipped / (grayscale.width * grayscale.height);
 }
 
-// Splits the frame into a rows x cols grid and returns the gap between the
-// brightest and darkest region's average — catches a localized shadow that
-// a whole-frame check would average away.
-double computeBrightnessSpread(img.Image grayscale, {required int rows, required int cols}) {
-  final cellWidth = grayscale.width ~/ cols;
-  final cellHeight = grayscale.height ~/ rows;
+double computeContrastScore(img.Image grayscale) {
+  double sum = 0, sumSq = 0;
+  final count = grayscale.width * grayscale.height;
+  for (int y = 0; y < grayscale.height; y++)
+    for (int x = 0; x < grayscale.width; x++) {
+      final v = grayscale.getPixel(x, y).r.toDouble();
+      sum += v;
+      sumSq += v * v;
+    }
+  final mean = sum / count;
+  return math.sqrt(((sumSq / count) - (mean * mean)).clamp(0, double.maxFinite));
+}
 
-  double? minAvg;
-  double? maxAvg;
-
+double computeShadowScore(img.Image grayscale, {int rows = 3, int cols = 3}) {
+  final cellW = grayscale.width ~/ cols;
+  final cellH = grayscale.height ~/ rows;
+  double? minAvg, maxAvg;
   for (int row = 0; row < rows; row++) {
     for (int col = 0; col < cols; col++) {
       double total = 0;
       int count = 0;
-      for (int y = row * cellHeight; y < (row + 1) * cellHeight; y++) {
-        for (int x = col * cellWidth; x < (col + 1) * cellWidth; x++) {
+      for (int y = row * cellH; y < (row + 1) * cellH; y++)
+        for (int x = col * cellW; x < (col + 1) * cellW; x++) {
           total += grayscale.getPixel(x, y).r.toDouble();
           count++;
         }
-      }
       if (count == 0) continue;
       final avg = total / count;
-      minAvg = (minAvg == null) ? avg : (avg < minAvg ? avg : minAvg);
-      maxAvg = (maxAvg == null) ? avg : (avg > maxAvg ? avg : maxAvg);
+      minAvg = (minAvg == null || avg < minAvg) ? avg : minAvg;
+      maxAvg = (maxAvg == null || avg > maxAvg) ? avg : maxAvg;
     }
   }
-
-  if (minAvg == null || maxAvg == null) return 0;
-  return maxAvg - minAvg;
+  return (maxAvg ?? 0) - (minAvg ?? 0);
 }
 
-// Top third of the frame — blur is measured here only, so blank paper
-// below the handwriting doesn't dilute the score.
+// Projection profile method: rotate image at candidate angles, compute
+// variance of horizontal dark-pixel counts per row. The angle that
+// maximises variance = text lines are most horizontal = true skew angle.
+double computeSkewAngle(img.Image grayscale) {
+  final small = img.copyResize(grayscale, width: 300);
+  // Threshold: dark pixels (text) = true, light (background) = false
+  final List<List<bool>> binary = List.generate(
+    small.height,
+    (y) => List.generate(small.width, (x) => small.getPixel(x, y).r < 128),
+  );
+
+  double bestAngle = 0;
+  double bestVariance = -1;
+
+  for (double angle = -20.0; angle <= 20.0; angle += 0.5) {
+    final rad = angle * math.pi / 180.0;
+    final cosA = math.cos(rad);
+    final sinA = math.sin(rad);
+    final cx = small.width / 2;
+    final cy = small.height / 2;
+
+    // Project: for each pixel, find which row it maps to after rotation
+    final proj = List<int>.filled(small.height, 0);
+    for (int y = 0; y < small.height; y++) {
+      for (int x = 0; x < small.width; x++) {
+        if (!binary[y][x]) continue;
+        // Rotate point around centre
+        final nx = cosA * (x - cx) + sinA * (y - cy) + cx;
+        final ny = -sinA * (x - cx) + cosA * (y - cy) + cy;
+        final row = ny.round();
+        if (row >= 0 && row < small.height) proj[row]++;
+      }
+    }
+
+    final mean = proj.fold(0, (a, b) => a + b) / proj.length;
+    final variance =
+        proj.fold(0.0, (a, b) => a + (b - mean) * (b - mean)) / proj.length;
+
+    if (variance > bestVariance) {
+      bestVariance = variance;
+      bestAngle = angle;
+    }
+  }
+  return bestAngle;
+}
+
 img.Image cropTopPortion(img.Image image, {required double fraction}) {
-  final cropHeight = (image.height * fraction).round();
-  return img.copyCrop(image, x: 0, y: 0, width: image.width, height: cropHeight);
+  final h = (image.height * fraction).round();
+  return img.copyCrop(image, x: 0, y: 0, width: image.width, height: h);
 }
 
-// Laplacian-variance sharpness — high for crisp edges, low for blur.
-double computeBlurScore(img.Image grayscale) {
-  double laplacianSum = 0;
-  double laplacianSumSquares = 0;
-  int count = 0;
+// ── Decision logic ────────────────────────────────────────────────────────
 
-  for (int y = 1; y < grayscale.height - 1; y++) {
-    for (int x = 1; x < grayscale.width - 1; x++) {
-      final center = grayscale.getPixel(x, y).r.toDouble();
-      final top    = grayscale.getPixel(x, y - 1).r.toDouble();
-      final bottom = grayscale.getPixel(x, y + 1).r.toDouble();
-      final left   = grayscale.getPixel(x - 1, y).r.toDouble();
-      final right  = grayscale.getPixel(x + 1, y).r.toDouble();
+QualityResult evaluateMetrics(QualityMetrics m, {bool autoFixed = false}) {
+  final issues = <String>[];
+  var decision = QualityDecision.pass;
 
-      final laplacian = 4 * center - top - bottom - left - right;
-      laplacianSum += laplacian;
-      laplacianSumSquares += laplacian * laplacian;
-      count++;
+  void flag(String msg, QualityDecision d) {
+    issues.add(msg);
+    if (d == QualityDecision.retake) {
+      decision = QualityDecision.retake;
+    } else if (d == QualityDecision.fixable &&
+        decision == QualityDecision.pass) {
+      decision = QualityDecision.fixable;
     }
   }
 
-  if (count == 0) return 0;
-  final mean = laplacianSum / count;
-  return (laplacianSumSquares / count) - (mean * mean);
-}
+  if (m.blurScore < kBlurRetake)
+    flag('Too blurry — hold the camera steady', QualityDecision.retake);
 
-// Dark/bright/shadow checks only — no blur. Used by both the final gate
-// and the live pre-check screen, which can't measure blur from a preview frame.
-QualityResult evaluateLighting({
-  required double darkClipFraction,
-  required double brightClipFraction,
-  required double brightnessSpread,
-}) {
-  final List<String> issues = [];
-  bool blocked = false;
+  if (m.darkClipFraction > kDarkRetake)
+    flag('Too dark — move to a brighter area', QualityDecision.retake);
+  else if (m.darkClipFraction > kDarkFixable)
+    flag('Slightly dark — brightness will be auto-adjusted', QualityDecision.fixable);
 
-  if (darkClipFraction > 0.05) {
-    issues.add('Too dark — move to a brighter area');
-    blocked = true;
-  }
+  if (m.brightClipFraction > kBrightRetake)
+    flag('Severely overexposed — reduce glare or move away from light',
+        QualityDecision.retake);
+  else if (m.brightClipFraction > kBrightFixable)
+    flag('Overexposed — brightness will be auto-adjusted', QualityDecision.fixable);
 
-  if (brightClipFraction > 0.20) {
-    issues.add('Too bright / overexposed — reduce lighting or move away from light source');
-    blocked = true;
-  }
+  if (m.contrastScore < kContrastFixable)
+    flag('Low contrast / faded ink — contrast will be auto-enhanced',
+        QualityDecision.fixable);
 
-  if (brightnessSpread > 35) {
-    issues.add("Uneven lighting detected — try repositioning so your shadow isn't blocking the page");
-    blocked = true;
-  }
+  if (m.shadowScore > kShadowRetake)
+    flag('Extreme shadow across page — reposition or use even lighting',
+        QualityDecision.retake);
+  else if (m.shadowScore > kShadowFixable)
+    flag('Uneven lighting / shadow — will be auto-corrected',
+        QualityDecision.fixable);
 
-  return QualityResult(passed: !blocked, issues: issues);
-}
+  final absSkew = m.skewAngleDeg.abs();
+  if (absSkew > kSkewRetake)
+    flag(
+        'Page too tilted (${m.skewAngleDeg.toStringAsFixed(1)}°) — straighten and rescan',
+        QualityDecision.retake);
+  else if (absSkew > kSkewPass)
+    flag(
+        'Page tilted ${m.skewAngleDeg.toStringAsFixed(1)}° — will be auto de-skewed',
+        QualityDecision.fixable);
 
-// Thresholds calibrated against real device captures across white bond
-// paper, green book, and yellow pad
-
-QualityResult evaluateQuality({
-  required double blurScore,
-  required double darkClipFraction,
-  required double brightClipFraction,
-  required double brightnessSpread,
-}) {
-  final List<String> issues = [];
-  bool blocked = false;
-
-  if (blurScore < 480) {
-    issues.add('Image quality too low — hold steady, ensure good lighting, and avoid glare');
-    blocked = true;
-  }
-
-  final lighting = evaluateLighting(
-    darkClipFraction: darkClipFraction,
-    brightClipFraction: brightClipFraction,
-    brightnessSpread: brightnessSpread,
-  );
-  issues.addAll(lighting.issues);
-  if (!lighting.passed) blocked = true;
-
-  return QualityResult(passed: !blocked, issues: issues);
-}
-
-QualityResult checkQuality(List<int> bytes) {
-  final image = img.decodeImage(Uint8List.fromList(bytes));
-  if (image == null) return QualityResult(passed: false, issues: ['Could not read image']);
-
-  final small = img.copyResize(image, width: 600, height: 600);
-  final grayscale = img.grayscale(small);
-
-  final blurScore = computeBlurScore(cropTopPortion(grayscale, fraction: 1 / 3));
-  final darkClipFraction = computeDarkClipFraction(grayscale);
-  final brightClipFraction = computeBrightClipFraction(grayscale);
-  final brightnessSpread = computeBrightnessSpread(grayscale, rows: 3, cols: 3);
-
-  // ignore: avoid_print
-  print('[quality-check] ----------------------------------------');
-  // ignore: avoid_print
-  print('[quality-check] dimensions:        ${image.width}x${image.height}');
-  // ignore: avoid_print
-  print('[quality-check] blurScore:         ${blurScore.toStringAsFixed(1)}');
-  // ignore: avoid_print
-  print('[quality-check] darkClipFraction:  ${darkClipFraction.toStringAsFixed(4)}');
-  // ignore: avoid_print
-  print('[quality-check] brightClipFraction:${brightClipFraction.toStringAsFixed(4)}');
-  // ignore: avoid_print
-  print('[quality-check] brightnessSpread:  ${brightnessSpread.toStringAsFixed(1)}');
-
-  return evaluateQuality(
-    blurScore: blurScore,
-    darkClipFraction: darkClipFraction,
-    brightClipFraction: brightClipFraction,
-    brightnessSpread: brightnessSpread,
+  return QualityResult(
+    decision: decision,
+    issues: issues,
+    metrics: m,
+    autoFixed: autoFixed,
   );
 }
 
-// One Y-plane (luma) sample from a live YUV420 camera frame. bytesPerRow
-// can be wider than width — camera plugins pad rows to an alignment
-// boundary, so it can't be assumed equal to width.
+// ── Lighting-only check for live camera frames ────────────────────────────
+
 class LumaFrame {
   final Uint8List bytes;
   final int width;
   final int height;
   final int bytesPerRow;
-  LumaFrame({
+  const LumaFrame({
     required this.bytes,
     required this.width,
     required this.height,
@@ -199,9 +274,6 @@ class LumaFrame {
   });
 }
 
-// Lighting check straight off a live camera frame — the Y-plane of a
-// YUV420 frame is already grayscale brightness data, so no JPEG decode
-// or color conversion is needed like checkQuality does.
 QualityResult checkLightingFrame(LumaFrame frame) {
   final grayscale = img.Image(width: frame.width, height: frame.height);
   for (int y = 0; y < frame.height; y++) {
@@ -211,10 +283,65 @@ QualityResult checkLightingFrame(LumaFrame frame) {
       grayscale.setPixelRgb(x, y, v, v, v);
     }
   }
-
-  return evaluateLighting(
-    darkClipFraction: computeDarkClipFraction(grayscale),
-    brightClipFraction: computeBrightClipFraction(grayscale),
-    brightnessSpread: computeBrightnessSpread(grayscale, rows: 3, cols: 3),
+  final dark = computeDarkClipFraction(grayscale);
+  final bright = computeBrightClipFraction(grayscale);
+  final shadow = computeShadowScore(grayscale);
+  final metrics = QualityMetrics(
+    blurScore: double.infinity,
+    darkClipFraction: dark,
+    brightClipFraction: bright,
+    contrastScore: double.infinity,
+    shadowScore: shadow,
+    skewAngleDeg: 0,
   );
+  return evaluateMetrics(metrics);
+}
+
+// ── Full quality check (runs in compute isolate) ──────────────────────────
+
+QualityResult checkQuality(List<int> bytes) {
+  final image = img.decodeImage(Uint8List.fromList(bytes));
+  if (image == null) {
+    return QualityResult(
+      decision: QualityDecision.retake,
+      issues: ['Could not read image'],
+      metrics: const QualityMetrics(
+        blurScore: 0,
+        darkClipFraction: 0,
+        brightClipFraction: 0,
+        contrastScore: 0,
+        shadowScore: 0,
+        skewAngleDeg: 0,
+      ),
+    );
+  }
+
+  final small = img.copyResize(image, width: 600);
+  final gray = img.grayscale(small);
+
+  final blur = computeBlurScore(cropTopPortion(gray, fraction: 1 / 3));
+  final dark = computeDarkClipFraction(gray);
+  final bright = computeBrightClipFraction(gray);
+  final contrast = computeContrastScore(gray);
+  final shadow = computeShadowScore(gray);
+  final skew = computeSkewAngle(gray);
+
+  final metrics = QualityMetrics(
+    blurScore: blur,
+    darkClipFraction: dark,
+    brightClipFraction: bright,
+    contrastScore: contrast,
+    shadowScore: shadow,
+    skewAngleDeg: skew,
+  );
+
+  // ignore: avoid_print
+  print('[quality] blur=${blur.toStringAsFixed(1)}'
+      ' dark=${dark.toStringAsFixed(3)}'
+      ' bright=${bright.toStringAsFixed(3)}'
+      ' contrast=${contrast.toStringAsFixed(1)}'
+      ' shadow=${shadow.toStringAsFixed(1)}'
+      ' skew=${skew.toStringAsFixed(1)}°');
+
+  return evaluateMetrics(metrics);
 }

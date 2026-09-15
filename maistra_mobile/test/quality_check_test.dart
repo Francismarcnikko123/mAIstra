@@ -59,8 +59,6 @@ void main() {
       final sharp = _checkerboard(40, 40);
       final sharpScore = computeBlurScore(sharp);
 
-      // gaussianBlur mutates its argument in place, so score the sharp
-      // version first, then blur it and score again.
       final blurred = img.gaussianBlur(sharp, radius: 6);
       final blurredScore = computeBlurScore(blurred);
 
@@ -90,7 +88,7 @@ void main() {
       final image = img.Image(width: 10, height: 10);
       for (int y = 0; y < 10; y++) {
         for (int x = 0; x < 10; x++) {
-          final value = y < 3 ? 0 : 200; // 3 of 10 rows are pure black
+          final value = y < 3 ? 0 : 200;
           image.setPixelRgb(x, y, value, value, value);
         }
       }
@@ -121,7 +119,7 @@ void main() {
       final image = img.Image(width: 10, height: 10);
       for (int y = 0; y < 10; y++) {
         for (int x = 0; x < 10; x++) {
-          final value = y < 2 ? 255 : 100; // 2 of 10 rows are pure white
+          final value = y < 2 ? 255 : 100;
           image.setPixelRgb(x, y, value, value, value);
         }
       }
@@ -130,146 +128,173 @@ void main() {
     });
   });
 
-  group('computeBrightnessSpread', () {
+  group('computeShadowScore', () {
     test('returns 0 for a uniformly bright image', () {
       final image = _whiteImage(30, 30);
 
-      expect(computeBrightnessSpread(image, rows: 3, cols: 3), 0);
+      expect(computeShadowScore(image, rows: 3, cols: 3), 0);
     });
 
     test('returns a large spread when one region is much darker than the rest', () {
       final image = img.Image(width: 30, height: 30);
       for (int y = 0; y < 30; y++) {
         for (int x = 0; x < 30; x++) {
-          // Bottom-left third dark (shadow-like), rest bright.
           final inShadow = x < 10 && y >= 20;
           final value = inShadow ? 60 : 200;
           image.setPixelRgb(x, y, value, value, value);
         }
       }
 
-      expect(computeBrightnessSpread(image, rows: 3, cols: 3), closeTo(140, 0.001));
+      expect(computeShadowScore(image, rows: 3, cols: 3), closeTo(140, 0.001));
     });
   });
 
-  group('evaluateQuality', () {
-    test('passes with no issues for a normal, well-formed image', () {
-      final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0);
+  // Helper to build a QualityMetrics and call evaluateMetrics in one line.
+  QualityResult eval({
+    double blur = 9000,
+    double dark = 0,
+    double bright = 0,
+    double contrast = 50,
+    double shadow = 0,
+    double skew = 0,
+  }) =>
+      evaluateMetrics(QualityMetrics(
+        blurScore: blur,
+        darkClipFraction: dark,
+        brightClipFraction: bright,
+        contrastScore: contrast,
+        shadowScore: shadow,
+        skewAngleDeg: skew,
+      ));
 
+  group('evaluateMetrics — blur', () {
+    test('passes with no issues for a well-formed image', () {
+      final result = eval();
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
     });
 
-    test('low blur score blocks accept as image quality too low', () {
-      final result = evaluateQuality(
-          blurScore: 479, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0);
-
+    test('blur below threshold results in retake', () {
+      // kBlurRetake = 200 — strict less-than triggers retake
+      final result = eval(blur: 199);
       expect(result.passed, isFalse);
-      expect(result.issues, ['Image quality too low — hold steady, ensure good lighting, and avoid glare']);
+      expect(result.issues, contains('Too blurry — hold the camera steady'));
     });
 
-    test('does not flag blur score exactly at the low threshold', () {
-      final result = evaluateQuality(
-          blurScore: 480, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0);
+    test('blur exactly at threshold does not retake', () {
+      final result = eval(blur: 200);
+      expect(result.passed, isTrue);
+    });
+  });
 
+  group('evaluateMetrics — dark clip', () {
+    test('dark fraction above retake threshold results in retake', () {
+      // kDarkRetake = 0.15
+      final result = eval(dark: 0.16);
+      expect(result.passed, isFalse);
+      expect(result.issues, contains('Too dark — move to a brighter area'));
+    });
+
+    test('dark fraction exactly at retake threshold does not retake', () {
+      // 0.15 is not > 0.15 so no retake; it is > 0.08 (kDarkFixable) so fixable,
+      // but fixable.passed == true
+      final result = eval(dark: 0.15);
+      expect(result.passed, isTrue);
+    });
+
+    test('dark fraction below fixable threshold produces no issues', () {
+      // kDarkFixable = 0.08 — below both thresholds
+      final result = eval(dark: 0.07);
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
     });
+  });
 
-    test('high dark-clip fraction blocks accept as too dark', () {
-      final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0.06, brightClipFraction: 0, brightnessSpread: 0);
-
+  group('evaluateMetrics — bright clip', () {
+    test('bright fraction above retake threshold results in retake', () {
+      // kBrightRetake = 0.20
+      final result = eval(bright: 0.21);
       expect(result.passed, isFalse);
-      expect(result.issues, ['Too dark — move to a brighter area']);
+      expect(result.issues, contains('Severely overexposed — reduce glare or move away from light'));
     });
 
-    test('does not flag dark-clip fraction exactly at the threshold', () {
-      final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0.05, brightClipFraction: 0, brightnessSpread: 0);
+    test('bright fraction exactly at retake threshold does not retake', () {
+      final result = eval(bright: 0.20);
+      expect(result.passed, isTrue);
+    });
 
+    test('bright fraction below fixable threshold produces no issues', () {
+      // kBrightFixable = 0.10
+      final result = eval(bright: 0.09);
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
     });
+  });
 
-    test('high bright-clip fraction blocks accept as too bright', () {
-      final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0.21, brightnessSpread: 0);
-
+  group('evaluateMetrics — shadow', () {
+    test('shadow above retake threshold results in retake', () {
+      // kShadowRetake = 25
+      final result = eval(shadow: 26);
       expect(result.passed, isFalse);
-      expect(result.issues, ['Too bright / overexposed — reduce lighting or move away from light source']);
+      expect(result.issues, contains('Extreme shadow across page — reposition or use even lighting'));
     });
 
-    test('does not flag bright-clip fraction exactly at the threshold', () {
-      final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0.20, brightnessSpread: 0);
+    test('shadow exactly at retake threshold does not retake', () {
+      final result = eval(shadow: 25);
+      expect(result.passed, isTrue);
+    });
 
+    test('shadow below retake threshold produces no issues', () {
+      // kShadowFixable = 999 (disabled), so anything under kShadowRetake is clean
+      final result = eval(shadow: 20);
       expect(result.passed, isTrue);
       expect(result.issues, isEmpty);
     });
+  });
 
-    test('high brightness spread blocks accept as uneven lighting', () {
-      final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 36);
-
+  group('evaluateMetrics — multiple issues', () {
+    test('combines blur and dark-clip retake issues', () {
+      final result = eval(blur: 50, dark: 0.5);
       expect(result.passed, isFalse);
-      expect(result.issues,
-          ["Uneven lighting detected — try repositioning so your shadow isn't blocking the page"]);
-    });
-
-    test('does not flag brightness spread exactly at the threshold', () {
-      final result = evaluateQuality(
-          blurScore: 9000, darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 35);
-
-      expect(result.passed, isTrue);
-      expect(result.issues, isEmpty);
-    });
-
-    test('combines low blur and too-dark blocks together', () {
-      final result = evaluateQuality(
-          blurScore: 50, darkClipFraction: 0.5, brightClipFraction: 0, brightnessSpread: 0);
-
-      expect(result.passed, isFalse);
-      expect(result.issues, [
-        'Image quality too low — hold steady, ensure good lighting, and avoid glare',
+      expect(result.issues, containsAll([
+        'Too blurry — hold the camera steady',
         'Too dark — move to a brighter area',
-      ]);
+      ]));
     });
   });
 
-  group('evaluateLighting', () {
-    test('passes with no issues under normal lighting', () {
-      final result = evaluateLighting(
-          darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 0);
+  group('evaluateMetrics — lighting only (blur/contrast/skew inert)', () {
+    QualityResult lighting({double dark = 0, double bright = 0, double shadow = 0}) =>
+        evaluateMetrics(QualityMetrics(
+          blurScore: double.infinity,
+          darkClipFraction: dark,
+          brightClipFraction: bright,
+          contrastScore: double.infinity,
+          shadowScore: shadow,
+          skewAngleDeg: 0,
+        ));
 
-      expect(result.passed, isTrue);
-      expect(result.issues, isEmpty);
+    test('passes with no issues under normal lighting', () {
+      expect(lighting().passed, isTrue);
+      expect(lighting().issues, isEmpty);
     });
 
     test('flags too dark', () {
-      final result = evaluateLighting(
-          darkClipFraction: 0.06, brightClipFraction: 0, brightnessSpread: 0);
-
+      final result = lighting(dark: 0.16);
       expect(result.passed, isFalse);
-      expect(result.issues, ['Too dark — move to a brighter area']);
+      expect(result.issues, contains('Too dark — move to a brighter area'));
     });
 
     test('flags too bright', () {
-      final result = evaluateLighting(
-          darkClipFraction: 0, brightClipFraction: 0.21, brightnessSpread: 0);
-
+      final result = lighting(bright: 0.21);
       expect(result.passed, isFalse);
-      expect(result.issues, ['Too bright / overexposed — reduce lighting or move away from light source']);
+      expect(result.issues, contains('Severely overexposed — reduce glare or move away from light'));
     });
 
-    test('flags uneven lighting', () {
-      final result = evaluateLighting(
-          darkClipFraction: 0, brightClipFraction: 0, brightnessSpread: 36);
-
+    test('flags uneven lighting / shadow', () {
+      final result = lighting(shadow: 101);
       expect(result.passed, isFalse);
-      expect(result.issues,
-          ["Uneven lighting detected — try repositioning so your shadow isn't blocking the page"]);
+      expect(result.issues, contains('Extreme shadow across page — reposition or use even lighting'));
     });
   });
 
@@ -297,11 +322,6 @@ void main() {
     });
 
     test('ignores row-stride padding bytes beyond the frame width', () {
-      // bytesPerRow (24) is wider than the actual frame (20) — common when
-      // the camera plugin pads rows to a byte alignment boundary. Real
-      // pixel data is mid-range (180, safely between the dark/bright
-      // thresholds); padding is 0 (near-black) and must be skipped, or
-      // it would wrongly read as a too-dark image.
       const width = 20;
       const height = 20;
       const bytesPerRow = 24;
