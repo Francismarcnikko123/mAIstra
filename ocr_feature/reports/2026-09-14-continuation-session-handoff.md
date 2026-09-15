@@ -80,19 +80,20 @@ Full evidence: [prototype report](2026-09-14-offline-association.md),
 [development prototype JSON](2026-09-14-offline-association-development.json),
 [reserved JSON](2026-09-14-offline-association-reserved.json).
 
-## Correction: “Example 7 missing” is not established
+## Example 7 is intentionally skipped
 
 The user confirms supplying all papers from the revised writing instructions.
 All **11 supplied photographs were included**, with no byte/pixel/visual duplicates
 identified. The intake assigns them IDs 1–6 and 8–12. The original final numbered
-writing list has not been reconciled with that mapping. A skipped ID alone does
-not establish a missing physical paper, especially after instructions were revised.
+writing list has not been reconciled with that mapping. Per the user's decision,
+Example 7 is intentionally out of scope for this run and is not required for the
+current experiment.
 
-Treat Example 7 as **unresolved numbering**, not a request for the user to rewrite
+Treat Example 7 as **out of scope**, not a request for the user to rewrite
 anything and not a blocker to testing. Existing frozen JSON fields named
 `missing_examples` / `missing_reserved` still contain 7 as historical bookkeeping.
 They remain untouched to preserve the recorded experiment; they are not proof of
-a missing upload. Reconcile the final instruction list before changing the mapping.
+a missing upload. A future dataset may assign a descriptive label if needed.
 
 The reserved photographs were visually identified at intake and excluded from rule
 tuning until after freeze; they were not wholly unseen images. Do not claim the

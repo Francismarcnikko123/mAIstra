@@ -248,7 +248,7 @@ The following state is intentionally retained in `SubmissionsListComponent`:
   function and the main start. That block-boundary error stays within one answer.
   No predicted continuation crosses annotated answers. Two cases are ambiguous.
 - A SHA-256 freeze precedes reserved evaluation. Reserved results cannot be used
-  to tune this version; Example 7 is an unresolved ID mapping, and all supplied
+  to tune this version; Example 7 is intentionally out of scope, and all supplied
   pages use one writer. The historical frozen manifests are retained unchanged.
   The five known production-order expected failures remain unresolved by design.
 - Frozen reserved order matches 3/3 available pages (baseline 2/3). Example 10's
@@ -276,9 +276,8 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - A real development page05 run recovered both local continuations, matched the
   annotated order and preserved all 15 retained records. The frozen rule file was
   unchanged. Focused runner tests cover lazy imports and duplicate preservation.
-- Clarified this session: all 11 supplied photos were processed. Do not request a
-  rewrite of “Example 7” without reconciling the revised writing instructions with
-  the skipped intake ID. Additional writers are future evaluation data, not a
+- Clarified this session: all 11 supplied photos were processed. Example 7 is
+  intentionally skipped for this run; no rewrite is requested. Additional writers are future evaluation data, not a
   prerequisite to use the tester; testing photos does not train the OCR model.
 - Updated local OCR guides, command reference, setup and maintainer entry points.
   Most are gitignored; the committed source of truth is the
