@@ -9,8 +9,6 @@ C_LANGUAGE = Language(tree_sitter_c.language())
 C_PARSER = Parser(C_LANGUAGE)
 
 ARITHMETIC_OPERATORS = {"+", "-", "*", "/", "%"}
-COMPARISON_OPERATORS = {"==", "!=", "<", "<=", ">", ">="}
-LOGICAL_OPERATORS = {"&&", "||"}
 
 
 def node_text(node: Node, source: bytes) -> str:
@@ -56,48 +54,17 @@ def binary_operator(node: Node, source: bytes) -> str | None:
     ).strip()
 
 
-def unary_operator(node: Node, source: bytes) -> str | None:
-    """Return the operator before a unary expression's argument."""
-    argument = node.child_by_field_name("argument")
-
-    if argument is None:
-        return None
-
-    return source[node.start_byte:argument.start_byte].decode(
-        "utf-8",
-        errors="replace",
-    ).strip()
-
-
 def extract_logic_features(code: str) -> dict[str, Any]:
-    """Parse C code and return beginner-level structural features."""
+    """Parse C code and return the features currently used for grading."""
     source = (code or "").encode("utf-8")
     root = C_PARSER.parse(source).root_node
 
     defined_functions: set[str] = set()
     called_functions: set[str] = set()
-    numeric_literals: set[str] = set()
     arithmetic_operators: set[str] = set()
-    comparison_operators: set[str] = set()
-    logical_operators: set[str] = set()
 
-    has_variable_declaration = False
     has_assignment = False
     has_return = False
-    has_if = False
-    has_else = False
-    has_switch = False
-    has_case = False
-    has_for_loop = False
-    has_while_loop = False
-    has_do_while_loop = False
-    has_break = False
-    has_continue = False
-    uses_increment = False
-    uses_decrement = False
-    uses_logical_not = False
-    has_array_declaration = False
-    has_array_access = False
 
     for node in walk_tree(root):
         node_type = node.type
@@ -114,9 +81,6 @@ def extract_logic_features(code: str) -> dict[str, Any]:
             if function is not None and function.type == "identifier":
                 called_functions.add(node_text(function, source))
 
-        elif node_type == "declaration":
-            has_variable_declaration = True
-
         elif node_type in {"assignment_expression", "init_declarator"}:
             has_assignment = True
 
@@ -124,63 +88,12 @@ def extract_logic_features(code: str) -> dict[str, Any]:
             operator = binary_operator(node, source)
             if operator in ARITHMETIC_OPERATORS:
                 arithmetic_operators.add(operator)
-            elif operator in COMPARISON_OPERATORS:
-                comparison_operators.add(operator)
-            elif operator in LOGICAL_OPERATORS:
-                logical_operators.add(operator)
-
-        elif node_type == "unary_expression":
-            if unary_operator(node, source) == "!":
-                uses_logical_not = True
-
-        elif node_type == "update_expression":
-            update_text = node_text(node, source)
-            uses_increment = uses_increment or "++" in update_text
-            uses_decrement = uses_decrement or "--" in update_text
 
         elif node_type == "return_statement":
             has_return = True
 
-        elif node_type == "if_statement":
-            has_if = True
-            has_else = (
-                has_else
-                or node.child_by_field_name("alternative") is not None
-            )
-
-        elif node_type == "switch_statement":
-            has_switch = True
-
-        elif node_type == "case_statement":
-            has_case = True
-
-        elif node_type == "for_statement":
-            has_for_loop = True
-
-        elif node_type == "while_statement":
-            has_while_loop = True
-
-        elif node_type == "do_statement":
-            has_do_while_loop = True
-
-        elif node_type == "break_statement":
-            has_break = True
-
-        elif node_type == "continue_statement":
-            has_continue = True
-
-        elif node_type == "array_declarator":
-            has_array_declaration = True
-
-        elif node_type == "subscript_expression":
-            has_array_access = True
-
-        elif node_type == "number_literal":
-            numeric_literals.add(node_text(node, source))
-
     return {
         "has_main": "main" in defined_functions,
-        "has_variable_declaration": has_variable_declaration,
         "has_printf": "printf" in called_functions,
         "has_scanf": "scanf" in called_functions,
         "has_assignment": has_assignment,
@@ -189,30 +102,8 @@ def extract_logic_features(code: str) -> dict[str, Any]:
         "uses_multiplication": "*" in arithmetic_operators,
         "uses_division": "/" in arithmetic_operators,
         "uses_modulo": "%" in arithmetic_operators,
-        "uses_comparison": bool(comparison_operators),
-        "comparison_operators": sorted(comparison_operators),
-        "uses_logical_and": "&&" in logical_operators,
-        "uses_logical_or": "||" in logical_operators,
-        "uses_logical_not": uses_logical_not,
         "has_return": has_return,
-        "has_if": has_if,
-        "has_else": has_else,
-        "has_switch": has_switch,
-        "has_case": has_case,
-        "has_for_loop": has_for_loop,
-        "has_while_loop": has_while_loop,
-        "has_do_while_loop": has_do_while_loop,
-        "has_loop": has_for_loop or has_while_loop or has_do_while_loop,
-        "has_break": has_break,
-        "has_continue": has_continue,
-        "uses_increment": uses_increment,
-        "uses_decrement": uses_decrement,
-        "has_array_declaration": has_array_declaration,
-        "has_array_access": has_array_access,
-        "has_parse_errors": root.has_error,
         "defined_functions": sorted(defined_functions),
-        "called_functions": sorted(called_functions),
-        "numbers": sorted(numeric_literals),
     }
 
 
