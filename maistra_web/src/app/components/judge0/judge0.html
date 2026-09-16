@@ -133,39 +133,5 @@
       </article>
     </section>
 
-    <section class="logic-analysis" *ngIf="logicAnalysisResults.length">
-      <button
-        class="logic-analysis-toggle"
-        type="button"
-        (click)="toggleLogicAnalysis()"
-        [attr.aria-expanded]="logicAnalysisExpanded"
-      >
-        <span class="logic-analysis-title">
-          <span
-            class="logic-analysis-chevron"
-            [class.expanded]="logicAnalysisExpanded"
-          >
-            ›
-          </span>
-          <span>Logic Analysis (feedback only)</span>
-        </span>
-        <span>
-          {{ passedLogicCheckCount }}/{{ logicAnalysisResults.length }} checks
-          passed
-        </span>
-      </button>
-
-      <div class="logic-analysis-body" *ngIf="logicAnalysisExpanded">
-        <div
-          class="logic-check"
-          *ngFor="let check of logicAnalysisResults"
-          [class.passed]="check.passed"
-          [class.failed]="!check.passed"
-        >
-          <span>{{ check.name }}</span>
-          <span>{{ check.passed ? 'Passed' : 'Review' }}</span>
-        </div>
-      </div>
-    </section>
   </div>
 </div>

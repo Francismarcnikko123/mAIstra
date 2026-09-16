@@ -21,13 +21,6 @@ export interface TestCaseResult {
   passed: boolean;
 }
 
-export interface LogicAnalysisResult {
-  name: string;
-  passed: boolean;
-  weight: number;
-  score: number;
-}
-
 @Component({
   selector: 'app-judge0',
   standalone: true,
@@ -44,7 +37,6 @@ export class Judge0 implements OnChanges {
   @Input() submitStatus = '';
   @Input() isSubmitting = false;
   @Input() testCaseResults: TestCaseResult[] = [];
-  @Input() logicAnalysisResults: LogicAnalysisResult[] = [];
   @Input() hasQuestion = true;
   @Input() requiresQuestion = false;
   codeToRun = ''; // editable copy
@@ -61,7 +53,6 @@ export class Judge0 implements OnChanges {
   runNotification = '';
   firstRunTestCasePassed: boolean | null = null;
   isRunning = false;
-  logicAnalysisExpanded = false;
   resultMode: 'run' | 'submit' = 'run';
   @Output() submitCode = new EventEmitter<void>();
   @Output() codeChange = new EventEmitter<string>();
@@ -73,10 +64,6 @@ export class Judge0 implements OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['initialCode']) {
       this.codeToRun = this.initialCode || '';
-    }
-
-    if (changes['logicAnalysisResults']) {
-      this.logicAnalysisExpanded = false;
     }
   }
   executeCode() {
@@ -130,10 +117,6 @@ export class Judge0 implements OnChanges {
   requestSubmit() {
     this.resultMode = 'submit';
     this.submitCode.emit();
-  }
-
-  toggleLogicAnalysis() {
-    this.logicAnalysisExpanded = !this.logicAnalysisExpanded;
   }
 
   get displayedOutput(): string {
@@ -240,10 +223,6 @@ export class Judge0 implements OnChanges {
       this.firstTestCaseResult?.passed ?? this.firstRunTestCasePassed;
     if (passed === null) return '';
     return passed ? '1/1 test case passed' : '1/1 test case failed';
-  }
-
-  get passedLogicCheckCount(): number {
-    return this.logicAnalysisResults.filter((result) => result.passed).length;
   }
 
   private evaluateFirstRunTestCase(): boolean | null {

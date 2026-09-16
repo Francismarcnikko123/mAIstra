@@ -8,11 +8,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-try:
-    from .logic_checker import compare_logic
-except ImportError:
-    from logic_checker import compare_logic
-
 load_dotenv()
 
 app = FastAPI()
@@ -38,9 +33,7 @@ class RunCodeRequest(BaseModel):
     source_code: str
     language_id: int
     stdin: Optional[str] = ""
-class LogicAnalysisRequest(BaseModel):
-    model_code: str
-    student_code: str
+
 
 @app.get("/")
 def health_check():
@@ -123,16 +116,6 @@ async def run_code(payload: RunCodeRequest):
 
     raise HTTPException(status_code=504, detail="Judge0 execution timed out")
 
-@app.post("/api/judge0/analyze-logic")
-async def analyze_logic(payload: LogicAnalysisRequest):
-    logic_result = compare_logic(
-        payload.model_code,
-        payload.student_code,
-    )
-    return {
-        "logic_score": logic_result["score"],
-        "logic_details": logic_result["checks"],
-    }
 
 def encode_base64(value: str) -> str:
     return base64.b64encode(value.encode("utf-8")).decode("utf-8")

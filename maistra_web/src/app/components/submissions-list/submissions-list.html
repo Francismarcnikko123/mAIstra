@@ -274,7 +274,6 @@
           [submitStatus]="submissionCheckStatus[selectedSubmission.id] || ''"
           [isSubmitting]="isChecking"
           [testCaseResults]="submissionTestResults[selectedSubmission.id] || []"
-          [logicAnalysisResults]="submissionLogicResults[selectedSubmission.id] || []"
           (codeChange)="updateSubmissionCode(selectedSubmission.id, $event)"
           (submitCode)="checkSubmission(selectedSubmission)"
         ></app-judge0>

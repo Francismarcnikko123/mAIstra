@@ -12,7 +12,7 @@ The Flutter mobile application captures handwritten submissions, performs a basi
 
 ### `maistra_web`
 
-The Angular teacher application manages questions and submissions. Teachers can review uploaded images, run OCR, correct extracted code, select the related question, execute code, and inspect test-case and logic results.
+The Angular teacher application manages questions and submissions. Teachers can review uploaded images, run OCR, correct extracted code, select the related question, execute code, and inspect test-case results.
 
 ### `ocr_feature`
 
@@ -20,7 +20,7 @@ The Python FastAPI OCR service downloads or accepts submission images, preproces
 
 ### `judge0_api`
 
-The Python FastAPI Judge0 wrapper submits C code to Judge0, polls for results, decodes output, and provides the grading endpoint consumed by the Angular application.
+The Python FastAPI Judge0 wrapper submits C code to Judge0, polls for results, and decodes execution output for the Angular application.
 
 ### `supabase`
 
@@ -47,7 +47,7 @@ The Angular submission review uses one existing `SubmissionsListComponent`; no a
    - Execute the verified code through the Judge0 wrapper.
    - For function questions, generate a temporary `main()` test harness.
    - Run all configured test cases.
-   - Display output comparison and logic-analysis results.
+   - Display output comparison and equal-weight test-case results.
 
 ## Submission interface changes
 
@@ -133,17 +133,16 @@ The September 8 manual-output and function-input update is documented in [its de
 - The displayed score is `(passed test cases / total test cases) * 100`, rounded to at most two decimal places.
 - Submission results show the passed fraction, percentage, and `1/1 point` or `0/1 point` for every case.
 - The question form no longer exposes or stores test-case marks. Older records containing `mark` remain readable, but scoring ignores the property and awards one point per passed case.
-- Logic Analysis remains visible as feedback only and does not change the test-case score.
+- Logic Analysis is isolated on `feature/logic-feature`; this branch scores only Judge0 test-case results.
 - This is intentionally a partial implementation: score persistence, teacher overrides, and any larger rubric formula are pending adviser approval.
 
 The review questions are tracked in [the adviser-review task](plans/2026-09-09-adviser-review-equal-weight-scoring.md). The supporting rationale and implementation scope are in [the scoring design](plans/2026-09-09-equal-weight-test-scoring-design.md) and [implementation plan](plans/2026-09-09-equal-weight-test-scoring.md).
 
 ## C structural analysis
 
-- The current Tree-sitter checker extracts only the features used by Logic Analysis: basic functions, input/output calls, declarations/assignments, arithmetic, and return statements.
-- The unused expanded feature extraction was removed from this branch to keep grading behavior and implementation aligned. Its prototype remains available on `feature/logic-feature` for future rubric work.
-- The shared checker is imported by the Judge0 logic-analysis endpoint; duplicate regex checkers and duplicate grading routes remain removed.
-- Judge0 test cases remain the primary correctness mechanism. Additional parser-based scoring should be added only through explicit per-question rubric requirements.
+- The Tree-sitter checker, logic comparison endpoint, frontend request/state, and Logic Analysis panel are owned by `feature/logic-feature`.
+- `judge0-integration` intentionally contains no structural-analysis implementation and uses Judge0 test cases as its only automatic correctness mechanism.
+- Additional parser-based scoring should be developed and reviewed on the feature branch before integration.
 
 ## Code cleanup completed
 
@@ -194,7 +193,7 @@ Focused tests now cover:
 - The focused submission-list test file passes isolated TypeScript validation.
 - Angular template compilation passed after the submission workflow changes, and after the Judge0 output-verification changes (`ng build --configuration development` succeeds).
 - The earlier automatic Expected Output synchronization was verified live before being superseded by the September 8 manual-output workflow.
-- `judge0_api`'s Python test suite (`tests_logic_checker.py`, `tests_judge0_api.py`) passes: 16/16.
+- The current `judge0_api` suite covers health/execution behavior and confirms the feature-only logic endpoint is unavailable on this branch.
 - Running Vitest from the current WSL environment is blocked because `node_modules` contains Windows-native Rollup/esbuild packages. Run `npm ci` and the tests in the same operating system environment, or run them directly from Windows where the dependencies were installed.
 - Question-validation follow-up (September 6): 71 focused Vitest tests pass across question-form, C structure checks, submissions-list, and Judge0 runner; `tsc --noEmit -p tsconfig.spec.json` and the Angular development build pass. Updated older fixtures to include real Judge0 status IDs and the test cases required by the existing submission workflow. Removed the redundant filesystem-based template string assertion; the changed UI was checked in the browser.
 - Live browser/Judge0 checks confirmed immediate function-format errors, successful function output, successful programs both with and without an explicit stdio header using Standard Input, and an explicit No output failure with Save disabled. No test questions were saved to Supabase during verification.

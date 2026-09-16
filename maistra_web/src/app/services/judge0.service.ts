@@ -1,17 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 
-export interface LogicCheck {
-  name: string;
-  passed: boolean;
-  weight: number;
-  score: number;
-}
-
-export interface LogicAnalysisResponse {
-  logic_score: number;
-  logic_details: LogicCheck[];
-}
 export interface Judge0RunResult {
   stdout?: string;
   stderr?: string;
@@ -39,16 +28,6 @@ export class Judge0Service {
         language_id: 50,
         stdin,
       },
-    );
-  }
-
-  analyzeLogic(payload: {
-    model_code: string;
-    student_code: string;
-  }) {
-    return this.http.post<LogicAnalysisResponse>(
-      `${this.apiUrl}/analyze-logic`,
-      payload,
     );
   }
 }

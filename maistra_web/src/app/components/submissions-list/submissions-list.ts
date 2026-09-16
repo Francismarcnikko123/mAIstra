@@ -10,7 +10,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { SupabaseService } from '../../services/supabase';
 import { CodeEditorComponent } from '../code-editor/code-editor';
-import { Judge0, LogicAnalysisResult, TestCaseResult } from '../judge0/judge0';
+import { Judge0, TestCaseResult } from '../judge0/judge0';
 import { Judge0Service } from '../../services/judge0.service';
 import { firstValueFrom } from 'rxjs';
 import { buildCQuestionSource } from '../../utils/c-question';
@@ -25,7 +25,6 @@ interface SubmissionQuestion {
   id: string;
   question_name: string;
   question_type: 'function' | 'program';
-  model_answer: string;
   test_cases: TestCase[];
 }
 
@@ -87,7 +86,6 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   submissionCheckStatus: Record<string, string> = {};
   submissionRunOutput: Record<string, string> = {};
   submissionTestResults: Record<string, TestCaseResult[]> = {};
-  submissionLogicResults: Record<string, LogicAnalysisResult[]> = {};
 
   private subscription?: ReturnType<SupabaseService['subscribeToSubmissions']>;
   private saveStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -217,7 +215,6 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.isChecking = false;
     this.submissionCheckStatus[submission.id] = '';
     this.submissionTestResults[submission.id] = [];
-    this.submissionLogicResults[submission.id] = [];
 
     const saved = submission.verified_text || submission.extracted_text || '';
     if (saved && !this.editableText[submission.id]) {
@@ -462,7 +459,6 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.submissionCheckStatus[submission.id] = '';
     this.submissionRunOutput[submission.id] = '';
     this.submissionTestResults[submission.id] = [];
-    this.submissionLogicResults[submission.id] = [];
 
     try {
       const question = this.getSubmissionQuestion(submission);
@@ -483,11 +479,6 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         return;
       }
 
-      if (!question.model_answer?.trim()) {
-        this.checkError = 'No model answer found.';
-        return;
-      }
-
       const testCases = question.test_cases || [];
 
       if (testCases.length === 0) {
@@ -496,17 +487,6 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       }
 
       const testResults: TestCaseResult[] = [];
-
-      // Logic analysis only depends on model vs student code, not on any
-      // single test case's I/O — run it once up front instead of once per
-      // test case. Output comparison still happens per test case below.
-      const logicGrade = await firstValueFrom(
-        this.judge0Service.analyzeLogic({
-          model_code: question.model_answer,
-          student_code: studentCode,
-        }),
-      );
-      const logicResults: LogicAnalysisResult[] = logicGrade.logic_details;
 
       for (const [index, testCase] of testCases.entries()) {
         const sourceCode = buildCQuestionSource(
@@ -554,7 +534,6 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       }
 
       this.submissionTestResults[submission.id] = testResults;
-      this.submissionLogicResults[submission.id] = logicResults;
       this.submissionRunOutput[submission.id] =
         testResults.at(-1)?.actualOutput || '';
       this.submissionCheckStatus[submission.id] = testResults.every(
@@ -563,7 +542,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         ? 'Accepted'
         : 'Wrong Answer';
     } catch (error) {
-      this.checkError = 'Failed to check logic and output.';
+      this.checkError = 'Failed to execute test cases.';
       this.submissionCheckStatus[submission.id] = 'Error';
     } finally {
       this.isChecking = false;
@@ -638,7 +617,6 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.submissionCheckStatus[id] = '';
     this.submissionRunOutput[id] = '';
     this.submissionTestResults[id] = [];
-    this.submissionLogicResults[id] = [];
   }
 
   private getSubmissionQuestion(

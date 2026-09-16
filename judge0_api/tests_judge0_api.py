@@ -40,7 +40,7 @@ def test_run_code_reports_unreachable_judge0(monkeypatch):
     )
 
 
-def test_analyze_logic_returns_only_logic_feedback():
+def test_logic_analysis_endpoint_is_not_available_on_execution_branch():
     client = TestClient(main.app)
 
     response = client.post(
@@ -51,6 +51,4 @@ def test_analyze_logic_returns_only_logic_feedback():
         },
     )
 
-    assert response.status_code == 200
-    assert set(response.json()) == {"logic_score", "logic_details"}
-    assert response.json()["logic_score"] == 100
+    assert response.status_code == 404

@@ -16,6 +16,17 @@ describe('Judge0', () => {
     expect(component).toBeTruthy();
   });
 
+  it('does not expose Logic Analysis state on the execution branch', () => {
+    const component = new Judge0(
+      {} as Judge0Service,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+
+    expect('logicAnalysisResults' in component).toBe(false);
+    expect('logicAnalysisExpanded' in component).toBe(false);
+    expect('toggleLogicAnalysis' in component).toBe(false);
+  });
+
   it('runs the provided code with stdin and keeps terminal output values', () => {
     const runCCode = vi.fn().mockReturnValue(
       of({

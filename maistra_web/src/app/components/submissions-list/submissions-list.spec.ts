@@ -219,7 +219,7 @@ describe('SubmissionsListComponent save feedback', () => {
     const { component } = createComponent(vi.fn(), {
       runCCode,
       analyzeLogic,
-    } as Partial<Judge0Service>);
+    } as unknown as Partial<Judge0Service>);
     const submission = {
       id: 'submission-1',
       image_url: 'https://example.test/submission.png',
@@ -233,7 +233,6 @@ describe('SubmissionsListComponent save feedback', () => {
         id: 'question-1',
         question_name: 'Addition',
         question_type: 'program',
-        model_answer: 'int main(void) { return 0; }',
         test_cases: [
           {
             test_code: '',
@@ -256,11 +255,7 @@ describe('SubmissionsListComponent save feedback', () => {
       '#include <stdio.h>\n\n' + component.editableText['submission-1'],
       '2 3',
     );
-    expect(analyzeLogic).toHaveBeenCalledWith({
-      model_code: 'int main(void) { return 0; }',
-      student_code: component.editableText['submission-1'],
-    });
-    expect(analyzeLogic).toHaveBeenCalledOnce();
+    expect(analyzeLogic).not.toHaveBeenCalled();
     expect(component.submissionRunOutput['submission-1']).toBe('5');
     expect(component.submissionCheckStatus['submission-1']).toBe('Accepted');
     expect(runCCode).toHaveBeenCalledTimes(2);
@@ -282,9 +277,6 @@ describe('SubmissionsListComponent save feedback', () => {
         passed: true,
       },
     ]);
-    expect(component.submissionLogicResults['submission-1']).toEqual([
-      { name: 'Has main', passed: true, weight: 1, score: 1 },
-    ]);
   });
 
   it('checks the edited runner code instead of stale verified text', async () => {
@@ -296,14 +288,8 @@ describe('SubmissionsListComponent save feedback', () => {
         status: { id: 3, description: 'Accepted' },
       }),
     );
-    const analyzeLogic = vi.fn().mockReturnValue(
-      of({
-        logic_details: [{ name: 'Has main', passed: true }],
-      }),
-    );
     const { component } = createComponent(vi.fn(), {
       runCCode,
-      analyzeLogic,
     } as Partial<Judge0Service>);
     const submission = {
       id: 'submission-1',
@@ -318,7 +304,6 @@ describe('SubmissionsListComponent save feedback', () => {
         id: 'question-1',
         question_name: 'Edited code',
         question_type: 'program',
-        model_answer: 'model code',
         test_cases: [
           {
             test_code: '',
@@ -336,11 +321,6 @@ describe('SubmissionsListComponent save feedback', () => {
       '#include <stdio.h>\n\nedited code',
       '',
     );
-    expect(analyzeLogic).toHaveBeenCalledWith(
-      expect.objectContaining({
-        student_code: 'edited code',
-      }),
-    );
   });
 
   it('shows wrong answer when code runs but output does not match', async () => {
@@ -352,14 +332,8 @@ describe('SubmissionsListComponent save feedback', () => {
         status: { id: 3, description: 'Accepted' },
       }),
     );
-    const analyzeLogic = vi.fn().mockReturnValue(
-      of({
-        logic_details: [{ name: 'Has main', passed: true }],
-      }),
-    );
     const { component } = createComponent(vi.fn(), {
       runCCode,
-      analyzeLogic,
     } as Partial<Judge0Service>);
     const submission = {
       id: 'submission-1',
@@ -373,7 +347,6 @@ describe('SubmissionsListComponent save feedback', () => {
         id: 'question-1',
         question_name: 'Ascending order',
         question_type: 'program',
-        model_answer: 'int main(void) { return 0; }',
         test_cases: [
           {
             test_code: '',
@@ -406,7 +379,6 @@ describe('SubmissionsListComponent save feedback', () => {
         id: 'stale-question',
         question_name: 'Old linked question',
         question_type: 'program' as const,
-        model_answer: 'int main(void) { return 0; }',
         test_cases: [],
       },
     };
@@ -416,7 +388,6 @@ describe('SubmissionsListComponent save feedback', () => {
         id: 'selected-question',
         question_name: 'Sum',
         question_type: 'program',
-        model_answer: 'int main(void) { return 0; }',
         test_cases: [
           {
             test_code: '',
@@ -439,10 +410,8 @@ describe('SubmissionsListComponent save feedback', () => {
     const runCCode = vi
       .fn()
       .mockReturnValue(of({ stdout: '5', status: { id: 3 } }));
-    const analyzeLogic = vi.fn().mockReturnValue(of({ logic_details: [] }));
     const { component } = createComponent(vi.fn(), {
       runCCode,
-      analyzeLogic,
     });
     selectSubmission(component, 'function-1');
     component.editableText['function-1'] =
@@ -452,7 +421,6 @@ describe('SubmissionsListComponent save feedback', () => {
         id: 'question-1',
         question_name: 'Addition',
         question_type: 'function',
-        model_answer: component.editableText['function-1'],
         test_cases: [
           {
             test_code: 'printf("%d", add(2, 3));',
@@ -493,17 +461,12 @@ describe('SubmissionsListComponent save feedback', () => {
         passed: false,
       },
     ];
-    component.submissionLogicResults['submission-1'] = [
-      { name: 'Has main', passed: true, weight: 1, score: 1 },
-    ];
-
     component.onSelectedQuestionChange('question-2');
 
     expect(component.selectedQuestionId).toBe('question-2');
     expect(component.submissionRunOutput['submission-1']).toBe('');
     expect(component.submissionCheckStatus['submission-1']).toBe('');
     expect(component.submissionTestResults['submission-1']).toEqual([]);
-    expect(component.submissionLogicResults['submission-1']).toEqual([]);
   });
 
   it('does not leave Details until a question is selected', async () => {
@@ -543,7 +506,6 @@ describe('SubmissionsListComponent save feedback', () => {
       id: 'question-1',
       question_name: 'Addition',
       question_type: 'program' as const,
-      model_answer: 'int main(void) { return 0; }',
       test_cases: [],
     };
     const submission = {
@@ -570,7 +532,6 @@ describe('SubmissionsListComponent save feedback', () => {
         id: 'question-1',
         question_name: 'Addition',
         question_type: 'program',
-        model_answer: 'int main(void) { return 0; }',
         test_cases: [],
       },
     ];
@@ -629,7 +590,6 @@ describe('SubmissionsListComponent save feedback', () => {
         id: 'question-1',
         question_name: 'Addition',
         question_type: 'program',
-        model_answer: 'int main(void) { return 0; }',
         test_cases: [
           { test_code: '', test_input: '', expected_output: '5' },
         ],
@@ -656,7 +616,6 @@ describe('SubmissionsListComponent save feedback', () => {
         id: 'question-1',
         question_name: 'Addition',
         question_type: 'program',
-        model_answer: 'int main(void) { return 0; }',
         test_cases: [
           { test_code: '', test_input: '', expected_output: '5' },
         ],
