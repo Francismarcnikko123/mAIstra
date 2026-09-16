@@ -324,15 +324,17 @@ QualityResult checkQuality(List<int> bytes) {
   final bright = computeBrightClipFraction(gray);
   final contrast = computeContrastScore(gray);
   final shadow = computeShadowScore(gray);
-  final skew = computeSkewAngle(gray);
 
+  // computeSkewAngle is not called: both skew thresholds are disabled, so the
+  // angle is never acted on, and the 81-angle projection sweep it runs is the
+  // most expensive operation in this function.
   final metrics = QualityMetrics(
     blurScore: blur,
     darkClipFraction: dark,
     brightClipFraction: bright,
     contrastScore: contrast,
     shadowScore: shadow,
-    skewAngleDeg: skew,
+    skewAngleDeg: 0,
   );
 
   // ignore: avoid_print
@@ -340,8 +342,7 @@ QualityResult checkQuality(List<int> bytes) {
       ' dark=${dark.toStringAsFixed(3)}'
       ' bright=${bright.toStringAsFixed(3)}'
       ' contrast=${contrast.toStringAsFixed(1)}'
-      ' shadow=${shadow.toStringAsFixed(1)}'
-      ' skew=${skew.toStringAsFixed(1)}°');
+      ' shadow=${shadow.toStringAsFixed(1)}');
 
   return evaluateMetrics(metrics);
 }

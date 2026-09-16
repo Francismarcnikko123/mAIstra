@@ -13,6 +13,15 @@ QualityAndFix checkAndFixQuality(List<int> bytes) {
     if (fixed != null) {
       // Re-evaluate the corrected image so the displayed result is accurate
       final fixedResult = checkQuality(fixed);
+
+      // The histogram stretch widens regional brightness spread along with
+      // ink separation, so a page already near kShadowRetake can cross it
+      // once corrected. Discard the correction rather than reject a page
+      // that was acceptable before it was touched.
+      if (fixedResult.decision == QualityDecision.retake) {
+        return QualityAndFix(quality: raw, fixedBytes: null);
+      }
+
       return QualityAndFix(
         quality: QualityResult(
           decision: fixedResult.decision,
