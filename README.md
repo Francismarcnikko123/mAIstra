@@ -18,5 +18,3 @@ mAIstra captures handwritten C programming submissions, extracts code through OC
 - [Judge0 Ubuntu Docker setup](docs/setup/JUDGE0_UBUNTU_DOCKER_SETUP.md)
 - [Supabase local setup](docs/setup/SUPABASE_LOCAL_SETUP.md)
 - [Switching between local and cloud Supabase](docs/setup/SUPABASE_CLOUD_LOCAL_SWITCHING.md)
-
-Project-specific Codex instructions are defined in [AGENTS.md](AGENTS.md).

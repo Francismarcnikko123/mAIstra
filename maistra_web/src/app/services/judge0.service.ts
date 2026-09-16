@@ -8,18 +8,9 @@ export interface LogicCheck {
   score: number;
 }
 
-export interface GradingResult {
-  final_score: number;
-  compilation_score: number;
+export interface LogicAnalysisResponse {
   logic_score: number;
-  output_score: number;
   logic_details: LogicCheck[];
-  output_details: {
-    passed: boolean;
-    score: number;
-    expected_normalized: string;
-    actual_normalized: string;
-  };
 }
 export interface Judge0RunResult {
   stdout?: string;
@@ -42,7 +33,7 @@ export class Judge0Service {
 
   runCCode(sourceCode: string, stdin = '') {
     return this.http.post<Judge0RunResult>(
-      'http://127.0.0.1:8001/api/judge0/run',
+      `${this.apiUrl}/run`,
       {
         source_code: sourceCode,
         language_id: 50,
@@ -51,15 +42,12 @@ export class Judge0Service {
     );
   }
 
-  gradeSubmission(payload: {
+  analyzeLogic(payload: {
     model_code: string;
     student_code: string;
-    expected_output: string;
-    actual_output: string;
-    compilation_passed: boolean;
   }) {
-    return this.http.post<GradingResult>(
-      `${this.apiUrl}/grade-submission`,
+    return this.http.post<LogicAnalysisResponse>(
+      `${this.apiUrl}/analyze-logic`,
       payload,
     );
   }

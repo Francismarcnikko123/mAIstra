@@ -38,3 +38,19 @@ def test_run_code_reports_unreachable_judge0(monkeypatch):
         "Judge0 is unreachable at http://127.0.0.1:2358. "
         "Start Judge0 or update JUDGE0_BASE_URL."
     )
+
+
+def test_analyze_logic_returns_only_logic_feedback():
+    client = TestClient(main.app)
+
+    response = client.post(
+        "/api/judge0/analyze-logic",
+        json={
+            "model_code": "int add(int a, int b) { return a + b; }",
+            "student_code": "int add(int x, int y) { return x + y; }",
+        },
+    )
+
+    assert response.status_code == 200
+    assert set(response.json()) == {"logic_score", "logic_details"}
+    assert response.json()["logic_score"] == 100

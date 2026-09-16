@@ -8,8 +8,9 @@ import {
   ChangeDetectorRef,
 } from '@angular/core';
 import { CodeEditorComponent } from '../code-editor/code-editor';
-import { HttpClient } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
+import { Judge0Service } from '../../services/judge0.service';
+import { normalizeOutput } from '../../utils/normalize-output';
 
 export interface TestCaseResult {
   caseNumber: number;
@@ -66,7 +67,7 @@ export class Judge0 implements OnChanges {
   @Output() codeChange = new EventEmitter<string>();
 
   constructor(
-    private http: HttpClient,
+    private judge0: Judge0Service,
     private cdr: ChangeDetectorRef,
   ) {}
   ngOnChanges(changes: SimpleChanges): void {
@@ -96,14 +97,8 @@ export class Judge0 implements OnChanges {
     this.firstRunTestCasePassed = null;
 
     this.cdr.detectChanges();
-    console.log('Execute clicked');
-
-    this.http
-      .post<any>('http://127.0.0.1:8001/api/judge0/run', {
-        source_code: this.runCode || this.codeToRun,
-        language_id: 50,
-        stdin: this.stdin,
-      })
+    this.judge0
+      .runCCode(this.runCode || this.codeToRun, this.stdin)
       .subscribe({
         next: (result) => {
           this.stdout = result.stdout || '';
@@ -260,16 +255,7 @@ export class Judge0 implements OnChanges {
     }
 
     return (
-      this.normalizeOutput(this.stdout) ===
-      this.normalizeOutput(this.expectedOutput)
+      normalizeOutput(this.stdout) === normalizeOutput(this.expectedOutput)
     );
-  }
-
-  private normalizeOutput(value: string): string {
-    return value
-      .trim()
-      .toLowerCase()
-      .replace(/\s*:\s*/g, ':')
-      .replace(/\s+/g, ' ');
   }
 }

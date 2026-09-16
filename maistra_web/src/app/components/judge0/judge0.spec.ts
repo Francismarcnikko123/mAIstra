@@ -1,15 +1,15 @@
 import '@angular/compiler';
 import { ChangeDetectorRef } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
+import { Judge0Service } from '../../services/judge0.service';
 import { Judge0 } from './judge0';
 
 describe('Judge0', () => {
   it('should create', () => {
     const component = new Judge0(
-      {} as HttpClient,
+      {} as Judge0Service,
       { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
     );
 
@@ -17,7 +17,7 @@ describe('Judge0', () => {
   });
 
   it('runs the provided code with stdin and keeps terminal output values', () => {
-    const post = vi.fn().mockReturnValue(
+    const runCCode = vi.fn().mockReturnValue(
       of({
         stdout: '5\n',
         stderr: '',
@@ -26,7 +26,7 @@ describe('Judge0', () => {
       }),
     );
     const component = new Judge0(
-      { post } as unknown as HttpClient,
+      { runCCode } as unknown as Judge0Service,
       { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
     );
     component.runCode = 'int main(void) { return 0; }';
@@ -35,19 +35,18 @@ describe('Judge0', () => {
 
     component.executeCode();
 
-    expect(post).toHaveBeenCalledWith('http://127.0.0.1:8001/api/judge0/run', {
-      source_code: 'int main(void) { return 0; }',
-      language_id: 50,
-      stdin: '2 3',
-    });
+    expect(runCCode).toHaveBeenCalledWith(
+      'int main(void) { return 0; }',
+      '2 3',
+    );
     expect(component.stdout).toBe('5\n');
     expect(component.expectedOutput).toBe('5');
   });
 
   it('shows a notification and does not run code before a question is selected', () => {
-    const post = vi.fn();
+    const runCCode = vi.fn();
     const component = new Judge0(
-      { post } as unknown as HttpClient,
+      { runCCode } as unknown as Judge0Service,
       { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
     );
     component.requiresQuestion = true;
@@ -56,7 +55,7 @@ describe('Judge0', () => {
 
     component.executeCode();
 
-    expect(post).not.toHaveBeenCalled();
+    expect(runCCode).not.toHaveBeenCalled();
     expect(component.runNotification).toBe(
       'Please select a question before running code.',
     );
@@ -64,7 +63,7 @@ describe('Judge0', () => {
 
   it('shows a processing state instead of terminal results while code is running', () => {
     const component = new Judge0(
-      {} as HttpClient,
+      {} as Judge0Service,
       { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
     );
 
@@ -76,7 +75,7 @@ describe('Judge0', () => {
 
   it('hides stale previous results while rerunning code', () => {
     const component = new Judge0(
-      {} as HttpClient,
+      {} as Judge0Service,
       { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
     );
     component.resultMode = 'run';
@@ -98,7 +97,7 @@ describe('Judge0', () => {
   });
 
   it('shows the first test case status after running code', () => {
-    const post = vi.fn().mockReturnValue(
+    const runCCode = vi.fn().mockReturnValue(
       of({
         stdout: '5\n',
         stderr: '',
@@ -107,7 +106,7 @@ describe('Judge0', () => {
       }),
     );
     const component = new Judge0(
-      { post } as unknown as HttpClient,
+      { runCCode } as unknown as Judge0Service,
       { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
     );
     component.runCode = 'int main(void) { return 0; }';
@@ -123,7 +122,7 @@ describe('Judge0', () => {
 
   it('hides the run result panel when submitting code', () => {
     const component = new Judge0(
-      {} as HttpClient,
+      {} as Judge0Service,
       { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
     );
     component.firstRunTestCasePassed = true;
@@ -138,7 +137,7 @@ describe('Judge0', () => {
 
   it('does not show an empty result panel while submit is in progress', () => {
     const component = new Judge0(
-      {} as HttpClient,
+      {} as Judge0Service,
       { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
     );
     component.stdout = '5\n';
@@ -152,7 +151,7 @@ describe('Judge0', () => {
   });
 
   it('shows the run result panel again after running code', () => {
-    const post = vi.fn().mockReturnValue(
+    const runCCode = vi.fn().mockReturnValue(
       of({
         stdout: '5\n',
         stderr: '',
@@ -161,7 +160,7 @@ describe('Judge0', () => {
       }),
     );
     const component = new Judge0(
-      { post } as unknown as HttpClient,
+      { runCCode } as unknown as Judge0Service,
       { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
     );
     component.expectedOutput = '5';
@@ -174,7 +173,7 @@ describe('Judge0', () => {
 
   it('does not show the terminal before run or submit results exist', () => {
     const component = new Judge0(
-      {} as HttpClient,
+      {} as Judge0Service,
       { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
     );
     component.stdin = '2 3';
@@ -211,7 +210,7 @@ describe('Judge0', () => {
     'calculates an equal-weight score for %j results',
     (outcomes, expectedPercentage, expectedSummary) => {
       const component = new Judge0(
-        {} as HttpClient,
+        {} as Judge0Service,
         { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
       );
       component.testCaseResults = outcomes.map((passed, index) => ({
@@ -235,7 +234,7 @@ describe('Judge0', () => {
 
   it('does not invent a score before test results exist', () => {
     const component = new Judge0(
-      {} as HttpClient,
+      {} as Judge0Service,
       { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
     );
 

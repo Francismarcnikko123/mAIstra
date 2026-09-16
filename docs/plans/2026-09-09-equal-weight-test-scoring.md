@@ -4,7 +4,7 @@
 
 **Goal:** Add a reviewable equal-weight test-case score without committing to grade persistence or a broader rubric.
 
-**Architecture:** Derive the score from `TestCaseResult.passed` in the Judge0 presentation component, which already receives the complete grading result set. Normalize authored test-case marks to one for data-shape compatibility and remove editable weighting from the form.
+**Architecture:** Derive the score from `TestCaseResult.passed` in the Judge0 presentation component, which already receives the complete grading result set. Remove the unused mark property and editable weighting from the form.
 
 **Tech Stack:** Angular 21, TypeScript, Vitest, Judge0 result data.
 
@@ -18,7 +18,7 @@
 
 1. Add failing tests for full, partial, and empty result collections.
 2. Require a two-decimal maximum percentage and `earned/total` summary.
-3. Require every saved and newly created test case to have `mark: 1`.
+3. Require saved and newly created test cases to omit the legacy `mark` property.
 
 ### Task 2: Implement and display the partial score
 
@@ -33,7 +33,7 @@
 2. Replace the result header with the fraction and percentage.
 3. Label individual cases as `1/1 point` or `0/1 point`.
 4. Remove the editable Mark input and explain equal weighting.
-5. Normalize saved test-case marks to one.
+5. Remove legacy test-case marks when saving.
 
 ### Task 3: Verify and hand off for adviser review
 

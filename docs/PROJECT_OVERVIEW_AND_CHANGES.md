@@ -132,7 +132,7 @@ The September 8 manual-output and function-input update is documented in [its de
 - Each passed test case earns one point and each failed case earns zero.
 - The displayed score is `(passed test cases / total test cases) * 100`, rounded to at most two decimal places.
 - Submission results show the passed fraction, percentage, and `1/1 point` or `0/1 point` for every case.
-- The question form no longer exposes editable test-case marks. New and saved cases retain `mark: 1` only for compatibility with the existing JSON shape.
+- The question form no longer exposes or stores test-case marks. Older records containing `mark` remain readable, but scoring ignores the property and awards one point per passed case.
 - Logic Analysis remains visible as feedback only and does not change the test-case score.
 - This is intentionally a partial implementation: score persistence, teacher overrides, and any larger rubric formula are pending adviser approval.
 
@@ -140,11 +140,10 @@ The review questions are tracked in [the adviser-review task](plans/2026-09-09-a
 
 ## C structural analysis
 
-- Replaced regex-based C feature detection with Tree-sitter's C parser.
-- The shared checker is imported by the Judge0 grading endpoint; duplicate regex checkers and duplicate grading routes were removed.
-- Beginner diagnostics now detect declarations, assignments, arithmetic, comparisons, logical operators, `if`/`else`, `switch`/`case`, separate loop types, `break`, `continue`, increment/decrement, arrays, functions, calls, returns, and parse errors.
-- Newly detected constructs remain diagnostic and are not automatically scored from the model answer. This avoids penalizing a correct alternative approach merely because it uses a different algorithm.
-- Judge0 test cases remain the primary correctness mechanism. Parser-based scoring should be added only through explicit per-question rubric requirements.
+- The current Tree-sitter checker extracts only the features used by Logic Analysis: basic functions, input/output calls, declarations/assignments, arithmetic, and return statements.
+- The unused expanded feature extraction was removed from this branch to keep grading behavior and implementation aligned. Its prototype remains available on `feature/logic-feature` for future rubric work.
+- The shared checker is imported by the Judge0 logic-analysis endpoint; duplicate regex checkers and duplicate grading routes remain removed.
+- Judge0 test cases remain the primary correctness mechanism. Additional parser-based scoring should be added only through explicit per-question rubric requirements.
 
 ## Code cleanup completed
 

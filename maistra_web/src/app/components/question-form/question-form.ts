@@ -10,12 +10,12 @@ import {
   getFunctionCodeError,
   getProgramCodeError,
 } from '../../utils/c-question';
+import { normalizeOutput } from '../../utils/normalize-output';
 
 interface TestCase {
   test_code: string;
   test_input: string;
   expected_output: string;
-  mark: number;
 }
 
 type TestRunStatus = 'idle' | 'running' | 'passed' | 'failed';
@@ -33,7 +33,6 @@ const DEFAULT_TEST_CASE: TestCase = {
   test_code: '',
   test_input: '',
   expected_output: '',
-  mark: 1,
 };
 
 @Component({
@@ -62,11 +61,6 @@ export class QuestionFormComponent {
   isSaving = false;
   successMessage = '';
   errorMessage = '';
-  customInput = '';
-  runOutput = '';
-  runError = '';
-  runStatus = '';
-  isRunningModelAnswer = false;
 
   readonly PROGRAM_TEMPLATE = `int main(void) {\n  return 0;\n}`;
 
@@ -180,53 +174,6 @@ export class QuestionFormComponent {
     }
   }
 
-  async runModelAnswer() {
-    this.isRunningModelAnswer = true;
-    this.runOutput = '';
-    this.runError = '';
-    this.runStatus = '';
-
-    try {
-      this.hasAttemptedValidation = true;
-      const testCase = this.testCases[0];
-      const error =
-        this.modelAnswerError ||
-        this.getTestCodeError(0) ||
-        this.getExpectedOutputError(0);
-      if (error || !testCase) {
-        this.runError = error || 'Add at least one test case before running.';
-        this.runStatus = 'Invalid code structure';
-        return;
-      }
-      const result = await firstValueFrom(
-        this.judge0.runCCode(
-          buildCQuestionSource(
-            this.questionType,
-            this.modelAnswer,
-            testCase.test_code,
-          ),
-          this.stdinFor(this.questionType, testCase.test_input),
-        ),
-      );
-      const validation = this.executionValidation(
-        result,
-        testCase.expected_output,
-        this.questionType,
-      );
-      this.runOutput = result.stdout || '';
-      this.runError = [validation.message, result.stderr, result.compile_output]
-        .filter(Boolean)
-        .join('\n');
-      this.runStatus = validation.status || '';
-    } catch (error) {
-      this.runError = this.validationRequestError(error);
-      this.runStatus = 'Validation request failed';
-    } finally {
-      this.isRunningModelAnswer = false;
-      this.cdr.detectChanges();
-    }
-  }
-
   onTypeChange() {
     this.modelAnswer =
       this.questionType === 'program' ? this.PROGRAM_TEMPLATE : '';
@@ -282,7 +229,6 @@ export class QuestionFormComponent {
         test_cases: this.testCases.map((testCase) => ({
           ...testCase,
           test_input: this.stdinFor(this.questionType, testCase.test_input),
-          mark: 1,
         })),
       });
 
@@ -380,7 +326,7 @@ export class QuestionFormComponent {
     const ranSuccessfully = result.status?.id === 3;
     const noOutput = ranSuccessfully && !actual;
     const outputMatches =
-      this.normalizeOutput(actual) === this.normalizeOutput(expectedOutput);
+      normalizeOutput(actual) === normalizeOutput(expectedOutput);
     const passed = ranSuccessfully && !noOutput && outputMatches;
     return {
       passed,
@@ -405,15 +351,6 @@ export class QuestionFormComponent {
 
   private stdinFor(type: string, input: string): string {
     return type === 'program' ? input : '';
-  }
-
-  private normalizeOutput(value: string | null | undefined): string {
-    if (value == null) return '';
-    return value
-      .trim()
-      .toLowerCase()
-      .replace(/\s*:\s*/g, ':')
-      .replace(/\s+/g, ' ');
   }
 
   private validationRequestError(error: unknown): string {

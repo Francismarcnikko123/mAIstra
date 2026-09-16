@@ -34,13 +34,11 @@ describe('QuestionFormComponent', () => {
         test_code: '1 1',
         test_input: '1 1',
         expected_output: '2',
-        mark: 2,
       },
       {
         test_code: '2 3',
         test_input: '2 3',
         expected_output: '5',
-        mark: 3,
       },
     ];
     await component.validateModelAnswer();
@@ -49,16 +47,15 @@ describe('QuestionFormComponent', () => {
     await component.save();
 
     expect(
-      saveQuestion.mock.calls[0][0].test_cases.map(
-        (testCase: { mark: number }) => testCase.mark,
+      saveQuestion.mock.calls[0][0].test_cases.every(
+        (testCase: object) => !('mark' in testCase),
       ),
-    ).toEqual([1, 1]);
+    ).toBe(true);
     expect(component.testCases).toEqual([
       {
         test_code: '',
         test_input: '',
         expected_output: '',
-        mark: 1,
       },
     ]);
     expect(component.validationResults).toEqual([]);
@@ -84,7 +81,6 @@ describe('QuestionFormComponent', () => {
         test_code: 'printf("%d", add(2, 3));',
         test_input: '',
         expected_output: '5',
-        mark: 2,
       },
     ];
     return { component, runCCode, saveQuestion };
@@ -401,14 +397,4 @@ describe('QuestionFormComponent', () => {
     ]);
   });
 
-  it('uses the function wrapper without Standard Input for the model run helper', async () => {
-    const { component, runCCode } = validationFixture();
-    component.testCases[0].test_input = '2 3';
-    await component.runModelAnswer();
-    expect(runCCode).toHaveBeenCalledWith(
-      expect.stringContaining('int main(void)'),
-      '',
-    );
-    expect(component.runOutput).toBe('5\n');
-  });
 });

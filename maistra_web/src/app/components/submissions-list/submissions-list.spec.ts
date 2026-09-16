@@ -209,21 +209,16 @@ describe('SubmissionsListComponent save feedback', () => {
         status: { id: 3, description: 'Accepted' },
       }),
     );
-    const gradeSubmission = vi.fn().mockReturnValue(
+    const analyzeLogic = vi.fn().mockReturnValue(
       of({
         logic_details: [
           { name: 'Has main', passed: true, weight: 1, score: 1 },
         ],
-        output_details: {
-          passed: true,
-          expected_normalized: '5',
-          actual_normalized: '5',
-        },
       }),
     );
     const { component } = createComponent(vi.fn(), {
       runCCode,
-      gradeSubmission,
+      analyzeLogic,
     } as Partial<Judge0Service>);
     const submission = {
       id: 'submission-1',
@@ -244,13 +239,11 @@ describe('SubmissionsListComponent save feedback', () => {
             test_code: '',
             test_input: '2 3',
             expected_output: '5',
-            mark: 2,
           },
           {
             test_code: '',
             test_input: '4 1',
             expected_output: '5',
-            mark: 2,
           },
         ],
       },
@@ -263,14 +256,11 @@ describe('SubmissionsListComponent save feedback', () => {
       '#include <stdio.h>\n\n' + component.editableText['submission-1'],
       '2 3',
     );
-    expect(gradeSubmission).toHaveBeenCalledWith({
+    expect(analyzeLogic).toHaveBeenCalledWith({
       model_code: 'int main(void) { return 0; }',
       student_code: component.editableText['submission-1'],
-      expected_output: '',
-      actual_output: '',
-      compilation_passed: false,
     });
-    expect(gradeSubmission).toHaveBeenCalledOnce();
+    expect(analyzeLogic).toHaveBeenCalledOnce();
     expect(component.submissionRunOutput['submission-1']).toBe('5');
     expect(component.submissionCheckStatus['submission-1']).toBe('Accepted');
     expect(runCCode).toHaveBeenCalledTimes(2);
@@ -306,19 +296,14 @@ describe('SubmissionsListComponent save feedback', () => {
         status: { id: 3, description: 'Accepted' },
       }),
     );
-    const gradeSubmission = vi.fn().mockReturnValue(
+    const analyzeLogic = vi.fn().mockReturnValue(
       of({
         logic_details: [{ name: 'Has main', passed: true }],
-        output_details: {
-          passed: true,
-          expected_normalized: '7',
-          actual_normalized: '7',
-        },
       }),
     );
     const { component } = createComponent(vi.fn(), {
       runCCode,
-      gradeSubmission,
+      analyzeLogic,
     } as Partial<Judge0Service>);
     const submission = {
       id: 'submission-1',
@@ -339,7 +324,6 @@ describe('SubmissionsListComponent save feedback', () => {
             test_code: '',
             test_input: '',
             expected_output: '7',
-            mark: 2,
           },
         ],
       },
@@ -352,7 +336,7 @@ describe('SubmissionsListComponent save feedback', () => {
       '#include <stdio.h>\n\nedited code',
       '',
     );
-    expect(gradeSubmission).toHaveBeenCalledWith(
+    expect(analyzeLogic).toHaveBeenCalledWith(
       expect.objectContaining({
         student_code: 'edited code',
       }),
@@ -368,19 +352,14 @@ describe('SubmissionsListComponent save feedback', () => {
         status: { id: 3, description: 'Accepted' },
       }),
     );
-    const gradeSubmission = vi.fn().mockReturnValue(
+    const analyzeLogic = vi.fn().mockReturnValue(
       of({
         logic_details: [{ name: 'Has main', passed: true }],
-        output_details: {
-          passed: false,
-          expected_normalized: 'ascending order:3 5 8',
-          actual_normalized: 'sum = 11',
-        },
       }),
     );
     const { component } = createComponent(vi.fn(), {
       runCCode,
-      gradeSubmission,
+      analyzeLogic,
     } as Partial<Judge0Service>);
     const submission = {
       id: 'submission-1',
@@ -400,7 +379,6 @@ describe('SubmissionsListComponent save feedback', () => {
             test_code: '',
             test_input: '8 3 5',
             expected_output: 'ascending order:3 5 8',
-            mark: 2,
           },
         ],
       },
@@ -444,7 +422,6 @@ describe('SubmissionsListComponent save feedback', () => {
             test_code: '',
             test_input: '2 3',
             expected_output: '5',
-            mark: 2,
           },
         ],
       },
@@ -462,10 +439,10 @@ describe('SubmissionsListComponent save feedback', () => {
     const runCCode = vi
       .fn()
       .mockReturnValue(of({ stdout: '5', status: { id: 3 } }));
-    const gradeSubmission = vi.fn().mockReturnValue(of({ logic_details: [] }));
+    const analyzeLogic = vi.fn().mockReturnValue(of({ logic_details: [] }));
     const { component } = createComponent(vi.fn(), {
       runCCode,
-      gradeSubmission,
+      analyzeLogic,
     });
     selectSubmission(component, 'function-1');
     component.editableText['function-1'] =
@@ -481,7 +458,6 @@ describe('SubmissionsListComponent save feedback', () => {
             test_code: 'printf("%d", add(2, 3));',
             test_input: '2 3',
             expected_output: '5',
-            mark: 2,
           },
         ],
       },
@@ -605,7 +581,6 @@ describe('SubmissionsListComponent save feedback', () => {
       test_code: '',
       test_input: '',
       expected_output: '5',
-      mark: 2,
     });
     expect(component.canOpenGradingStep()).toBe(true);
   });
@@ -656,7 +631,7 @@ describe('SubmissionsListComponent save feedback', () => {
         question_type: 'program',
         model_answer: 'int main(void) { return 0; }',
         test_cases: [
-          { test_code: '', test_input: '', expected_output: '5', mark: 2 },
+          { test_code: '', test_input: '', expected_output: '5' },
         ],
       },
     ];
@@ -683,7 +658,7 @@ describe('SubmissionsListComponent save feedback', () => {
         question_type: 'program',
         model_answer: 'int main(void) { return 0; }',
         test_cases: [
-          { test_code: '', test_input: '', expected_output: '5', mark: 2 },
+          { test_code: '', test_input: '', expected_output: '5' },
         ],
       },
     ];

@@ -14,7 +14,7 @@ Every test case has equal weight and contributes one raw point. A passed case co
 
 The result panel displays both the fraction and percentage, for example `2/3 test cases passed — Score: 66.67%`. Percentages are rounded to at most two decimal places. Individual result cards show `1/1 point` for a pass and `0/1 point` for a failure.
 
-The question-authoring form no longer exposes an editable Mark field. New and saved test cases use `mark: 1` for compatibility with the existing JSON shape and older records. Existing non-unit mark values are ignored by automatic scoring and normalized to `1` when a question is saved again.
+The question-authoring form no longer exposes an editable Mark field. Test cases do not store a `mark` property; older records may still contain it, but the application ignores it. Automatic scoring derives one point directly from each passed test case.
 
 Logic analysis remains visible as feedback only. It does not affect the numeric test-case score because a correct student solution may use a different valid algorithm than the Model Answer.
 

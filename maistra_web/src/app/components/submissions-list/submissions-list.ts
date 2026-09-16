@@ -14,12 +14,12 @@ import { Judge0, LogicAnalysisResult, TestCaseResult } from '../judge0/judge0';
 import { Judge0Service } from '../../services/judge0.service';
 import { firstValueFrom } from 'rxjs';
 import { buildCQuestionSource } from '../../utils/c-question';
+import { normalizeOutput } from '../../utils/normalize-output';
 
 interface TestCase {
   test_code: string;
   test_input: string;
   expected_output: string;
-  mark: number;
 }
 interface SubmissionQuestion {
   id: string;
@@ -499,16 +499,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
       // Logic analysis only depends on model vs student code, not on any
       // single test case's I/O — run it once up front instead of once per
-      // test case. Output comparison still happens per test case below,
-      // using normalizeOutput() (an exact mirror of the backend's
-      // normalize_output) so whitespace/case differences are still forgiven.
+      // test case. Output comparison still happens per test case below.
       const logicGrade = await firstValueFrom(
-        this.judge0Service.gradeSubmission({
+        this.judge0Service.analyzeLogic({
           model_code: question.model_answer,
           student_code: studentCode,
-          expected_output: '',
-          actual_output: '',
-          compilation_passed: false,
         }),
       );
       const logicResults: LogicAnalysisResult[] = logicGrade.logic_details;
@@ -539,8 +534,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         // missing #include) and still run correctly.
         const compilationPassed = runResult.status?.id === 3;
 
-        const normalizedExpected = this.normalizeOutput(expectedOutput);
-        const normalizedActual = this.normalizeOutput(actualOutput);
+        const normalizedExpected = normalizeOutput(expectedOutput);
+        const normalizedActual = normalizeOutput(actualOutput);
         const outputPassed = normalizedExpected === normalizedActual;
         const passed = outputPassed && compilationPassed;
 
@@ -629,17 +624,6 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   hasExecutionQuestion(submission: Submission | null): boolean {
     return !!(submission && this.getSubmissionQuestion(submission));
-  }
-
-  // Exact mirror of judge0_api/main.py's normalize_output — keep these two
-  // in sync if either one changes.
-  private normalizeOutput(value: string | null | undefined): string {
-    if (value == null) return '';
-    return value
-      .trim()
-      .toLowerCase()
-      .replace(/\s*:\s*/g, ':')
-      .replace(/\s+/g, ' ');
   }
 
   private stdinFor(

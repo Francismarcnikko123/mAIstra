@@ -25,26 +25,26 @@ SET row_security = off;
 -- Data for Name: questions; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-INSERT INTO "public"."questions" ("id", "question_name", "question_text", "model_answer", "test_cases", "created_at", "validation_status", "can_publish", "model_validation_results") VALUES
+INSERT INTO "public"."questions" ("id", "question_name", "question_text", "model_answer", "test_cases", "created_at") VALUES
 	('954a8f00-8c73-4367-ad11-4557ee28ce7e', 'Programming 1A', 'Write a function that adds two integers and returns the result.', 'int add(int a, int b){
   return a + b;
-}', '[{"mark": 2, "test_code": "Test Code: printf(\"%d\", add(2, 3));", "expected_output": "5"}]', '2026-07-16 13:05:24.468872+00', 'draft', false, '[]'),
+}', '[{"test_code": "Test Code: printf(\"%d\", add(2, 3));", "expected_output": "5"}]', '2026-07-16 13:05:24.468872+00'),
 	('1b0dbba3-b2bf-4150-9654-9808d7d96f3b', 'Even and odd', 'Even and odd', '#include <stdio.h>
 
 int main(){
  printf("Hello world");
-}', '[{"mark": 2, "test_code": " printf(\"Hello world\") ", "expected_output": "Hello world"}]', '2026-07-18 05:38:55.44301+00', 'draft', false, '[]'),
+}', '[{"test_code": " printf(\"Hello world\") ", "expected_output": "Hello world"}]', '2026-07-18 05:38:55.44301+00'),
 	('862c0506-d68d-460b-b96c-d5f9a6f63763', 'anem', 'name', '#include <stdio.h>
 
 int main(){
  printf("jayrald"); 
-}', '[{"mark": 2, "test_code": "printf(\"jayrald\"); ", "expected_output": "jayrald"}]', '2026-07-18 05:57:00.470042+00', 'draft', false, '[]'),
+}', '[{"test_code": "printf(\"jayrald\"); ", "expected_output": "jayrald"}]', '2026-07-18 05:57:00.470042+00'),
 	('3881feae-06fb-43fd-9c7a-caf91e58faa9', 'Programming A1', 'write a c program that prints "hello world" to the screen', '#include <stdio.h>
 
 int main(void) {
     printf("Hello World");
     return 0;
-}', '[{"mark": 2, "test_code": "#include <stdio.h>\n\nint main(void) {\nprintf(\"hello world\");\nreturn 0;\n\n}", "expected_output": "hello world"}]', '2026-07-19 21:02:33.631766+00', 'draft', false, '[]'),
+}', '[{"test_code": "#include <stdio.h>\n\nint main(void) {\nprintf(\"hello world\");\nreturn 0;\n\n}", "expected_output": "hello world"}]', '2026-07-19 21:02:33.631766+00'),
 	('11ad97c2-2aa4-4b90-8a8d-d4c784e1f97d', 'Well Order', 'Create a function ', 'int isWellOrdered(int n) {
     int prev = 10;
 
@@ -60,13 +60,13 @@ int main(void) {
     }
 
     return 1;
-}', '[{"mark": 2, "is_hidden": true, "test_code": "int main() {\n    if (isWellOrdered(123))\n        printf(\"Well ordered\");\n    else\n        printf(\"Not well ordered\");\n\n    return 0;\n}", "expected_output": "Well ordered"}, {"mark": 2, "is_hidden": true, "test_code": "int main() {\n    if (isWellOrdered(132))\n        printf(\"Well ordered\");\n    else\n        printf(\"Not well ordered\");\n\n    return 0;\n}", "expected_output": "Not well ordered"}]', '2026-07-20 04:30:44.683117+00', 'validated', true, '[{"index": 0, "label": "Hidden Test 1", "passed": true, "status": "Passed", "isHidden": true, "diagnostics": "", "actualOutput": "", "expectedOutput": ""}, {"index": 1, "label": "Hidden Test 2", "passed": true, "status": "Passed", "isHidden": true, "diagnostics": "", "actualOutput": "", "expectedOutput": ""}]'),
+}', '[{"is_hidden": true, "test_code": "int main() {\n    if (isWellOrdered(123))\n        printf(\"Well ordered\");\n    else\n        printf(\"Not well ordered\");\n\n    return 0;\n}", "expected_output": "Well ordered"}, {"is_hidden": true, "test_code": "int main() {\n    if (isWellOrdered(132))\n        printf(\"Well ordered\");\n    else\n        printf(\"Not well ordered\");\n\n    return 0;\n}", "expected_output": "Not well ordered"}]', '2026-07-20 04:30:44.683117+00'),
 	('e1265442-6a60-471e-9730-6ab26128083d', 'Sum of two numbers', 'write a function that accepts 2 integers and display the sum of 2 numbers', 'void sumof2(int x, int y){
   int sum = x+y;
   
   printf("the sum of %d and %d is = %d ", x, y, sum);
   
-}', '[{"mark": 2, "test_code": "int main(){\n int x = 2, y = 1;\nsumof2(x,y);\n}", "expected_output": "3"}]', '2026-07-20 06:20:18.698358+00', 'draft', false, '[{"index": 0, "label": "Test Case 1", "passed": false, "status": "Accepted", "isHidden": false, "diagnostics": "", "actualOutput": "the sum of 2 and 1 is = 3 ", "expectedOutput": "3"}]'),
+}', '[{"test_code": "int main(){\n int x = 2, y = 1;\nsumof2(x,y);\n}", "expected_output": "3"}]', '2026-07-20 06:20:18.698358+00'),
 	('2cc5a71f-b95b-4d66-9d3e-324474c1d368', 'Count Even Numbers in an Array', 'Write a C function named countEven that accepts an integer array and its size. The function should return the number of even numbers in the array.', 'int countEven(int arr[], int size) {
     int count = 0;
 
@@ -77,10 +77,10 @@ int main(void) {
     }
 
     return count;
-}', '[{"mark": 2, "test_code": "int main(void){\nint arr[] = {1, 2, 3, 4, 5, 6};\nint size = 6;\n\nprintf(\"%d\", countEven(arr, size));\n}", "expected_output": "3"}]', '2026-07-20 04:49:17.697684+00', 'draft', false, '[{"index": 0, "label": "Test Case 1", "passed": true, "status": "Accepted", "isHidden": false, "diagnostics": "", "actualOutput": "3", "expectedOutput": "3"}, {"index": 1, "label": "Test Case 2", "passed": false, "status": "Compilation Error", "isHidden": false, "diagnostics": "main.c: In function ‘main’:\nmain.c:21:1: error: expected declaration or statement at end of input\n   21 | int size = 5;\n      | ^~~\n", "actualOutput": "", "expectedOutput": "Odd"}]'),
+}', '[{"test_code": "int main(void){\nint arr[] = {1, 2, 3, 4, 5, 6};\nint size = 6;\n\nprintf(\"%d\", countEven(arr, size));\n}", "expected_output": "3"}]', '2026-07-20 04:49:17.697684+00'),
 	('05ce850e-7d37-4a66-93b2-3943afa2b31d', 'Programming 1B', 'Write a function that adds two integers and returns the result.', 'int add(int a, int b){
   return a + b;
-}', '[{"mark": 2, "test_code": "printf(\"%d\", add(2, 3));", "expected_output": "5"}]', '2026-07-16 13:15:57.13156+00', 'draft', false, '[]');
+}', '[{"test_code": "printf(\"%d\", add(2, 3));", "expected_output": "5"}]', '2026-07-16 13:15:57.13156+00');
 
 
 --

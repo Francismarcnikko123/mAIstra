@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import re
 
 try:
     from .logic_checker import compare_logic
@@ -39,12 +38,9 @@ class RunCodeRequest(BaseModel):
     source_code: str
     language_id: int
     stdin: Optional[str] = ""
-class GradeSubmissionRequest(BaseModel):
+class LogicAnalysisRequest(BaseModel):
     model_code: str
     student_code: str
-    expected_output: str
-    actual_output: str
-    compilation_passed: bool
 
 @app.get("/")
 def health_check():
@@ -127,70 +123,15 @@ async def run_code(payload: RunCodeRequest):
 
     raise HTTPException(status_code=504, detail="Judge0 execution timed out")
 
-@app.get("/api/judge0/languages")
-async def get_languages():
-    headers = {}
-
-    if JUDGE0_API_KEY:
-        headers["X-Auth-Token"] = JUDGE0_API_KEY
-
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.get(
-            f"{JUDGE0_BASE_URL}/languages",
-            headers=headers,
-        )
-
-    if response.status_code >= 400:
-        raise HTTPException(
-            status_code=response.status_code,
-            detail=response.text,
-        )
-
-    return response.json()
-def normalize_output(output: str) -> str:
-    if output is None:
-        return ""
-
-    output = output.strip().lower()
-    output = re.sub(r"\s*:\s*", ":", output)
-    output = re.sub(r"\s+", " ", output)
-
-    return output
-
-
-@app.post("/api/judge0/grade-submission")
-async def grade_submission(payload: GradeSubmissionRequest):
-    compilation_score = 100 if payload.compilation_passed else 0
-
+@app.post("/api/judge0/analyze-logic")
+async def analyze_logic(payload: LogicAnalysisRequest):
     logic_result = compare_logic(
         payload.model_code,
         payload.student_code,
     )
-
-    expected = normalize_output(payload.expected_output)
-    actual = normalize_output(payload.actual_output)
-
-    output_passed = expected == actual
-    output_score = 100 if output_passed else 0
-
-    final_score = (
-        logic_result["score"] * 0.50
-        + output_score * 0.40
-        + compilation_score * 0.10
-    )
-
     return {
-        "final_score": round(final_score, 2),
-        "compilation_score": compilation_score,
         "logic_score": logic_result["score"],
-        "output_score": output_score,
         "logic_details": logic_result["checks"],
-        "output_details": {
-            "passed": output_passed,
-            "score": output_score,
-            "expected_normalized": expected,
-            "actual_normalized": actual,
-        },
     }
 
 def encode_base64(value: str) -> str:
