@@ -13,6 +13,7 @@ import unittest
 from unittest.mock import patch
 
 from core import layout
+from core.layout import columns
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -114,7 +115,7 @@ class RealMarginLayoutTests(unittest.TestCase):
 
     def test_lower_region_seed_threshold_does_not_change_real_order(self):
         for band_multiplier in (1.5, 0.5):
-            with patch.object(layout, "BAND_GUTTER_MIN_MULTIPLIER", band_multiplier):
+            with patch.object(columns, "BAND_GUTTER_MIN_MULTIPLIER", band_multiplier):
                 for letter in EXPECTED_ROWS:
                     records = detections(letter)
                     baseline = group(records)
@@ -140,7 +141,7 @@ class RealMarginLayoutTests(unittest.TestCase):
                 self.assertEqual(result is not None, accepts)
 
     def test_old_banded_threshold_reproduces_b_and_c_order_failures(self):
-        with patch.object(layout, "BAND_GUTTER_MIN_MULTIPLIER", 1.5):
+        with patch.object(columns, "BAND_GUTTER_MIN_MULTIPLIER", 1.5):
             for letter in ("B", "C"):
                 with self.subTest(photo=letter):
                     records = detections(letter)

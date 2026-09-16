@@ -39,20 +39,28 @@ def replay(records):
     def instrument(name):
         implementation = getattr(layout, name)
         def wrapped(*args, **kwargs):
-            before = (None if name.startswith("_detect_")
-                      else layout._line_identity_order(args[0]))
+            if name.startswith("_detect_"):
+                before = None
+            elif name == "_associate_continuation":
+                before = tuple(id(member) for row in args[0] for member in row)
+            else:
+                before = layout._line_identity_order(args[0])
             result = implementation(*args, **kwargs)
             if name.startswith("_detect_"):
                 events.append({"mechanism": name, "found": result is not None})
             else:
-                after = layout._line_identity_order(result)
+                after = (
+                    tuple(id(member) for row in result for member in row)
+                    if name == "_associate_continuation"
+                    else layout._line_identity_order(result)
+                )
                 events.append({"mechanism": name, "changed_order": before != after})
             return result
         return wrapped
 
     names = ("_detect_two_columns", "_detect_banded_column",
              "_sever_displaced_regions", "_reassemble_margin_candidates",
-             "_reassemble_displaced_regions")
+             "_reassemble_displaced_regions", "_associate_continuation")
     with ExitStack() as stack:
         for name in names:
             stack.enter_context(patch.object(layout, name, side_effect=instrument(name)))
@@ -144,7 +152,11 @@ def evaluate(prototype=False):
             pairwise_order_accuracy=pairwise_order_accuracy(expected, actual),
             all_detections_preserved=True, mechanisms=events,
             association_accuracy=None,
-            association_note="Current pipeline does not predict answer membership",
+            association_note=(
+                "Production applies conservative continuation association; "
+                "this replay scores final order only. Use --prototype for "
+                "the frozen relationship-edge score."
+            ),
             actual_text_rows=[" ".join(records[i]["text"] for i in row) for row in rows],
             intended_text_rows=[" ".join(records[i]["text"] for i in row)
                                 for row in page["expected_detection_rows"]]))

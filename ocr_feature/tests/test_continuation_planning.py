@@ -55,17 +55,19 @@ class ContinuationPlanningTests(unittest.TestCase):
         self.assertEqual(Counter(member_key(m) for row in rows for m in row),
                          Counter(detection_key(d) for d in payload))
 
-    def test_current_column_path_bypasses_brace_candidate_fallback(self):
-        # Characterization only; revise when local association is implemented.
+    def test_full_column_path_runs_association_before_returning(self):
         with (patch.object(layout, "_detect_banded_column",
                            wraps=layout._detect_banded_column) as band,
               patch.object(layout, "_reassemble_margin_candidates",
-                           wraps=layout._reassemble_margin_candidates) as brace):
+                           wraps=layout._reassemble_margin_candidates) as brace,
+              patch.object(layout, "_associate_continuation",
+                           wraps=layout._associate_continuation) as association):
             rows, safe = group(records())
         self.assertTrue(safe)
         self.assertEqual(len(rows), 20)
         band.assert_not_called()
         brace.assert_not_called()
+        association.assert_called_once()
 
 
 if __name__ == "__main__":

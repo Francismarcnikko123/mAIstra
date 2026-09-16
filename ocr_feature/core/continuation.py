@@ -58,6 +58,20 @@ def _scope(code):
     return depth, lowest
 
 
+def _code_rows(text_rows):
+    """Return safe row evidence plus whether every row was lexically safe."""
+    output = []
+    fully_safe = True
+    for text in text_rows:
+        code, safe = _code_only(text)
+        if safe:
+            output.append(code)
+        else:
+            fully_safe = False
+            output.append(" ")
+    return "\n".join(output), fully_safe
+
+
 def _blocks(identifiers, records, height, side):
     ordered = sorted(
         identifiers,
@@ -227,8 +241,8 @@ def associate_continuation(records, baseline_ids):
             for match in [QUESTION.fullmatch(text)]
             if match
         ]
-        left_code, left_safe = _code_only("\n".join(left_block["text_rows"]))
-        right_code, right_safe = _code_only("\n".join(right_block["text_rows"]))
+        left_code, left_safe = _code_rows(left_block["text_rows"])
+        right_code, right_safe = _code_rows(right_block["text_rows"])
 
         if (left_questions and right_questions
                 and set(left_questions).isdisjoint(right_questions)):
@@ -244,6 +258,26 @@ def associate_continuation(records, baseline_ids):
                 decision="independent",
                 reasons=["separate_main_entries", "clean_gutter"],
             )
+            continue
+        later_numbered_question = any(
+            QUESTION.fullmatch(text)
+            for candidate in left_blocks
+            if candidate["top"] > left_block["bottom"]
+            for text in candidate["text_rows"]
+        )
+        if (right_safe
+                and later_numbered_question
+                and re.search(r"\bif\b", left_code)
+                and re.search(r"\belse\b", right_code)):
+            relation.update(
+                decision="continuation",
+                reasons=[
+                    "clean_gutter",
+                    "unique_local_vertical_match",
+                    "if_else_link_before_next_numbered_question",
+                ],
+            )
+            moves.append((left_block, right_block, relation))
             continue
         if not left_safe or not right_safe:
             relation["reasons"] = ["uncertain_literal_or_comment_boundary"]

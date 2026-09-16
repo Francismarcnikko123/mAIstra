@@ -4,7 +4,9 @@ import copy
 import json
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
+from core import layout
 from core.continuation import associate_continuation
 from evaluators.evaluate_continuation_development import replay
 
@@ -187,6 +189,81 @@ class ContinuationAssociationTests(unittest.TestCase):
         result = associate_continuation(records, [0, 0])
         self.assertEqual(result["ordered_ids"], [0, 1])
         self.assertEqual(result["reasons"], ["invalid_baseline_order"])
+
+
+class ContinuationLayoutFinalizerTests(unittest.TestCase):
+    @staticmethod
+    def member(text, x, y):
+        return {
+            "text": text,
+            "score": .95,
+            "x": x,
+            "x_max": x + 20,
+            "y": y + 10,
+            "y_min": y,
+            "y_max": y + 20,
+        }
+
+    def test_moves_only_whole_visual_rows(self):
+        members = [
+            self.member("a", 0, 0),
+            self.member("b", 30, 0),
+            self.member("c", 0, 40),
+            self.member("d", 0, 80),
+        ]
+        rows = [[members[0], members[1]], [members[2]], [members[3]]]
+        identities = {id(member): index for index, member in enumerate(members)}
+        records = [
+            detection(member["text"], member["x"], member["y_min"])
+            for member in members
+        ]
+        with patch.object(layout, "associate_continuation", return_value={
+            "ordered_ids": [2, 0, 1, 3],
+        }):
+            result = layout._associate_continuation(rows, records, identities)
+        self.assertEqual(
+            result,
+            [[members[2]], [members[0], members[1]], [members[3]]],
+        )
+        self.assertEqual(
+            {id(member) for row in result for member in row},
+            {id(member) for member in members},
+        )
+
+    def test_rejects_proposal_that_splits_a_visual_row(self):
+        members = [
+            self.member("a", 0, 0),
+            self.member("b", 30, 0),
+            self.member("c", 0, 40),
+        ]
+        rows = [[members[0], members[1]], [members[2]]]
+        identities = {id(member): index for index, member in enumerate(members)}
+        records = [
+            detection(member["text"], member["x"], member["y_min"])
+            for member in members
+        ]
+        with patch.object(layout, "associate_continuation", return_value={
+            "ordered_ids": [0, 2, 1],
+        }):
+            result = layout._associate_continuation(rows, records, identities)
+        self.assertIs(result, rows)
+
+    def test_rejects_incomplete_or_duplicate_proposal(self):
+        members = [self.member("a", 0, 0), self.member("b", 0, 40)]
+        rows = [[members[0]], [members[1]]]
+        identities = {id(member): index for index, member in enumerate(members)}
+        records = [
+            detection(member["text"], member["x"], member["y_min"])
+            for member in members
+        ]
+        for proposed in ([0], [0, 0], [0, 1, 2]):
+            with self.subTest(proposed=proposed), patch.object(
+                    layout, "associate_continuation",
+                    return_value={"ordered_ids": proposed}):
+                self.assertIs(
+                    layout._associate_continuation(rows, records, identities),
+                    rows,
+                )
 
 
 if __name__ == "__main__":

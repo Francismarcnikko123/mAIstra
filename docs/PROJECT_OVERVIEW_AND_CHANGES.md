@@ -147,13 +147,14 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - Extraction is now paper-faithful (it reconstructs the student's handwritten indentation/spacing), so Format is the on-demand "make it IDE-structured" normalization on top of that — and it is only as correct as the braces in the buffer, so the teacher's edit pass remains the correctness guarantee.
 - Tests: 13 new `code-editor.spec.ts` unit tests (each rule, brace-depth regression, grade-safety = only leading whitespace changes, idempotency, blank-line/robustness). Web suite 49/50 — the one red is a pre-existing, unrelated `submissions-list` OCR-error test. Whitespace-only, so invisible to the OCR `clean_ws` CER (0.099 unchanged); this is a teacher-readability change, not an accuracy metric mover.
 
-## OCR pipeline split into `core/layout.py` (2026-09-13)
+## OCR reading-order layout package (2026-09-13, reorganized 2026-09-17)
 
 > **Owner:** Nombrado
 
-- `core/ocr_pipeline.py` had grown past **1,200 lines**, so the pure reading-order / indentation geometry was extracted into a new sibling module `core/layout.py` along the file's natural dependency seam (commit `f99732c`). **`ocr_pipeline.py`** (~275 lines) keeps recognition + orchestration (model construction, `warmup`, `REC_SCORE_FLOOR`, `_filter_low_confidence`, `_recognize_preprocessed`, `extract_text_from_image`) and is the only half that imports `cv2`/`numpy`/`paddleocr`. **`core/layout.py`** (~960 lines) holds all the geometry: `_group_detection_records`, the two-column / banded / severance detectors, brace-depth reassembly, `_group_structured_lines`, `line_member_bounds`, and indentation/blank-line reconstruction — pure stdlib + `core.numeric`/`core.c_literals`, so it loads in tests without the recognizer.
-- **Behavior-preserving, not a rewrite:** function bodies were moved by exact line range, never retyped; no logic changed. `ocr_pipeline.py` re-exports the geometry names, so `from core.ocr_pipeline import _group_detection_records` (tests, `evaluators/build_recognition_dataset.py`) still works. Geometry unit tests load `core.layout` directly (`load_layout()`) so `patch.object` targets the module where the functions call one another — patching a re-export would not intercept those internal calls.
-- Verified four ways: (1) an AST check confirms all **41** top-level definitions are byte-for-byte identical between the pre-split file and the post-split `ocr_pipeline.py` + `layout.py`; (2) running the real fine-tuned OCR on the gate set with the pre-split vs post-split code produced **byte-for-byte identical** `evaluate_cer` output (every per-file row and aggregate — clean_ws CER **0.099**, clean WER **0.328**, clean token accuracy **0.716**, green_writer10 clean_ws **0.061**); (3) full Python suite **148/148**; (4) all pipeline callers (`main`, `try_config`, `compare_config`, the three evaluators, `build_recognition_dataset`) import cleanly and the re-exports are the same objects as `layout`'s definitions.
+- `core/ocr_pipeline.py` keeps recognition and orchestration: model construction, `warmup`, `REC_SCORE_FLOOR`, `_filter_low_confidence`, `_recognize_preprocessed`, and `extract_text_from_image`. It is the only side that imports `cv2`, `numpy`, or `paddleocr`.
+- Pure reading-order and presentation geometry lives in `core/layout/`: `__init__.py` coordinates grouping and remains the stable import surface; `columns.py` detects full-height and banded columns; `displacement.py` supplies sweep, trace, and brace-reassembly primitives; `braces.py` provides literal-safe brace-depth helpers; and `format.py` reconstructs indentation and blank lines. `reorder.py` is a legacy compatibility re-export.
+- The split is behavior-preserving: original layout functions were moved without changing executable bodies. The package-level coordinator deliberately resolves mock-sensitive calls in its own namespace so tests patch the real live call path. `ocr_pipeline.py` continues to re-export layout helpers for existing callers.
+- Fresh sanity check after the 2026-09-17 organization: all **18** original layout functions are present with no executable-body mismatches; the full Python suite reports **187 passed** with **5 documented expected planning failures**; the package and legacy `core.layout.reorder` import surfaces resolve to the same grouping functions. The evaluator started normally and printed the expected `green_writer10` clean_ws CER **0.061**, but the terminal detached before the aggregate table, so this change records no new aggregate CER claim.
 
 ## OCR real handwriting margin calibration (2026-09-13)
 
@@ -286,6 +287,41 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - Verification: 187 tests executed, 182 passed and the same 5 expected failures.
   Fresh live evaluation retained clean_ws CER 0.099, clean WER 0.328, clean token
   accuracy 0.716 and green_writer10 clean_ws CER 0.061. No production changes.
+
+## OCR continuation association live integration (2026-09-17)
+
+> **Owner:** Nombrado
+
+- Added `core/continuation.py`, a pure records-only decision layer derived from the
+  frozen experiment. It receives recognized text, scores, boxes and the existing
+  layout order; it returns a proposed detection-ID permutation plus inspectable
+  continuation, independent or ambiguous evidence. It never changes OCR text,
+  inserts symbols, compiles code or grades an answer.
+- Full and banded column paths now pass their completed rows through one package-level
+  finalizer before returning. The finalizer accepts only a complete permutation that
+  keeps every existing visual row contiguous. Invalid, duplicate, missing or
+  row-splitting proposals retain the current layout order. Existing single-column
+  brace/severance mechanisms remain authoritative so association cannot undo their
+  higher-confidence reassembly.
+- A continuation requires a unique clean gutter and one local left target. Recognized
+  scope closure supplies the normal content signal. The original two-question photo
+  also uses a local `if`/`else` link before a recognized next-question boundary, so
+  its order is recovered despite the unedited OCR strings `{else {` and
+  `printf("a uns\');`. This is supporting evidence, not character correction.
+- The five former expected failures are now ordinary passing acceptance tests: the
+  original and counterfactual two-question fixtures, plus development Examples 5,
+  6 and 8. All eight development pages match their annotated retained-detection
+  order; Examples 1, 2, 4, 9 and 11 remain unchanged, and every detection survives.
+  The A/B/C real-margin fixtures, `green_writer10`, per-column indentation and the
+  existing brace-assisted single-column cases also retain their expected behavior.
+- The frozen prototype and reserved manifests remain unchanged. Reserved Example 10
+  still demonstrates a layout outside the live column gate; Examples 3 and 12 retain
+  their existing order. All supplied evaluation photos are from one writer, so this
+  release does not establish general continuation-classification accuracy. Additional
+  writers remain the next evaluation step.
+- Fresh verification: **204 tests pass with zero expected failures**. The 20-image
+  live evaluator remains at clean_ws CER **0.099**, clean WER **0.328**, clean token
+  accuracy **0.716**, and `green_writer10` clean_ws CER **0.061**.
 
 ## Code cleanup completed
 

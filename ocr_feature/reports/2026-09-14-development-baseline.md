@@ -1,5 +1,10 @@
 # Handwritten continuation development baseline
 
+> **2026-09-17 follow-up:** This file records the pre-integration baseline. The five
+> expected failures are now fixed in production column ordering. All eight development
+> pages match annotation, every retained detection survives, and 204 tests pass with
+> zero expected failures. See `2026-09-14-offline-association.md` for current limits.
+
 > Session update: the offline prototype and manual tester are now implemented;
 > see the [current handoff](2026-09-14-continuation-session-handoff.md).
 > All 11 supplied photos were used. Historical “Example 7 missing” wording below

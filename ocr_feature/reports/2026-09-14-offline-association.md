@@ -1,7 +1,9 @@
 # Offline continuation association experiment
 
-Status: frozen prototype, not integrated into OCR or the web app. This is an
-experiment with one writer, not a general handwriting accuracy claim.
+Status update (2026-09-17): this frozen prototype remains unchanged as historical
+evidence. A conservative production derivative is now integrated into OCR column
+ordering; see **Production integration follow-up** below. The evidence still covers
+one writer and is not a general handwriting accuracy claim.
 
 ## Session correction and manual testing
 
@@ -107,9 +109,9 @@ module existed; the development Example 6 assertion then failed until local-gutt
 candidate handling was implemented. The association scorer was also tested red
 before implementation.
 
-The five existing expected failures concern production ordering. They remain
-expected failures because the runtime has not been changed; they are not passing
-acceptance tests and must be resolved before a production fix is claimed.
+Historical baseline: these five tests were expected failures because the runtime had
+not yet changed. They became ordinary passing acceptance tests in the 2026-09-17
+production follow-up recorded below.
 
 ## First reserved evaluation
 
@@ -180,3 +182,29 @@ integration in shadow mode, where proposed associations are recorded without
 changing teacher-visible text, before enabling automatic reordering. A new model is
 not required for this first experiment; these results alone do not settle whether
 rules will be sufficient across writers and layouts.
+
+## Production integration follow-up (2026-09-17)
+
+The frozen evaluator prototype and its SHA-256 record were not modified. Production
+now contains a separate `core/continuation.py` implementation with the same core
+gutter, local-band and scope safeguards plus a narrowly corroborated `if`/`else`
+rule before a recognized next-question boundary. It runs only after successful full
+or banded column discovery. Existing single-column brace/severance mechanisms remain
+authoritative after a focused regression showed that reapplying column association
+could undo an already supported reassembly.
+
+All eight development pages now match their annotated retained-detection order;
+Examples 5, 6 and 8 are the three production changes. The original two-question
+fixture and its corrected-brace counterfactual also match annotation without editing
+any OCR character. Every proposal is validated as a complete detection permutation
+that preserves existing visual rows. Ambiguity retains the pre-association order.
+
+The first reserved evaluation remains historical and reproducible. Its fixture and
+prototype hashes still pass. Live production does not yet repair reserved Example
+10 because that layout does not enter the full/banded column gate; Examples 3 and 12
+retain their prior correct order. This boundary and the single-writer dataset mean
+additional writers and new frozen evaluation pages are still needed.
+
+Fresh gates: 204 unit tests pass with zero expected failures. The live 20-image
+evaluation remains clean_ws CER 0.099, clean WER 0.328, clean token accuracy 0.716,
+and green_writer10 clean_ws CER 0.061.

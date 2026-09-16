@@ -14,6 +14,42 @@ from unittest.mock import patch
 PIPELINE_PATH = Path(__file__).resolve().parent.parent / "core" / "ocr_pipeline.py"
 
 
+def build_layout_package():
+    """Build (unexecuted) module objects for the core.layout package and its
+    braces / format / columns / displacement submodules from disk. Returns
+    (specs, modules),
+    both dicts keyed by the sys.modules name. The caller registers `modules` in
+    a stubbed sys.modules and calls exec_layout_package to execute them."""
+    layout_dir = PIPELINE_PATH.parent / "layout"
+    specs = {
+        "core.continuation": importlib.util.spec_from_file_location(
+            "core.continuation", PIPELINE_PATH.parent / "continuation.py"),
+        "core.layout.braces": importlib.util.spec_from_file_location(
+            "core.layout.braces", layout_dir / "braces.py"),
+        "core.layout.format": importlib.util.spec_from_file_location(
+            "core.layout.format", layout_dir / "format.py"),
+        "core.layout.columns": importlib.util.spec_from_file_location(
+            "core.layout.columns", layout_dir / "columns.py"),
+        "core.layout.displacement": importlib.util.spec_from_file_location(
+            "core.layout.displacement", layout_dir / "displacement.py"),
+        "core.layout": importlib.util.spec_from_file_location(
+            "core.layout", layout_dir / "__init__.py",
+            submodule_search_locations=[str(layout_dir)]),
+    }
+    modules = {name: importlib.util.module_from_spec(spec)
+               for name, spec in specs.items()}
+    return specs, modules
+
+
+def exec_layout_package(specs, modules):
+    """Execute core.layout leaves, then its grouping coordinator.
+    Must run inside a patch.dict(sys.modules, ...) that includes every module."""
+    for name in ("core.continuation", "core.layout.braces", "core.layout.format",
+                 "core.layout.columns", "core.layout.displacement",
+                 "core.layout"):
+        specs[name].loader.exec_module(modules[name])
+
+
 def load_pipeline_without_models():
     """Load the grouping helpers without importing OCR runtime dependencies."""
     cv2 = types.ModuleType("cv2")
@@ -70,10 +106,11 @@ def load_pipeline_without_models():
     # loads without the recognizer. Exec it inside the patched sys.modules,
     # before ocr_pipeline, so its `from core.numeric import ...` and
     # ocr_pipeline's `from core.layout import ...` both resolve to real modules.
-    layout_spec = importlib.util.spec_from_file_location(
-        "core.layout", PIPELINE_PATH.parent / "layout.py"
-    )
-    layout = importlib.util.module_from_spec(layout_spec)
+    # core.layout is a package (2026-09-17): __init__ re-exports from submodules
+    # braces / format / columns / displacement. Build the package from disk,
+    # register every module in stubbed sys.modules, and execute leaves before
+    # the coordinator so ocr_pipeline imports the real package surface.
+    layout_specs, layout_modules = build_layout_package()
 
     stubs = {
         "cv2": cv2,
@@ -85,13 +122,12 @@ def load_pipeline_without_models():
         "core.debug_artifact": debug_artifact,
         "core.c_code_cleanup": c_code_cleanup,
         "core.c_literals": c_literals,
-        "core.layout": layout,
         module_name: module,
+        **layout_modules,
     }
     with patch.dict(sys.modules, stubs):
-        assert layout_spec.loader is not None
-        layout_spec.loader.exec_module(layout)
-        setattr(core_pkg, "layout", layout)
+        exec_layout_package(layout_specs, layout_modules)
+        setattr(core_pkg, "layout", layout_modules["core.layout"])
         assert spec.loader is not None
         spec.loader.exec_module(module)
     return module
@@ -102,10 +138,9 @@ def load_layout():
     isolation, without the recognizer. layout imports only core.numeric and
     core.c_literals, so no cv2/numpy/paddleocr stubs are needed.
 
-    Geometry test classes load THIS module rather than ocr_pipeline: ocr_pipeline
-    only re-exports these functions, and patch.object on a re-export would not
-    intercept layout's internal calls (e.g. _group_detection_records calling
-    _detect_banded_column). Patching on layout targets the real call site."""
+    Returns the core.layout package, which owns the grouping coordinator.
+    Geometry tests patch this package because _group_detection_records resolves
+    its detector and displaced-region helpers in this namespace."""
     core_pkg = types.ModuleType("core")
 
     def load_real(name):
@@ -120,20 +155,18 @@ def load_layout():
     numeric = load_real("numeric")
     c_literals = load_real("c_literals")
 
-    layout_spec = importlib.util.spec_from_file_location(
-        "core.layout", PIPELINE_PATH.parent / "layout.py"
-    )
-    layout = importlib.util.module_from_spec(layout_spec)
+    # core.layout is a package (2026-09-17). Build and execute its leaf modules
+    # before the coordinator and return the coordinator's public package surface.
+    layout_specs, layout_modules = build_layout_package()
     stubs = {
         "core": core_pkg,
         "core.numeric": numeric,
         "core.c_literals": c_literals,
-        "core.layout": layout,
+        **layout_modules,
     }
     with patch.dict(sys.modules, stubs):
-        assert layout_spec.loader is not None
-        layout_spec.loader.exec_module(layout)
-    return layout
+        exec_layout_package(layout_specs, layout_modules)
+    return layout_modules["core.layout"]
 
 
 def box(x, y_center):

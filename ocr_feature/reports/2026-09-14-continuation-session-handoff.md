@@ -1,5 +1,13 @@
 # Handwritten code continuation — session handoff
 
+> **2026-09-17 follow-up:** The five production-order expected failures described
+> below are now fixed by `core/continuation.py` and the live column finalizer. All
+> eight development pages match annotation, 204 tests pass with zero expected
+> failures, and the live OCR metrics remain 0.099 clean_ws CER / 0.328 clean WER /
+> 0.716 clean token accuracy (`green_writer10` 0.061). The historical notes remain
+> below for provenance. The frozen prototype is unchanged; reserved Example 10 is
+> still outside the live column gate, and additional writers remain necessary.
+
 Date: 2026-09-14. Branch: `feature/reading-order-reassembly`.
 Read this before resuming OCR association work. This is the current summary;
 older plans and local guides retain dated historical results.

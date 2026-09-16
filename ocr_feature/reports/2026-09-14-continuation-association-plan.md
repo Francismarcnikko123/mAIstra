@@ -5,7 +5,9 @@
 > All 11 supplied photos were used. Historical “Example 7 missing” wording below
 > reflects an unresolved numbering mismatch, not a confirmed missing upload.
 
-Status: planning and baseline testing only. No production ordering changes.
+Status update (2026-09-17): the conservative column-association subset is now
+integrated into production. The baseline findings below remain the test-first
+record. See **Live integration outcome** at the end for current behavior.
 
 ## Requirement
 
@@ -177,3 +179,29 @@ clean_ws CER 0.061. Its model initialization was slow and logged a sandbox
 `sysctl` warning, but the original run completed without a restart. `git diff
 --check` passed. No improved association accuracy is claimed by these baseline
 results. No production code, thresholds, model weights or web UI were changed.
+
+## Live integration outcome (2026-09-17)
+
+The five planning failures are resolved by `core/continuation.py` and the shared
+column finalizer in `core/layout/__init__.py`. Full and banded column results are
+checked before return, removing the earlier bypass. Accepted moves reorder whole
+existing visual rows only. The finalizer rejects an incomplete detection
+permutation, duplicate or missing IDs, and any proposal that splits a visual row.
+Single-column brace/severance ordering is deliberately retained without a second
+association pass because focused testing showed that applying the lower-confidence
+column rule there could undo an already brace-balanced move.
+
+The original 20-detection screenshot and its corrected-brace counterfactual now
+match the annotated Question 1 left → Question 1 right → Question 2 left → Question
+2 right order. The unedited photo succeeds without correcting `{else {` or the
+unterminated recognized quote: the decision combines a clean unique gutter, a local
+`if`/`else` relationship and the following recognized Question 2 boundary. Examples
+5, 6 and 8 also match their annotations. All eight development pages have exact
+retained-detection order and preserve every record.
+
+Fresh verification after evaluator instrumentation: 204 tests pass with no expected
+failures. The 20-image OCR evaluator remains clean_ws CER 0.099, clean WER 0.328,
+clean token accuracy 0.716 and green_writer10 clean_ws CER 0.061. Frozen prototype
+and reserved fixture hashes remain unchanged. This remains one-writer evidence;
+reserved Example 10 is still outside the live column gate, and additional writers
+are required before making a general accuracy claim.

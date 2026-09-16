@@ -1,4 +1,5 @@
 """Checks for development-only evaluation and preservation of repeated text."""
+from collections import Counter
 import json
 import hashlib
 from pathlib import Path
@@ -10,15 +11,23 @@ from evaluators import evaluate_continuation_development as evaluator
 
 
 class ContinuationEvaluationTests(unittest.TestCase):
-    def test_fixtures_are_frozen_and_replay_matches_live_extraction(self):
+    def test_fixtures_and_recorded_live_characters_are_frozen(self):
         annotation = json.loads((evaluator.FIXTURES / "writerX_development_annotations.json").read_text())
         result = evaluator.evaluate()
         self.assertEqual({p["example"] for p in result["pages"]}, {1, 2, 4, 5, 6, 8, 9, 11})
         for page, measured in zip(annotation["pages"], result["pages"]):
             fixture = evaluator.FIXTURES / f"writerX_page{page['example']:02d}_detections.json"
             self.assertEqual(hashlib.sha256(fixture.read_bytes()).hexdigest(), page["fixture_sha256"])
-            self.assertEqual([line.strip() for line in page["live_raw_text"].splitlines() if line.strip()],
-                             measured["actual_text_rows"])
+            records = json.loads(fixture.read_text())
+            recorded = [
+                line.strip()
+                for line in page["live_raw_text"].splitlines()
+                if line.strip()
+            ]
+            self.assertEqual(
+                Counter(recorded),
+                Counter(record["text"].strip() for record in records),
+            )
             self.assertTrue(measured["all_detections_preserved"])
 
     def test_pairwise_metric_counts_misordered_and_missing_ids(self):
@@ -48,6 +57,25 @@ class ContinuationEvaluationTests(unittest.TestCase):
         records = [{"text": "}", "score": .9, "box": [10, 0, 30, 10]} for _ in range(2)]
         rows, _ = evaluator.replay(records)
         self.assertEqual(sorted(i for row in rows for i in row), [0, 1])
+
+    def test_live_layout_matches_every_development_annotation(self):
+        result = evaluator.evaluate()
+        for page in result["pages"]:
+            with self.subTest(example=page["example"]):
+                self.assertEqual(page["actual_order"], page["expected_order"])
+                self.assertTrue(page["all_detections_preserved"])
+
+    def test_evaluator_reports_live_association_changes(self):
+        pages = {page["example"]: page for page in evaluator.evaluate()["pages"]}
+        for example in (5, 6, 8):
+            events = [
+                event for event in pages[example]["mechanisms"]
+                if event["mechanism"] == "_associate_continuation"
+            ]
+            self.assertEqual(events, [{
+                "mechanism": "_associate_continuation",
+                "changed_order": True,
+            }])
 
 
 class LocalContinuationAcceptanceTests(unittest.TestCase):
