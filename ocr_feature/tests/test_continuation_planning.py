@@ -33,15 +33,12 @@ def group(payload):
 
 
 class ContinuationPlanningTests(unittest.TestCase):
-    # Remove expectedFailure when implementing association, after rerunning red.
-    @unittest.expectedFailure
     def test_real_two_question_continuations_belong_before_next_question(self):
         payload = records()
         rows, safe = group(payload)
         self.assertTrue(safe)
         self.assertEqual(row_ids(rows, payload), EXPECTED)
 
-    @unittest.expectedFailure
     def test_corrected_else_brace_variant_has_required_order(self):
         payload = records()
         self.assertEqual(payload[2]["text"], "{else {")

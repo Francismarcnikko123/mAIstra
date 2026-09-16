@@ -55,16 +55,12 @@ class LocalContinuationAcceptanceTests(unittest.TestCase):
         page = next(p for p in evaluator.evaluate()["pages"] if p["example"] == example)
         self.assertEqual(page["actual_order"], page["expected_order"])
 
-    # Known failures during the annotation/baseline phase; remove on integration.
-    @unittest.expectedFailure
     def test_example05_finishes_question_one_before_question_two(self):
         self.assert_intended_order(5)
 
-    @unittest.expectedFailure
     def test_example06_finishes_each_loop_with_its_own_continuation(self):
         self.assert_intended_order(6)
 
-    @unittest.expectedFailure
     def test_example08_keeps_local_continuations_without_headings(self):
         self.assert_intended_order(8)
 
