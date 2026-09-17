@@ -293,6 +293,18 @@ def associate_continuation(records, baseline_ids):
             if candidate["top"] > left_block["bottom"]
             for text in candidate["text_rows"]
         )
+        # Unlike the main() branch above and the scope branch below, this branch
+        # intentionally does NOT require left_safe. _code_rows already blanks any
+        # lexically-unsafe row before building left_code, so a `\bif\b` match can
+        # only come from a SAFE row -- an unsafe row can only remove evidence
+        # (under-fire), never inject a false `if`. The scope branch needs both
+        # sides fully safe because it counts braces across the whole block, where
+        # a blanked row's missing braces would corrupt the depth math; keyword
+        # presence has no such dependency. See the writerX two-question fixture
+        # (tests/test_continuation_planning.py) and
+        # test_if_else_continuation_survives_unsafe_unrelated_left_row: the Q1
+        # left block has an unterminated string on one row, yet the if/else
+        # continuation is the correct outcome. Do not add left_safe here.
         if (right_safe
                 and later_numbered_question
                 and re.search(r"\bif\b", left_code)

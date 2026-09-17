@@ -114,6 +114,31 @@ class ContinuationAssociationTests(unittest.TestCase):
         self.assertEqual(result["relations"][0]["decision"], "ambiguous")
         self.assertFalse(result["changed_order"])
 
+    def test_if_else_continuation_survives_unsafe_unrelated_left_row(self):
+        # The if/else branch intentionally does NOT require left_safe: _code_rows
+        # blanks any unsafe row, so a `\bif\b` match can only come from a safe
+        # row. Here the left block's first row is an unterminated string literal
+        # (left_safe becomes False), but the `if` on the next row is clean, so
+        # the continuation must still fire. Guards against re-adding a left_safe
+        # check to this branch (see core/continuation.py's comment there and the
+        # writerX two-question fixture, which has the same shape).
+        records = [
+            detection('printf("oops);', 0, 0),   # 0: unterminated -> unsafe row
+            detection("if (x > 0) {", 0, 40),     # 1: clean `if`, safe row
+            detection("Question 2:", 0, 120),     # 2: later numbered question
+            detection("int g() {", 0, 160),       # 3: Q2 left body
+            detection("} else {", 400, 40),       # 4: right continuation
+            detection("return x; }", 400, 80),    # 5: right continuation
+        ]
+        result = associate_continuation(records, list(range(len(records))))
+        self.assertTrue(any(
+            relation["decision"] == "continuation"
+            and "if_else_link_before_next_numbered_question" in relation["reasons"]
+            for relation in result["relations"]
+        ))
+        self.assertTrue(result["changed_order"])
+        self.assertEqual(sorted(result["ordered_ids"]), list(range(len(records))))
+
     def test_misread_closer_cannot_authorize_move(self):
         records = [
             detection("int f() {", 0, 0),
