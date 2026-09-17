@@ -10,8 +10,9 @@ Split out of core/layout.py on 2026-09-17 as a behavior-preserving refactor
 -- the function bodies are unchanged. Depends only on the standard library
 `re` and core.c_literals (the same C_LITERAL segment pattern
 c_code_cleanup.py walks, so literal handling never drifts between call sites).
-core.layout re-exports `_brace_delta` so existing callers -- including
-core.ocr_pipeline -- keep importing it from core.layout unchanged.
+core.layout re-exports `_brace_delta` so package-level callers keep importing it
+from core.layout unchanged. (core.ocr_pipeline no longer re-exports it -- removed
+2026-09-18 as an unused backward-compatibility export.)
 """
 import re
 

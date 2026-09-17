@@ -10,9 +10,11 @@ are emitted.
 Split out of core/layout.py on 2026-09-17 as a behavior-preserving refactor
 -- the function bodies are unchanged. Pure standard library (math only).
 core.layout re-exports these names (and the INDENT_* / MAX_BLANK_LINES
-constants), so existing callers -- core.ocr_pipeline,
-evaluators/build_recognition_dataset, and the geometry tests -- keep importing
-them from core.layout / core.ocr_pipeline unchanged.
+constants) for package-level callers and the geometry tests. `line_member_bounds`
+is also re-exported from core.ocr_pipeline (used by
+evaluators/build_recognition_dataset); the other former ocr_pipeline re-exports
+from here, such as `_expected_line_y`, were removed 2026-09-18 as unused --
+import them directly from core.layout.
 """
 import math
 

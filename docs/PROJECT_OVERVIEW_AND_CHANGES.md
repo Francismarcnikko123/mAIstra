@@ -323,6 +323,37 @@ The following state is intentionally retained in `SubmissionsListComponent`:
   live evaluator remains at clean_ws CER **0.099**, clean WER **0.328**, clean token
   accuracy **0.716**, and `green_writer10` clean_ws CER **0.061**.
 
+## OCR heading recognition + code-review fixes (2026-09-18)
+
+> **Owner:** Nombrado
+
+- Widened heading recognition (`core/continuation.py` `QUESTION`) beyond `Question N:`
+  to every format present in `datasets/verified/labels.csv`: `QUESTION NO. N`,
+  `test Case N` / `Test case N:`, and bare numbered headings (`1.`, `2)`, `3.)`). The
+  prefix is conditional, so a bare digit or `digit;` fragment (`5`, `0;`, `1;`) is NOT
+  misread as a heading. Closed-vocabulary by design; an unrecognized style falls back
+  to geometry/brace evidence and only loses a shortcut, never causes a wrong reorder.
+- Synced `evaluators/continuation_prototype.py`'s `QUESTION` to the same pattern so the
+  offline/manual tester (`tests/manual_continuation.py`) mirrors live heading
+  recognition; behaviour-neutral on the recorded association cohort (all continuation
+  tests unchanged).
+- Code-review fixes (medium-depth review of the OCR feature): `_brace_delta` and
+  `_is_definition_close` now mask `//` and `/* */` comments as well as literals, so the
+  single-column brace guard matches `core.continuation._scope`; `#include`
+  normalization no longer truncates a fused OCR line's trailing student content;
+  `ocr.predict` failures now raise a `RuntimeError` carrying the image path instead of a
+  bare traceback; `try_config.py` guards a `None` average confidence before formatting.
+- Removed six dead "backward compatibility" re-exports from `ocr_pipeline.py` (only
+  `_group_detection_records` and `line_member_bounds` are still imported from it) and
+  deleted the unused `core/layout/reorder.py` shim — no importer used either.
+- One review finding (adding `left_safe` to the if/else continuation branch) was
+  intentionally NOT applied: `_code_rows` already blanks unsafe rows, so the `if`
+  evidence can only come from a safe row, and requiring `left_safe` regresses a real
+  annotated two-question fixture. The omission is now documented in-code and locked by
+  `test_if_else_continuation_survives_unsafe_unrelated_left_row`.
+- Verification: **207 tests pass**. Live evaluator unchanged: clean_ws CER **0.099**,
+  WER **0.328**, token accuracy **0.716**, `green_writer10` clean_ws CER **0.061**.
+
 ## Code cleanup completed
 
 > **Owner:** Shared (Jayrald + Nombrado)
