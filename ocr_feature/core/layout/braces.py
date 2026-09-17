@@ -1,9 +1,10 @@
 """C brace-depth primitives for reading-order reassembly.
 
 Two small, pure helpers that measure `{}` structure in a line of recognized
-text while ignoring anything inside a string/char literal -- that is student
-content, never real C structure. They back the displaced-region reassembly
-guard in core.layout (brace-well-formedness and definition-close checks).
+text while ignoring anything inside a string/char literal or a comment -- that
+is student content or annotation, never real C structure. They back the
+displaced-region reassembly guard in core.layout (brace-well-formedness and
+definition-close checks).
 
 Split out of core/layout.py on 2026-09-17 as a behavior-preserving refactor
 -- the function bodies are unchanged. Depends only on the standard library
@@ -16,15 +17,27 @@ import re
 
 from core.c_literals import C_LITERAL
 
+# Like C_LITERAL, but also spans `//` line comments and `/* */` block comments,
+# so a brace written inside a comment is never counted as real structure. This
+# keeps the invariant identical to core.continuation._scope/_code_only, which
+# masks comments too -- without it, a displaced line like "// still in the if {"
+# or "/* } */" would reach a different brace verdict here than in the two-column
+# continuation path. Literals come first in the alternation so a `//` or `/*`
+# inside a string stays part of the string; re.S lets a `/* */` block span
+# newlines.
+_LITERAL_OR_COMMENT = re.compile(
+    C_LITERAL.pattern + r"|//[^\n]*|/\*.*?\*/", re.S
+)
+
 
 def _brace_delta(text: str) -> int:
-    """Net change in {}-depth contributed by `text`, skipping anything
-    inside a string/char literal -- that's student content, never real C
-    structure. Walks the same C_LITERAL segment pattern c_code_cleanup.py
-    uses, so literal handling never drifts between the two call sites."""
+    """Net change in {}-depth contributed by `text`, skipping anything inside a
+    string/char literal or a comment -- that's student content or annotation,
+    never real C structure. Uses the same masking pattern as
+    core.continuation._scope so the two brace guards never disagree."""
     delta = 0
     last = 0
-    for match in C_LITERAL.finditer(text):
+    for match in _LITERAL_OR_COMMENT.finditer(text):
         segment = text[last:match.start()]
         delta += segment.count("{") - segment.count("}")
         last = match.end()
@@ -49,7 +62,7 @@ def _is_definition_close(text: str) -> bool:
     """
     stripped = ""
     last = 0
-    for match in C_LITERAL.finditer(text):
+    for match in _LITERAL_OR_COMMENT.finditer(text):
         stripped += text[last:match.start()]
         last = match.end()
     stripped += text[last:]

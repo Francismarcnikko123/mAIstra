@@ -15,7 +15,14 @@ from core import layout
 RULE_VERSION = "local-gutter-scope-v1"
 GUTTER_HEIGHTS = 2.0
 BAND_GAP_HEIGHTS = 1.2
-QUESTION = re.compile(r"^\s*q[a-z]{3,10}\s*(\d+)\s*[:;.]?\s*$", re.I)
+# Kept in lock-step with core.continuation.QUESTION so this offline prototype
+# mirrors the production heading recognition. See that module's comment for the
+# rationale (prefixed vs bare headings, why a bare "5"/"0;" must not match).
+QUESTION = re.compile(
+    r"^\s*(?P<pre>q[a-z]{3,10}\s*(?:no\.?)?|test\s*case)?\s*"
+    r"(?P<num>\d+)\s*(?(pre)[.):;]{0,2}|[.)]{1,2})\s*$",
+    re.I,
+)
 
 
 def code_only(text):
@@ -161,8 +168,8 @@ def associate(records):
         if gap < GUTTER_HEIGHTS * height:
             relation['reasons'] = ['insufficient_local_gutter']
             continue
-        lq = [QUESTION.fullmatch(t).group(1) for t in l['text_rows'] if QUESTION.fullmatch(t)]
-        rq = [QUESTION.fullmatch(t).group(1) for t in r['text_rows'] if QUESTION.fullmatch(t)]
+        lq = [QUESTION.fullmatch(t).group("num") for t in l['text_rows'] if QUESTION.fullmatch(t)]
+        rq = [QUESTION.fullmatch(t).group("num") for t in r['text_rows'] if QUESTION.fullmatch(t)]
         lc, lok = code_only('\n'.join(l['text_rows']))
         rc, rok = code_only('\n'.join(r['text_rows']))
         if lq and rq and set(lq).isdisjoint(rq):

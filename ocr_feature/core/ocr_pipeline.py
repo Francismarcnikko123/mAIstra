@@ -15,15 +15,11 @@ from core.layout import (
     _join_lines_with_vertical_gaps,
     # Re-exported for backward compatibility. The reading-order / indentation
     # geometry moved to core.layout (2026-09-13, behavior-preserving split);
-    # tests and evaluators/build_recognition_dataset import these names from
-    # core.ocr_pipeline, so keep that import surface stable here.
-    _brace_delta,
-    _detect_banded_column,
-    _detect_two_columns,
-    _expected_line_y,
+    # evaluators/build_recognition_dataset imports these two names from
+    # core.ocr_pipeline, so keep that import surface stable here. (The other
+    # split-out geometry helpers are imported directly from core.layout by
+    # their callers, so they are not re-exported here.)
     _group_detection_records,
-    _reassemble_displaced_regions,
-    _sever_displaced_regions,
     line_member_bounds,
 )
 
@@ -173,7 +169,17 @@ def _recognize_preprocessed(preprocessed_path: str) -> dict:
             f"could not read preprocessed image: {preprocessed_path}"
         )
 
-    results = ocr.predict(preprocessed_path)
+    try:
+        results = ocr.predict(preprocessed_path)
+    except Exception as exc:
+        # A single bad image (corrupt/degenerate data, an internal model error,
+        # or OOM) must fail with context rather than a bare PaddleOCR traceback
+        # -- the preprocessed path is the one thing that pins down which image.
+        # (warmup() swallows the same call because it's best-effort at startup;
+        # a real request cannot silently continue, so this re-raises.)
+        raise RuntimeError(
+            f"OCR prediction failed for {preprocessed_path}"
+        ) from exc
     structured_lines = []
     confidence_scores = []
     debug_detections = []

@@ -29,6 +29,10 @@ result = extract_text_from_image(IMAGE, preprocess_config=config)
 
 print(f"image            : {IMAGE}")
 print(f"adaptive_denoise : {config.adaptive_denoise}")
-print(f"avg confidence   : {result['average_confidence']:.3f}")
+# average_confidence is None when every detection was filtered out or the page
+# yielded none (blank/near-blank photo), so guard the format like compare_config.
+_conf = result["average_confidence"]
+print(f"avg confidence   : {_conf:.3f}" if _conf is not None
+      else "avg confidence   : n/a")
 print("-" * 60)
 print(result["cleaned_text"])

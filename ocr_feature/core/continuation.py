@@ -23,13 +23,22 @@ BAND_GAP_HEIGHTS = 1.2
 # heading never causes a wrong reorder -- it only loses this shortcut and
 # falls back to geometry/brace evidence, which is more conservative. Add a
 # new alternative here only after finding it in real, newly collected papers.
-# A trailing [.):;]{0,2} lets the heading carry ordinary closing punctuation
-# ("1.)", "Test case 5:") without accidentally matching a heading fused with
-# the code that follows it on the same OCR'd line (e.g. "1. #include ..."
+# A trailing [.):;]{0,2} lets a PREFIXED heading carry ordinary closing
+# punctuation ("Test case 5:") without accidentally matching a heading fused
+# with the code that follows it on the same OCR'd line (e.g. "1. #include ..."
 # still fails to match, because leftover text after the number is not
 # whitespace).
+#
+# The prefix group is conditional (?(pre)...): when a heading word IS present it
+# already disambiguates, so trailing punctuation is optional. When the prefix is
+# ABSENT (a bare numbered heading) we require at least one "." or ")" -- this is
+# what separates a real heading like "1." / "2)" / "3.)" from a stray code
+# fragment misdetected on its own row like "5", "0;", or "1;", which must NOT be
+# treated as a heading (a bare digit or a digit+semicolon is statement text, not
+# a question label). The number is captured as the named group "num".
 QUESTION = re.compile(
-    r"^\s*(?:q[a-z]{3,10}\s*(?:no\.?)?|test\s*case)?\s*(\d+)\s*[.):;]{0,2}\s*$",
+    r"^\s*(?P<pre>q[a-z]{3,10}\s*(?:no\.?)?|test\s*case)?\s*"
+    r"(?P<num>\d+)\s*(?(pre)[.):;]{0,2}|[.)]{1,2})\s*$",
     re.I,
 )
 
@@ -249,13 +258,13 @@ def associate_continuation(records, baseline_ids):
             continue
 
         left_questions = [
-            match.group(1)
+            match.group("num")
             for text in left_block["text_rows"]
             for match in [QUESTION.fullmatch(text)]
             if match
         ]
         right_questions = [
-            match.group(1)
+            match.group("num")
             for text in right_block["text_rows"]
             for match in [QUESTION.fullmatch(text)]
             if match
