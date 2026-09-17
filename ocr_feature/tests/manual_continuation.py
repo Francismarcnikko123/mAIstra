@@ -36,6 +36,49 @@ from evaluators import continuation_prototype
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# Plain-English translations for the decision labels and reason codes the
+# prototype emits. Display only -- the codes in comparison.json are unchanged.
+DECISION_PLAIN = {
+    'continuation': 'CONTINUATION -> moved into place after the left block',
+    'independent': 'SEPARATE ANSWER -> left where it is',
+    'ambiguous': 'NOT SURE -> left in original order (safe default)',
+}
+REASON_PLAIN = {
+    'no_unique_supported_global_gutter':
+        'no single clear left/right split on the page, so nothing to compare',
+    'no_unique_local_vertical_match':
+        'the side block does not line up with exactly one block on the left',
+    'insufficient_local_gutter':
+        'the gap between the two blocks is too small to trust as a margin note',
+    'distinct_numbered_headings':
+        'the two sides have different question numbers',
+    'clean_gutter': 'there is a clear gap between the two sides',
+    'separate_main_entries':
+        'both sides have their own main(), so two separate programs',
+    'if_else_link_before_next_numbered_question':
+        'left has an if, right has the matching else, before the next question',
+    'unique_local_vertical_match':
+        'the side block lines up with exactly one block on the left',
+    'recognized_open_scope_and_closing_block':
+        'the braces show the left block is still open and the right block closes it',
+    'uncertain_literal_or_comment_boundary':
+        'a string or comment could not be read safely, so no move was made',
+    'insufficient_or_conflicting_scope_evidence':
+        'the brace math does not clearly support a continuation',
+    'competing_blocks_for_insertion_point':
+        'more than one side block wanted the same spot, so nothing was moved',
+    'heuristic_evidence_not_semantic_proof':
+        'decisions use layout evidence, not proof the code is correct',
+    'empty_input': 'no detections were found on the page',
+    'invalid_detection_geometry_or_payload':
+        'a detection had unusable coordinates, so the original order was kept',
+}
+
+
+def _plain_reasons(reasons):
+    """Human-readable reason list; unknown codes pass through unchanged."""
+    return '; '.join(REASON_PLAIN.get(reason, reason) for reason in reasons)
+
 
 def compare_photo(photo, run_dir, extract):
     """Extract and compare in an isolated run directory; extractor is injectable."""
@@ -76,23 +119,52 @@ def main(argv=None):
     output.mkdir(parents=True, exist_ok=True)
     run_dir = Path(tempfile.mkdtemp(prefix='run-', dir=output))
     report = compare_photo(photo, run_dir, extract_text_from_image)
-    print('\n=== CURRENT PIPELINE RAW TEXT ===')
-    print(report['ocr']['raw_text'])
-    print('\n=== PROTOTYPE ORDER (one retained detection per line) ===')
-    print('\n'.join(report['prototype_detection_text']))
     prediction = report['prediction']
-    print('\n=== ASSOCIATION DECISIONS ===')
-    for relation in prediction['relations']:
-        print(f"Right block {relation['source_block']}: {relation['decision']}; "
-              f"compared with left block {relation['target_block']} "
-              f"({', '.join(relation['reasons'])})")
+    changed = prediction['changed_order']
+    bar = '=' * 64
+
+    print('\n' + bar)
+    print(f' CONTINUATION CHECK: {photo.name}')
+    print(bar)
+    print('Re-runs OCR on the photo, then checks whether any code written off')
+    print('to the side belongs earlier in the program. It only REORDERS whole')
+    print('lines -- it never edits, adds, or removes a single character.')
+
+    print('\n--- 1. WHAT THE OCR READ (original top-to-bottom order) ---')
+    print(report['ocr']['raw_text'])
+
+    print('\n--- 2. ORDER AFTER THE CONTINUATION CHECK ---')
+    print('\n'.join(report['prototype_detection_text']))
+    if changed:
+        print('\n>> Lines WERE reordered: a side block was moved into place.')
+    else:
+        print('\n>> No lines moved: the original order was already correct,')
+        print('   or there was not enough evidence to safely move anything.')
+
+    print('\n--- 3. DECISIONS (one per side block the check considered) ---')
     if not prediction['relations']:
-        print('No association candidates:', ', '.join(prediction['reasons']))
-    print('Order changed:', prediction['changed_order'])
-    print('Overall status:', prediction['status'])
-    print('All retained records preserved:', report['all_retained_records_preserved'])
-    print('Dropped upstream:', len(report['dropped_low_confidence']))
-    print('Saved comparison:', run_dir / 'comparison.json')
+        print('No side blocks to compare.')
+        print(f"Reason: {_plain_reasons(prediction['reasons'])}")
+    for relation in prediction['relations']:
+        target = relation['target_block']
+        against = f"left block {target}" if target else "the left side"
+        print(f"\nRight-side block {relation['source_block']} vs {against}:")
+        print(f"   -> {DECISION_PLAIN.get(relation['decision'], relation['decision'])}")
+        if relation['reasons']:
+            print(f"      Why: {_plain_reasons(relation['reasons'])}")
+
+    print('\n--- SUMMARY ---')
+    print(f"Lines reordered : {'Yes' if changed else 'No'}")
+    if prediction['status'] == 'supported':
+        print("Overall         : SUPPORTED -- every decision had clear evidence")
+    else:
+        print("Overall         : NOT SURE -- at least one block lacked clear")
+        print("                  evidence, so it was left in its original place")
+    print(f"All text kept    : {'Yes' if report['all_retained_records_preserved'] else 'NO'}"
+          " (no characters added, edited, or dropped)")
+    print(f"Low-conf dropped : {len(report['dropped_low_confidence'])}"
+          " (removed before this step as OCR noise)")
+    print(f"Full details     : {run_dir / 'comparison.json'}")
     return 0
 
 
