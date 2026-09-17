@@ -63,6 +63,43 @@ The Angular submission review uses one existing `SubmissionsListComponent`; no a
    - Run all configured test cases.
    - Display output comparison and logic-analysis results.
 
+### Re-extraction: detailed ownership split
+
+The "Re-extract code" flow was built in two clearly separated parts. All paths
+below are in `maistra_web/src/app/components/submissions-list/`, verified against
+`git blame`.
+
+**Jayrald — the re-extraction capability** (`0133859`, "feat(web): Implement
+submissions list and multi-stage review logic"):
+
+- The extract control that doubles as **Re-extract** once text already exists:
+  the button label switches between `Extract code`, `Extracting…`, and
+  `Re-extract code` based on `hasExtractedText(...)` — `submissions-list.html:204`.
+- `performExtract(id)` — the actual OCR call that re-runs extraction and
+  overwrites the editor with the fresh result: `POST /api/ocr/extract-from-url`,
+  then sets `extractedText[id]` / `editableText[id]` — `submissions-list.ts:320–340`.
+  (The `performExtract` wrapper was factored out by Nombrado to insert the guard;
+  the HTTP extraction call inside it is Jayrald's.)
+
+**Nombrado — the guardrail** (`144f340`, "Guard Re-extract against silently
+overwriting teacher's edits"):
+
+- `extractText()` now checks for unsaved work before re-running: it compares the
+  current editor text (`editableText[id]`) against the last extraction
+  (`extractedText[id]`); if they differ (`hasEdits`), it opens the confirmation
+  dialog instead of extracting, and only a first extraction or an edit-free
+  re-extract runs straight through — `submissions-list.ts:289–306`.
+- The confirmation dialog itself — *"Re-extract and discard edits? … Your current
+  corrections will be lost."* — with `confirmReextract()` / `cancelReextract()`
+  handlers and the `reextractConfirmId` state — `submissions-list.ts:308–318`,
+  `submissions-list.html:328–348`, styling in `submissions-list.css` (destructive
+  confirm button + dialog).
+- Effect: re-extraction can no longer silently destroy a teacher's corrections;
+  progress loss now requires an explicit confirm. Cancel keeps the edits intact.
+
+**Boundary in one line:** Jayrald made extraction *re-runnable*; Nombrado made a
+re-run that would discard edits *ask first*.
+
 ## Submission interface changes
 
 > **Owner:** Jayrald
