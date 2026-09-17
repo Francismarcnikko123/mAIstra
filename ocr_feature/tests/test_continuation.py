@@ -65,6 +65,44 @@ class ContinuationAssociationTests(unittest.TestCase):
         self.assertEqual(result["relations"][0]["decision"], "independent")
         self.assertFalse(result["changed_order"])
 
+    def test_bare_and_test_case_headings_support_independence(self):
+        # Real heading styles found in datasets/verified/labels.csv besides
+        # "Question N:" -- must be recognized the same way.
+        for left_heading, right_heading in (
+            ("1.", "2."),
+            ("1)", "2)"),
+            ("test Case 2", "test Case 3"),
+            ("Test case 5:", "Test case 6:"),
+            ("QUESTION NO. 3.", "QUESTION NO. 4."),
+        ):
+            with self.subTest(left=left_heading, right=right_heading):
+                records = [
+                    detection(left_heading, 0, 0),
+                    detection("int f() {", 0, 40),
+                    detection("return 1; }", 0, 80),
+                    detection(right_heading, 400, 0),
+                    detection("int g() {", 400, 40),
+                    detection("return 2; }", 400, 80),
+                ]
+                result = associate_continuation(records, list(range(len(records))))
+                self.assertEqual(result["relations"][0]["decision"], "independent")
+                self.assertFalse(result["changed_order"])
+
+    def test_heading_fused_with_code_is_not_mistaken_for_a_heading(self):
+        # "1. #include <stdio.h>" is a numbered heading OCR'd on the same
+        # line as the first code line -- it must NOT match as a bare
+        # heading, or the two questions would be misclassified.
+        records = [
+            detection("1. #include <stdio.h>", 0, 0),
+            detection("int f() {", 0, 40),
+            detection("return 1; }", 0, 80),
+            detection("2. #include <stdio.h>", 400, 0),
+            detection("int g() {", 400, 40),
+            detection("return 2; }", 400, 80),
+        ]
+        result = associate_continuation(records, list(range(len(records))))
+        self.assertNotEqual(result["relations"][0]["decision"], "independent")
+
     def test_two_unnumbered_functions_abstain(self):
         records = [
             detection("int f() {", 0, 0),

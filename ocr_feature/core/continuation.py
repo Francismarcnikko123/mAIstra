@@ -12,7 +12,26 @@ from statistics import median
 
 GUTTER_HEIGHTS = 2.0
 BAND_GAP_HEIGHTS = 1.2
-QUESTION = re.compile(r"^\s*q[a-z]{3,10}\s*(\d+)\s*[:;.]?\s*$", re.I)
+
+# Recognizes a heading line standing alone on its own detection row, used to
+# split blocks and to tell independent answers apart by number. Calibrated
+# against every heading format observed in datasets/verified/labels.csv as of
+# 2026-09-17 ("Question N:", "QUESTION NO. N.", "test Case N", "Test case N:",
+# and a bare numbered heading "N." / "N)" / "N.)"). This is closed-vocabulary
+# on purpose, the same way c_code_cleanup.py only fixes known keywords: a
+# heading style not seen in real papers is not guessed at. An unrecognized
+# heading never causes a wrong reorder -- it only loses this shortcut and
+# falls back to geometry/brace evidence, which is more conservative. Add a
+# new alternative here only after finding it in real, newly collected papers.
+# A trailing [.):;]{0,2} lets the heading carry ordinary closing punctuation
+# ("1.)", "Test case 5:") without accidentally matching a heading fused with
+# the code that follows it on the same OCR'd line (e.g. "1. #include ..."
+# still fails to match, because leftover text after the number is not
+# whitespace).
+QUESTION = re.compile(
+    r"^\s*(?:q[a-z]{3,10}\s*(?:no\.?)?|test\s*case)?\s*(\d+)\s*[.):;]{0,2}\s*$",
+    re.I,
+)
 
 
 def _code_only(text):
