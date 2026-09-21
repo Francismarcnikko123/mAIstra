@@ -100,7 +100,8 @@ export class Judge0 implements OnChanges {
         },
         error: (error) => {
           this.stderr = 'Failed to execute code.';
-          this.firstRunTestCasePassed = false;
+          this.statusDescription = 'Execution failed';
+          this.firstRunTestCasePassed = null;
           this.isRunning = false;
 
           console.error(error);
@@ -120,6 +121,15 @@ export class Judge0 implements OnChanges {
   }
 
   get displayedOutput(): string {
+    if (this.resultMode === 'run') {
+      return (
+        this.stdout ||
+        this.stderr ||
+        this.compileOutput ||
+        (this.isRunning ? 'Running...' : '(no output)')
+      );
+    }
+
     return (
       this.submittedOutput ||
       this.stdout ||
@@ -136,9 +146,11 @@ export class Judge0 implements OnChanges {
   }
 
   get displayedStatus(): string {
-    if (this.isRunning) return 'Running';
+    if (this.resultMode === 'run') {
+      return this.isRunning ? 'Running' : this.statusDescription;
+    }
     if (this.isSubmitting) return 'Checking';
-    return this.submitStatus || this.statusDescription;
+    return this.submitStatus;
   }
 
   get shouldShowTerminalResults(): boolean {
@@ -147,10 +159,10 @@ export class Judge0 implements OnChanges {
 
     return (
       !!this.stdout ||
-      !!this.submittedOutput ||
       !!this.stderr ||
       !!this.compileOutput ||
-      this.testCaseResults.length > 0
+      !!this.statusDescription ||
+      this.firstRunTestCasePassed !== null
     );
   }
 
@@ -158,9 +170,9 @@ export class Judge0 implements OnChanges {
     return (
       this.resultMode === 'run' &&
       (!!this.stdout ||
-        !!this.submittedOutput ||
         !!this.stderr ||
         !!this.compileOutput ||
+        !!this.statusDescription ||
         this.firstRunTestCasePassed !== null)
     );
   }
@@ -174,6 +186,7 @@ export class Judge0 implements OnChanges {
       (this.statusId !== null && this.statusId !== 3) ||
       this.displayedStatus === 'Wrong Answer' ||
       this.displayedStatus === 'Error' ||
+      this.displayedStatus === 'Execution failed' ||
       this.firstRunTestCasePassed === false
     );
   }
@@ -205,22 +218,19 @@ export class Judge0 implements OnChanges {
   }
 
   get firstTestCasePassedLabel(): string {
-    const passed =
-      this.firstTestCaseResult?.passed ?? this.firstRunTestCasePassed;
+    const passed = this.firstRunTestCasePassed;
     if (passed === null) return '';
     return passed ? 'First Test Case Passed' : 'First Test Case Failed';
   }
 
   get runResultTitle(): string {
-    const passed =
-      this.firstTestCaseResult?.passed ?? this.firstRunTestCasePassed;
+    const passed = this.firstRunTestCasePassed;
     if (passed === null) return '';
     return passed ? 'Accepted' : 'Wrong Answer :(';
   }
 
   get runResultSummary(): string {
-    const passed =
-      this.firstTestCaseResult?.passed ?? this.firstRunTestCasePassed;
+    const passed = this.firstRunTestCasePassed;
     if (passed === null) return '';
     return passed ? '1/1 test case passed' : '1/1 test case failed';
   }

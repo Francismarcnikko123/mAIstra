@@ -18,6 +18,23 @@ class UnreachableJudge0Client:
         raise httpx.ConnectError("All connection attempts failed")
 
 
+def test_cors_allows_both_angular_development_origins():
+    client = TestClient(main.app)
+
+    for origin in ("http://localhost:4200", "http://127.0.0.1:4200"):
+        response = client.options(
+            "/api/judge0/run",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == origin
+
+
 def test_run_code_reports_unreachable_judge0(monkeypatch):
     monkeypatch.setattr(main.httpx, "AsyncClient", UnreachableJudge0Client)
     monkeypatch.setattr(main, "JUDGE0_BASE_URL", "http://127.0.0.1:2358")

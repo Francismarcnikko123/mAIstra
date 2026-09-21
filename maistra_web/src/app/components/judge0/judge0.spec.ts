@@ -1,6 +1,6 @@
 import '@angular/compiler';
 import { ChangeDetectorRef } from '@angular/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Judge0Service } from '../../services/judge0.service';
@@ -131,6 +131,72 @@ describe('Judge0', () => {
     expect(component.hasErrorStatus).toBe(false);
   });
 
+  it('shows a new execution failure instead of a previously passed grade', () => {
+    const runCCode = vi
+      .fn()
+      .mockReturnValue(throwError(() => new Error('network failure')));
+    const component = new Judge0(
+      { runCCode } as unknown as Judge0Service,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+    component.submittedOutput = 'old passing output';
+    component.submitStatus = 'Accepted';
+    component.testCaseResults = [
+      {
+        caseNumber: 1,
+        stdin: '',
+        expectedOutput: '5',
+        actualOutput: '5',
+        status: 'Accepted',
+        passed: true,
+      },
+    ];
+
+    component.executeCode();
+
+    expect(component.resultMode).toBe('run');
+    expect(component.displayedOutput).toBe('Failed to execute code.');
+    expect(component.displayedStatus).toBe('Execution failed');
+    expect(component.runResultTitle).toBe('');
+    expect(component.hasErrorStatus).toBe(true);
+  });
+
+  it('shows a new successful run instead of a previously failed grade', () => {
+    const runCCode = vi.fn().mockReturnValue(
+      of({
+        stdout: 'new passing output',
+        stderr: '',
+        compile_output: '',
+        status: { id: 3, description: 'Accepted' },
+      }),
+    );
+    const component = new Judge0(
+      { runCCode } as unknown as Judge0Service,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+    component.expectedOutput = 'new passing output';
+    component.submittedOutput = 'old failing output';
+    component.submitStatus = 'Wrong Answer';
+    component.testCaseResults = [
+      {
+        caseNumber: 1,
+        stdin: '',
+        expectedOutput: '5',
+        actualOutput: '4',
+        status: 'Wrong Answer',
+        passed: false,
+      },
+    ];
+
+    component.executeCode();
+
+    expect(component.resultMode).toBe('run');
+    expect(component.displayedOutput).toBe('new passing output');
+    expect(component.displayedStatus).toBe('Accepted');
+    expect(component.firstTestCasePassedLabel).toBe('First Test Case Passed');
+    expect(component.runResultTitle).toBe('Accepted');
+  });
+
   it('hides the run result panel when submitting code', () => {
     const component = new Judge0(
       {} as Judge0Service,
@@ -210,6 +276,7 @@ describe('Judge0', () => {
         passed: true,
       },
     ];
+    component.resultMode = 'submit';
     expect(component.shouldShowTerminalResults).toBe(true);
   });
 
