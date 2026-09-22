@@ -60,7 +60,11 @@ type SubmissionFilter = 'all' | 'new' | 'extracted' | 'verified' | 'graded';
   standalone: true,
   imports: [CommonModule, FormsModule, CodeEditorComponent, Judge0],
   templateUrl: './submissions-list.html',
-  styleUrl: './submissions-list.css',
+  styleUrls: [
+    './submissions-list.css',
+    './submissions-list.review.css',
+    './submissions-list.responsive.css',
+  ],
 })
 export class SubmissionsListComponent implements OnInit, OnDestroy {
   @ViewChild('codeEditor') codeEditor?: CodeEditorComponent;
