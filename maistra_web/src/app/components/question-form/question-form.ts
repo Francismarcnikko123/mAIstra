@@ -128,44 +128,45 @@ export class QuestionFormComponent {
     this.cdr.detectChanges();
 
     try {
-      const results = await Promise.all(
-        testCases.map(async (tc, i) => {
-          let validation: ValidationResult;
-          try {
-            const result = await firstValueFrom(
-              this.judge0.runCCode(
-                buildCQuestionSource(type, answer, tc.test_code),
-                this.stdinFor(type, tc.test_input),
+      let results: ValidationResult[];
+      try {
+        const runResults = await firstValueFrom(
+          this.judge0.runCCodeBatch(
+            testCases.map((testCase) => ({
+              sourceCode: buildCQuestionSource(
+                type,
+                answer,
+                testCase.test_code,
               ),
-            );
-            validation = this.executionValidation(
-              result,
-              tc.expected_output,
-              type,
-            );
-          } catch (error) {
-            validation = {
-              passed: false,
-              expected: tc.expected_output.trim(),
-              actual: '',
-              status: 'Validation request failed',
-              message: this.validationRequestError(error),
-            };
-          }
-          if (isCurrent()) {
-            this.validationResults[i] = validation;
-            this.testRunStatuses[i] = validation.passed ? 'passed' : 'failed';
-            this.cdr.detectChanges();
-          }
-          return validation;
-        }),
-      );
+              stdin: this.stdinFor(type, testCase.test_input),
+            })),
+          ),
+        );
+        results = testCases.map((testCase, index) =>
+          this.executionValidation(
+            runResults[index],
+            testCase.expected_output,
+            type,
+          ),
+        );
+      } catch (error) {
+        results = testCases.map((testCase) => ({
+          passed: false,
+          expected: testCase.expected_output.trim(),
+          actual: '',
+          status: 'Validation request failed',
+          message: this.validationRequestError(error),
+        }));
+      }
 
       if (!isCurrent()) {
         this.clearValidationResults();
         return;
       }
       this.validationResults = results;
+      this.testRunStatuses = results.map((result) =>
+        result.passed ? 'passed' : 'failed',
+      );
       this.canPublish = results.every((result) => result.passed);
       this.validatedInputs = this.canPublish ? this.executionInputsKey() : '';
     } finally {

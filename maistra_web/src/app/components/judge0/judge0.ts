@@ -65,8 +65,18 @@ export class Judge0 implements OnChanges {
     if (changes['initialCode']) {
       this.codeToRun = this.initialCode || '';
     }
+    if (changes['testCaseResults'] && this.testCaseResults.length > 0) {
+      this.resultMode = 'submit';
+    }
   }
+
+  get isExecutionBusy(): boolean {
+    return this.isRunning || this.isSubmitting;
+  }
+
   executeCode() {
+    if (this.isExecutionBusy) return;
+
     if (this.requiresQuestion && !this.hasQuestion) {
       this.runNotification = 'Please select a question before running code.';
       this.cdr.detectChanges();
@@ -116,6 +126,8 @@ export class Judge0 implements OnChanges {
   }
 
   requestSubmit() {
+    if (this.isExecutionBusy) return;
+
     this.resultMode = 'submit';
     this.submitCode.emit();
   }

@@ -1,7 +1,7 @@
 import '@angular/compiler';
 import { ChangeDetectorRef } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { of, throwError } from 'rxjs';
+import { firstValueFrom, from, of, Subject, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Judge0Service } from '../../services/judge0.service';
 import { SupabaseService } from '../../services/supabase';
@@ -16,17 +16,34 @@ describe('SubmissionsListComponent save feedback', () => {
   function createComponent(
     updateSubmissionText: ReturnType<typeof vi.fn>,
     judge0Overrides: Partial<Judge0Service> = {},
+    updateSubmissionGrade: ReturnType<typeof vi.fn> = vi
+      .fn()
+      .mockResolvedValue(1),
   ) {
     const cdr = { detectChanges: vi.fn() } as unknown as ChangeDetectorRef;
-    const supabase = { updateSubmissionText } as unknown as SupabaseService;
+    const supabase = {
+      updateSubmissionText,
+      updateSubmissionGrade,
+    } as unknown as SupabaseService;
+    const judge0 = { ...judge0Overrides } as Partial<Judge0Service>;
+    if (!judge0.runCCodeBatch && judge0.runCCode) {
+      judge0.runCCodeBatch = (runs) =>
+        from(
+          Promise.all(
+            runs.map(({ sourceCode, stdin = '' }) =>
+              firstValueFrom(judge0.runCCode!(sourceCode, stdin)),
+            ),
+          ),
+        );
+    }
     const component = new SubmissionsListComponent(
       supabase,
       {} as HttpClient,
       cdr,
-      judge0Overrides as Judge0Service,
+      judge0 as Judge0Service,
     );
 
-    return { component, cdr };
+    return { component, cdr, updateSubmissionGrade };
   }
 
   function selectSubmission(component: SubmissionsListComponent, id: string) {
@@ -53,6 +70,10 @@ describe('SubmissionsListComponent save feedback', () => {
     updateSubmissionDetails?: ReturnType<typeof vi.fn>;
     updateSubmissionText?: ReturnType<typeof vi.fn>;
     post?: ReturnType<typeof vi.fn>;
+    updateSubmissionGrade?: ReturnType<typeof vi.fn>;
+    getSubmissions?: ReturnType<typeof vi.fn>;
+    getQuestions?: ReturnType<typeof vi.fn>;
+    subscribeToSubmissions?: ReturnType<typeof vi.fn>;
   }) {
     const cdr = { detectChanges: vi.fn() } as unknown as ChangeDetectorRef;
     const updateSubmissionDetails =
@@ -62,9 +83,22 @@ describe('SubmissionsListComponent save feedback', () => {
     const post =
       options?.post ??
       vi.fn().mockReturnValue(of({ cleaned_text: 'int main() {}' }));
+    const updateSubmissionGrade =
+      options?.updateSubmissionGrade ?? vi.fn().mockResolvedValue(1);
+    const getSubmissions =
+      options?.getSubmissions ?? vi.fn().mockResolvedValue({ data: [], error: null });
+    const getQuestions =
+      options?.getQuestions ?? vi.fn().mockResolvedValue({ data: [], error: null });
+    const subscribeToSubmissions =
+      options?.subscribeToSubmissions ??
+      vi.fn().mockReturnValue({ unsubscribe: vi.fn() });
     const supabase = {
       updateSubmissionDetails,
       updateSubmissionText,
+      updateSubmissionGrade,
+      getSubmissions,
+      getQuestions,
+      subscribeToSubmissions,
     } as unknown as SupabaseService;
     const http = { post } as unknown as HttpClient;
     const component = new SubmissionsListComponent(
@@ -80,8 +114,72 @@ describe('SubmissionsListComponent save feedback', () => {
       post,
       updateSubmissionDetails,
       updateSubmissionText,
+      updateSubmissionGrade,
+      getSubmissions,
+      getQuestions,
+      subscribeToSubmissions,
     };
   }
+
+  it('subscribes before initial loading and reconciles an event with the final snapshot', async () => {
+    const questions = deferred<{ data: unknown[]; error: null }>();
+    const eventReload = deferred<{ data: unknown[]; error: null }>();
+    const finalSnapshot = deferred<{ data: unknown[]; error: null }>();
+    const getSubmissions = vi
+      .fn()
+      .mockReturnValueOnce(eventReload.promise)
+      .mockReturnValueOnce(finalSnapshot.promise);
+    const subscription = { unsubscribe: vi.fn() };
+    let realtimeCallback: (() => void) | undefined;
+    const subscribeToSubmissions = vi.fn().mockImplementation((callback) => {
+      realtimeCallback = callback;
+      return subscription;
+    });
+    const { component } = createWorkflowComponent({
+      getQuestions: vi.fn().mockReturnValue(questions.promise),
+      getSubmissions,
+      subscribeToSubmissions,
+    });
+
+    const initialization = component.ngOnInit();
+
+    expect(realtimeCallback).toBeTypeOf('function');
+    realtimeCallback!();
+    expect(getSubmissions).toHaveBeenCalledTimes(1);
+
+    eventReload.resolve({
+      data: [
+        {
+          id: 'submission-from-event',
+          image_url: 'https://example.test/event.png',
+          captured_at: '2026-09-22T00:00:00.000Z',
+        },
+      ],
+      error: null,
+    });
+    await eventReload.promise;
+    questions.resolve({ data: [], error: null });
+    await questions.promise;
+    await vi.waitFor(() => expect(getSubmissions).toHaveBeenCalledTimes(2));
+    finalSnapshot.resolve({
+      data: [
+        {
+          id: 'submission-from-snapshot',
+          image_url: 'https://example.test/snapshot.png',
+          captured_at: '2026-09-22T00:01:00.000Z',
+        },
+      ],
+      error: null,
+    });
+
+    await initialization;
+
+    expect(component.submissions.map((submission) => submission.id)).toEqual([
+      'submission-from-snapshot',
+    ]);
+    component.ngOnDestroy();
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce();
+  });
 
   it('keeps a second save confirmation visible for its full three seconds', async () => {
     vi.useFakeTimers();
@@ -216,15 +314,23 @@ describe('SubmissionsListComponent save feedback', () => {
         ],
       }),
     );
-    const { component } = createComponent(vi.fn(), {
-      runCCode,
-      analyzeLogic,
-    } as unknown as Partial<Judge0Service>);
+    const updateSubmissionGrade = vi.fn().mockResolvedValue(8);
+    const { component } = createComponent(
+      vi.fn(),
+      {
+        runCCode,
+        analyzeLogic,
+      } as unknown as Partial<Judge0Service>,
+      updateSubmissionGrade,
+    );
     const submission = {
       id: 'submission-1',
       image_url: 'https://example.test/submission.png',
       captured_at: '2026-07-28T00:00:00.000Z',
+      question_id: 'question-1',
+      grading_revision: 7,
     };
+    component.submissions = [{ ...submission }];
     component.selectedSubmission = submission;
     component.editableText['submission-1'] =
       'int main(void) { int a, b; scanf("%d %d", &a, &b); printf("%d", a + b); }';
@@ -277,9 +383,162 @@ describe('SubmissionsListComponent save feedback', () => {
         passed: true,
       },
     ]);
+    expect(updateSubmissionGrade).toHaveBeenCalledWith(
+      'submission-1',
+      component.submissionTestResults['submission-1'],
+      7,
+      'question-1',
+    );
+    expect(component.selectedSubmission?.grading_revision).toBe(8);
+    expect(component.submissions[0].grading_revision).toBe(8);
   });
 
-  it('checks the edited runner code instead of stale verified text', async () => {
+  it('grades every test case with one batch request', async () => {
+    const runCCode = vi.fn();
+    const runCCodeBatch = vi.fn().mockReturnValue(
+      of([
+        { stdout: '5', status: { id: 3, description: 'Accepted' } },
+        { stdout: '7', status: { id: 3, description: 'Accepted' } },
+      ]),
+    );
+    const updateSubmissionGrade = vi.fn().mockResolvedValue(1);
+    const { component } = createComponent(
+      vi.fn(),
+      { runCCode, runCCodeBatch } as unknown as Partial<Judge0Service>,
+      updateSubmissionGrade,
+    );
+    const submission = {
+      id: 'submission-batch',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-09-22T00:00:00.000Z',
+      question_id: 'question-1',
+      verified_text: 'int main(void) { return 0; }',
+      grading_revision: 0,
+    };
+    component.submissions = [{ ...submission }];
+    component.selectedSubmission = submission;
+    component.editableText[submission.id] = submission.verified_text;
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'Batch grading',
+        question_type: 'program',
+        test_cases: [
+          { test_code: '', test_input: '2 3', expected_output: '5' },
+          { test_code: '', test_input: '3 4', expected_output: '7' },
+        ],
+      },
+    ];
+    component.selectedQuestionId = 'question-1';
+
+    await component.checkSubmission(submission);
+
+    expect(runCCodeBatch).toHaveBeenCalledOnce();
+    expect(runCCode).not.toHaveBeenCalled();
+    expect(updateSubmissionGrade).toHaveBeenCalledOnce();
+  });
+
+  it('does not publish a completed grade when persistence fails', async () => {
+    const runCCode = vi.fn().mockReturnValue(
+      of({
+        stdout: '5\n',
+        stderr: '',
+        compile_output: '',
+        status: { id: 3, description: 'Accepted' },
+      }),
+    );
+    const updateSubmissionGrade = vi
+      .fn()
+      .mockRejectedValue(new Error('database unavailable'));
+    const { component } = createComponent(
+      vi.fn(),
+      { runCCode } as Partial<Judge0Service>,
+      updateSubmissionGrade,
+    );
+    const submission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-07-28T00:00:00.000Z',
+      status: 'verified',
+    };
+    component.selectedSubmission = submission;
+    component.editableText['submission-1'] = 'int main(void) { return 0; }';
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'Addition',
+        question_type: 'program',
+        test_cases: [
+          { test_code: '', test_input: '2 3', expected_output: '5' },
+        ],
+      },
+    ];
+    component.selectedQuestionId = 'question-1';
+
+    await component.checkSubmission(submission);
+
+    expect(component.submissionTestResults['submission-1']).toEqual([]);
+    expect(component.submissionCheckStatus['submission-1']).toBe('Error');
+    expect(component.checkError).toBe(
+      'Test cases completed, but the grade could not be saved.',
+    );
+    expect(submission.status).toBe('verified');
+  });
+
+  it('refuses to grade an unsaved question change without calling Judge0', async () => {
+    const runCCode = vi.fn().mockReturnValue(
+      of({
+        stdout: '5\n',
+        stderr: '',
+        compile_output: '',
+        status: { id: 3, description: 'Accepted' },
+      }),
+    );
+    const updateSubmissionGrade = vi.fn().mockResolvedValue(1);
+    const { component } = createComponent(
+      vi.fn(),
+      { runCCode } as Partial<Judge0Service>,
+      updateSubmissionGrade,
+    );
+    // Persisted assignment is question-1 (this is what lives in the list).
+    const submission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-07-28T00:00:00.000Z',
+      question_id: 'question-1',
+      grading_revision: 0,
+    };
+    component.submissions = [{ ...submission }];
+    component.selectedSubmission = submission;
+    component.editableText['submission-1'] = 'int main(void) { return 0; }';
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'First',
+        question_type: 'program',
+        test_cases: [{ test_code: '', test_input: '2 3', expected_output: '5' }],
+      },
+      {
+        id: 'question-2',
+        question_name: 'Second',
+        question_type: 'program',
+        test_cases: [{ test_code: '', test_input: '4 1', expected_output: '5' }],
+      },
+    ];
+    // Teacher switches the dropdown to question-2 but never saves it, so the
+    // list (persisted state) still holds question-1.
+    component.onSelectedQuestionChange('question-2');
+
+    await component.checkSubmission(submission);
+
+    expect(runCCode).not.toHaveBeenCalled();
+    expect(updateSubmissionGrade).not.toHaveBeenCalled();
+    expect(component.checkError).toBe(
+      'Save the selected question before grading.',
+    );
+  });
+
+  it('refuses to grade unsaved code without calling Judge0', async () => {
     const runCCode = vi.fn().mockReturnValue(
       of({
         stdout: '7\n',
@@ -288,9 +547,12 @@ describe('SubmissionsListComponent save feedback', () => {
         status: { id: 3, description: 'Accepted' },
       }),
     );
-    const { component } = createComponent(vi.fn(), {
-      runCCode,
-    } as Partial<Judge0Service>);
+    const updateSubmissionGrade = vi.fn().mockResolvedValue(1);
+    const { component } = createComponent(
+      vi.fn(),
+      { runCCode } as Partial<Judge0Service>,
+      updateSubmissionGrade,
+    );
     const submission = {
       id: 'submission-1',
       image_url: 'https://example.test/submission.png',
@@ -317,10 +579,9 @@ describe('SubmissionsListComponent save feedback', () => {
 
     await component.checkSubmission(submission);
 
-    expect(runCCode).toHaveBeenCalledWith(
-      '#include <stdio.h>\n\nedited code',
-      '',
-    );
+    expect(runCCode).not.toHaveBeenCalled();
+    expect(updateSubmissionGrade).not.toHaveBeenCalled();
+    expect(component.checkError).toBe('Save the edited code before grading.');
   });
 
   it('shows wrong answer when code runs but output does not match', async () => {
@@ -469,6 +730,229 @@ describe('SubmissionsListComponent save feedback', () => {
     expect(component.submissionTestResults['submission-1']).toEqual([]);
   });
 
+  it('discards an in-progress grade when the selected question changes', async () => {
+    const pendingRun = new Subject<{
+      stdout: string;
+      status: { id: number; description: string };
+    }>();
+    const runCCode = vi.fn().mockReturnValue(pendingRun);
+    const updateSubmissionGrade = vi.fn().mockResolvedValue(1);
+    const { component } = createComponent(
+      vi.fn(),
+      { runCCode } as Partial<Judge0Service>,
+      updateSubmissionGrade,
+    );
+    const submission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-07-28T00:00:00.000Z',
+      question_id: 'question-1',
+      grading_revision: 0,
+    };
+    component.selectedSubmission = submission;
+    component.editableText['submission-1'] = 'int main(void) { return 0; }';
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'First question',
+        question_type: 'program',
+        test_cases: [
+          { test_code: '', test_input: '', expected_output: '5' },
+        ],
+      },
+      {
+        id: 'question-2',
+        question_name: 'Second question',
+        question_type: 'program',
+        test_cases: [
+          { test_code: '', test_input: '', expected_output: '7' },
+        ],
+      },
+    ];
+    component.selectedQuestionId = 'question-1';
+
+    const grading = component.checkSubmission(submission);
+    component.onSelectedQuestionChange('question-2');
+    pendingRun.next({
+      stdout: '5',
+      status: { id: 3, description: 'Accepted' },
+    });
+    pendingRun.complete();
+    await grading;
+
+    expect(updateSubmissionGrade).not.toHaveBeenCalled();
+    expect(component.submissionTestResults['submission-1']).toEqual([]);
+    expect(component.submissionCheckStatus['submission-1']).toBe('');
+    expect(component.isChecking).toBe(false);
+  });
+
+  it('discards an in-progress grade when the runner code changes', async () => {
+    const pendingRun = new Subject<{
+      stdout: string;
+      status: { id: number; description: string };
+    }>();
+    const runCCode = vi.fn().mockReturnValue(pendingRun);
+    const updateSubmissionGrade = vi.fn().mockResolvedValue(1);
+    const { component } = createComponent(
+      vi.fn(),
+      { runCCode } as Partial<Judge0Service>,
+      updateSubmissionGrade,
+    );
+    const submission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-07-28T00:00:00.000Z',
+      question_id: 'question-1',
+      grading_revision: 0,
+    };
+    component.selectedSubmission = submission;
+    component.editableText['submission-1'] = 'old code';
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'First question',
+        question_type: 'program',
+        test_cases: [
+          { test_code: '', test_input: '', expected_output: '5' },
+        ],
+      },
+    ];
+    component.selectedQuestionId = 'question-1';
+
+    const grading = component.checkSubmission(submission);
+    component.updateSubmissionCode('submission-1', 'new code');
+    pendingRun.next({
+      stdout: '5',
+      status: { id: 3, description: 'Accepted' },
+    });
+    pendingRun.complete();
+    await grading;
+
+    expect(updateSubmissionGrade).not.toHaveBeenCalled();
+    expect(component.submissionTestResults['submission-1']).toEqual([]);
+    expect(component.isChecking).toBe(false);
+  });
+
+  it('discards an in-progress grade when the modal closes', async () => {
+    const pendingRun = new Subject<{
+      stdout: string;
+      status: { id: number; description: string };
+    }>();
+    const runCCode = vi.fn().mockReturnValue(pendingRun);
+    const updateSubmissionGrade = vi.fn().mockResolvedValue(1);
+    const { component } = createComponent(
+      vi.fn(),
+      { runCCode } as Partial<Judge0Service>,
+      updateSubmissionGrade,
+    );
+    const submission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-07-28T00:00:00.000Z',
+      question_id: 'question-1',
+      grading_revision: 0,
+    };
+    component.selectedSubmission = submission;
+    component.editableText['submission-1'] = 'code';
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'First question',
+        question_type: 'program',
+        test_cases: [
+          { test_code: '', test_input: '', expected_output: '5' },
+        ],
+      },
+    ];
+    component.selectedQuestionId = 'question-1';
+
+    const grading = component.checkSubmission(submission);
+    component.closeModal();
+    pendingRun.next({
+      stdout: '5',
+      status: { id: 3, description: 'Accepted' },
+    });
+    pendingRun.complete();
+    await grading;
+
+    expect(updateSubmissionGrade).not.toHaveBeenCalled();
+    expect(component.submissionTestResults['submission-1']).toEqual([]);
+    expect(component.isChecking).toBe(false);
+  });
+
+  it('does not let an older grading request stop a newer request', async () => {
+    const firstRun = new Subject<{
+      stdout: string;
+      status: { id: number; description: string };
+    }>();
+    const secondRun = new Subject<{
+      stdout: string;
+      status: { id: number; description: string };
+    }>();
+    const runCCode = vi
+      .fn()
+      .mockReturnValueOnce(firstRun)
+      .mockReturnValueOnce(secondRun);
+    const updateSubmissionGrade = vi.fn().mockResolvedValue(1);
+    const { component } = createComponent(
+      vi.fn(),
+      { runCCode } as Partial<Judge0Service>,
+      updateSubmissionGrade,
+    );
+    const submission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-07-28T00:00:00.000Z',
+      question_id: 'question-1',
+      grading_revision: 0,
+    };
+    component.selectedSubmission = submission;
+    component.editableText['submission-1'] = 'int main(void) { return 0; }';
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'First question',
+        question_type: 'program',
+        test_cases: [
+          { test_code: '', test_input: '', expected_output: '5' },
+        ],
+      },
+      {
+        id: 'question-2',
+        question_name: 'Second question',
+        question_type: 'program',
+        test_cases: [
+          { test_code: '', test_input: '', expected_output: '7' },
+        ],
+      },
+    ];
+    component.selectedQuestionId = 'question-1';
+
+    const olderGrading = component.checkSubmission(submission);
+    component.onSelectedQuestionChange('question-2');
+    const newerGrading = component.checkSubmission(submission);
+
+    firstRun.next({
+      stdout: '5',
+      status: { id: 3, description: 'Accepted' },
+    });
+    firstRun.complete();
+    await olderGrading;
+
+    expect(component.isChecking).toBe(true);
+
+    secondRun.next({
+      stdout: '7',
+      status: { id: 3, description: 'Accepted' },
+    });
+    secondRun.complete();
+    await newerGrading;
+
+    expect(updateSubmissionGrade).toHaveBeenCalledTimes(1);
+    expect(component.submissionCheckStatus['submission-1']).toBe('Accepted');
+    expect(component.isChecking).toBe(false);
+  });
+
   it('does not leave Details until a question is selected', async () => {
     const { component, updateSubmissionDetails } = createWorkflowComponent();
     selectSubmission(component, 'submission-1');
@@ -481,7 +965,8 @@ describe('SubmissionsListComponent save feedback', () => {
   });
 
   it('saves the topic and selected question together before code review', async () => {
-    const { component, updateSubmissionDetails } = createWorkflowComponent();
+    const updateSubmissionDetails = vi.fn().mockResolvedValue(4);
+    const { component } = createWorkflowComponent({ updateSubmissionDetails });
     selectSubmission(component, 'submission-1');
     component.submissions = [component.selectedSubmission!];
     component.editableTopic = 'Loops';
@@ -495,6 +980,57 @@ describe('SubmissionsListComponent save feedback', () => {
       'question-1',
     );
     expect(component.reviewStep).toBe(2);
+    expect(component.selectedSubmission?.grading_revision).toBe(4);
+  });
+
+  it('does not apply a completed assignment save to a different open submission', async () => {
+    const pendingSave = deferred<number>();
+    const updateSubmissionDetails = vi
+      .fn()
+      .mockReturnValue(pendingSave.promise);
+    const { component } = createWorkflowComponent({ updateSubmissionDetails });
+    const first = {
+      id: 'submission-a',
+      image_url: 'https://example.test/a.png',
+      captured_at: '2026-09-22T00:00:00.000Z',
+      topic: 'Original A',
+      question_id: 'question-a',
+      grading_revision: 1,
+    };
+    const second = {
+      id: 'submission-b',
+      image_url: 'https://example.test/b.png',
+      captured_at: '2026-09-22T00:00:00.000Z',
+      topic: 'Original B',
+      question_id: 'question-b',
+      grading_revision: 9,
+    };
+    component.submissions = [first, second];
+    component.openModal(first);
+    component.editableTopic = 'Saved A';
+    component.selectedQuestionId = 'question-a-new';
+
+    const save = component.continueFromDetails();
+    component.closeModal();
+    component.openModal(second);
+    pendingSave.resolve(2);
+    await save;
+
+    expect(updateSubmissionDetails).toHaveBeenCalledWith(
+      'submission-a',
+      'Saved A',
+      'question-a-new',
+    );
+    expect(component.selectedSubmission?.id).toBe('submission-b');
+    expect(component.selectedSubmission?.grading_revision).toBe(9);
+    expect(component.selectedSubmission?.topic).toBe('Original B');
+    expect(component.selectedQuestionId).toBe('question-b');
+    expect(component.reviewStep).toBe(1);
+    expect(component.submissions[0]).toMatchObject({
+      topic: 'Saved A',
+      question_id: 'question-a-new',
+      grading_revision: 2,
+    });
   });
 
   it.each([
@@ -519,6 +1055,338 @@ describe('SubmissionsListComponent save feedback', () => {
 
     expect(component.selectedQuestionId).toBe('question-1');
     expect(component.getQuestionName(submission)).toBe('Addition');
+  });
+
+  it('restores a persisted grade when reopening a submission', () => {
+    const { component } = createWorkflowComponent();
+    const persistedResults = [
+      {
+        caseNumber: 1,
+        stdin: '2 3',
+        expectedOutput: '5',
+        actualOutput: '5',
+        status: 'Accepted',
+        passed: true,
+      },
+      {
+        caseNumber: 2,
+        stdin: '4 4',
+        expectedOutput: '8',
+        actualOutput: '7',
+        status: 'Wrong Answer',
+        passed: false,
+      },
+    ];
+    const submission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-08-18T00:00:00.000Z',
+      status: 'graded',
+      grading_results: persistedResults,
+      passed_test_cases: 1,
+      total_test_cases: 2,
+      score_percent: 50,
+      graded_at: '2026-09-17T12:00:00.000Z',
+    };
+
+    component.openModal(submission);
+
+    expect(component.submissionTestResults['submission-1']).toEqual(
+      persistedResults,
+    );
+    expect(component.submissionCheckStatus['submission-1']).toBe(
+      'Wrong Answer',
+    );
+    expect(component.submissionRunOutput['submission-1']).toBe('7');
+  });
+
+  it('exposes the persisted numerical grade as soon as the review reopens', () => {
+    const { component } = createWorkflowComponent();
+    const submission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-08-18T00:00:00.000Z',
+      status: 'graded',
+      grading_results: [],
+      passed_test_cases: 4,
+      total_test_cases: 6,
+      score_percent: 66.67,
+      graded_at: '2026-09-17T12:00:00.000Z',
+    };
+
+    component.openModal(submission);
+
+    expect(component.reviewStep).toBe(1);
+    expect(component.getSubmissionGradeSummary(component.selectedSubmission)).toBe(
+      '4/6 test cases passed — Score: 66.67%',
+    );
+  });
+
+  it('clears a completed grade immediately when the student code changes', () => {
+    const { component } = createWorkflowComponent();
+    const persistedResults = [
+      {
+        caseNumber: 1,
+        stdin: '2 3',
+        expectedOutput: '5',
+        actualOutput: '5',
+        status: 'Accepted',
+        passed: true,
+      },
+    ];
+    const submission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-08-18T00:00:00.000Z',
+      status: 'graded',
+      verified_text: 'old code',
+      grading_results: persistedResults,
+      passed_test_cases: 1,
+      total_test_cases: 1,
+      score_percent: 100,
+      graded_at: '2026-09-17T12:00:00.000Z',
+    };
+    component.submissions = [submission];
+    component.editableText[submission.id] = 'old code';
+    component.openModal(submission);
+
+    component.updateSubmissionCode(submission.id, 'edited code');
+
+    expect(component.editableText[submission.id]).toBe('edited code');
+    expect(component.submissionTestResults[submission.id]).toEqual([]);
+    expect(component.submissionCheckStatus[submission.id]).toBe('');
+    expect(component.submissionRunOutput[submission.id]).toBe('');
+    expect(component.selectedSubmission?.status).toBe('verified');
+    expect(submission.status).toBe('verified');
+    expect(component.selectedSubmission?.grading_results).toEqual([]);
+    expect(submission.grading_results).toEqual([]);
+    expect(component.selectedSubmission?.score_percent).toBeUndefined();
+    expect(submission.score_percent).toBeUndefined();
+    expect(component.getSubmissionStatusLabel(submission)).toBe(
+      'Ready to grade',
+    );
+  });
+
+  it('clears a completed grade immediately when the question changes', () => {
+    const { component } = createWorkflowComponent();
+    const persistedResults = [
+      {
+        caseNumber: 1,
+        stdin: '2 3',
+        expectedOutput: '5',
+        actualOutput: '5',
+        status: 'Accepted',
+        passed: true,
+      },
+    ];
+    const submission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-08-18T00:00:00.000Z',
+      status: 'graded',
+      verified_text: 'int main(void) { return 0; }',
+      question_id: 'question-1',
+      grading_results: persistedResults,
+      passed_test_cases: 1,
+      total_test_cases: 1,
+      score_percent: 100,
+      graded_at: '2026-09-17T12:00:00.000Z',
+    };
+    component.submissions = [submission];
+    component.openModal(submission);
+
+    component.onSelectedQuestionChange('question-2');
+
+    expect(component.selectedQuestionId).toBe('question-2');
+    expect(component.submissionTestResults[submission.id]).toEqual([]);
+    expect(component.selectedSubmission?.status).toBe('verified');
+    expect(submission.status).toBe('verified');
+    expect(component.selectedSubmission?.grading_results).toEqual([]);
+    expect(submission.grading_results).toEqual([]);
+    expect(component.getSubmissionStatusLabel(submission)).toBe(
+      'Ready to grade',
+    );
+  });
+
+  it('restores persisted code, question, and grade when unsaved edits are canceled', () => {
+    const { component } = createWorkflowComponent();
+    const persistedResults = [
+      {
+        caseNumber: 1,
+        stdin: '2 3',
+        expectedOutput: '5',
+        actualOutput: '5',
+        status: 'Accepted',
+        passed: true,
+      },
+    ];
+    const submission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-08-18T00:00:00.000Z',
+      status: 'graded',
+      verified_text: 'persisted code',
+      question_id: 'question-1',
+      grading_results: persistedResults,
+      passed_test_cases: 1,
+      total_test_cases: 1,
+      score_percent: 100,
+      graded_at: '2026-09-17T12:00:00.000Z',
+    };
+    component.submissions = [submission];
+    component.openModal(submission);
+
+    component.updateSubmissionCode(submission.id, 'unsaved code');
+    component.onSelectedQuestionChange('question-2');
+    component.closeModal();
+    component.openModal(submission);
+
+    expect(component.editableText[submission.id]).toBe('persisted code');
+    expect(component.selectedQuestionId).toBe('question-1');
+    expect(component.submissionTestResults[submission.id]).toEqual(
+      persistedResults,
+    );
+    expect(component.getSubmissionStatusLabel(submission)).toBe('Graded');
+    expect(submission.score_percent).toBe(100);
+  });
+
+  it('keeps a dirty editor buffer when a realtime-triggered reload completes', async () => {
+    const remoteSubmission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-08-18T00:00:00.000Z',
+      status: 'verified',
+      verified_text: 'persisted code',
+      question_id: 'question-1',
+    };
+    const getSubmissions = vi.fn().mockResolvedValue({
+      data: [{ ...remoteSubmission }],
+      error: null,
+    });
+    const { component } = createWorkflowComponent({ getSubmissions });
+    component.submissions = [{ ...remoteSubmission }];
+    component.openModal(component.submissions[0]);
+    component.updateSubmissionCode(remoteSubmission.id, 'unsaved code');
+
+    await component.loadSubmissions();
+
+    expect(component.editableText[remoteSubmission.id]).toBe('unsaved code');
+    expect(component.selectedSubmission?.verified_text).toBe('persisted code');
+  });
+
+  it('refreshes a non-dirty open submission after a realtime update', async () => {
+    const persistedResults = [
+      {
+        caseNumber: 1,
+        stdin: '2 3',
+        expectedOutput: '5',
+        actualOutput: '5',
+        status: 'Accepted',
+        passed: true,
+      },
+    ];
+    const originalSubmission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-08-18T00:00:00.000Z',
+      status: 'verified',
+      verified_text: 'persisted code',
+      question_id: 'question-1',
+    };
+    const getSubmissions = vi.fn().mockResolvedValue({
+      data: [
+        {
+          ...originalSubmission,
+          status: 'graded',
+          grading_results: persistedResults,
+          passed_test_cases: 1,
+          total_test_cases: 1,
+          score_percent: 100,
+          graded_at: '2026-09-22T00:00:00.000Z',
+        },
+      ],
+      error: null,
+    });
+    const { component } = createWorkflowComponent({ getSubmissions });
+    component.submissions = [{ ...originalSubmission }];
+    component.openModal(component.submissions[0]);
+
+    await component.loadSubmissions();
+
+    expect(component.selectedSubmission?.status).toBe('graded');
+    expect(component.selectedSubmission?.score_percent).toBe(100);
+    expect(component.submissionTestResults[originalSubmission.id]).toEqual(
+      persistedResults,
+    );
+  });
+
+  it('ignores an older submissions reload that completes after a newer reload', async () => {
+    const olderReload = deferred<{ data: unknown[]; error: null }>();
+    const newerReload = deferred<{ data: unknown[]; error: null }>();
+    const getSubmissions = vi
+      .fn()
+      .mockReturnValueOnce(olderReload.promise)
+      .mockReturnValueOnce(newerReload.promise);
+    const { component } = createWorkflowComponent({ getSubmissions });
+
+    const firstLoad = component.loadSubmissions();
+    const secondLoad = component.loadSubmissions();
+    newerReload.resolve({
+      data: [
+        {
+          id: 'submission-1',
+          image_url: 'https://example.test/submission.png',
+          captured_at: '2026-09-22T00:00:00.000Z',
+          verified_text: 'newest persisted code',
+        },
+      ],
+      error: null,
+    });
+    await secondLoad;
+    olderReload.resolve({
+      data: [
+        {
+          id: 'submission-1',
+          image_url: 'https://example.test/submission.png',
+          captured_at: '2026-09-22T00:00:00.000Z',
+          verified_text: 'stale persisted code',
+        },
+      ],
+      error: null,
+    });
+    await firstLoad;
+
+    expect(component.submissions[0].verified_text).toBe(
+      'newest persisted code',
+    );
+    expect(component.editableText['submission-1']).toBe(
+      'newest persisted code',
+    );
+  });
+
+  it('preserves an unsaved topic through realtime reload and restores it on cancel', async () => {
+    const persistedSubmission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-09-22T00:00:00.000Z',
+      topic: 'Loops',
+      verified_text: 'persisted code',
+    };
+    const getSubmissions = vi.fn().mockResolvedValue({
+      data: [{ ...persistedSubmission, topic: 'Updated Loops' }],
+      error: null,
+    });
+    const { component } = createWorkflowComponent({ getSubmissions });
+    component.submissions = [{ ...persistedSubmission }];
+    component.openModal(component.submissions[0]);
+    component.editableTopic = 'Arrays';
+
+    await component.loadSubmissions();
+
+    expect(component.editableTopic).toBe('Arrays');
+
+    component.closeModal();
+    expect(component.editableTopic).toBe('Updated Loops');
   });
 
   it('blocks grading until student code and a question with test cases exist', () => {
@@ -581,8 +1449,58 @@ describe('SubmissionsListComponent save feedback', () => {
     expect(component.extractingId).toBeNull();
   });
 
+  it('treats re-extracted OCR as a dirty edit and preserves it through realtime reload', async () => {
+    const persistedResults = [
+      {
+        caseNumber: 1,
+        stdin: '',
+        expectedOutput: '5',
+        actualOutput: '5',
+        status: 'Accepted',
+        passed: true,
+      },
+    ];
+    const persistedSubmission = {
+      id: 'submission-1',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-09-22T00:00:00.000Z',
+      status: 'graded',
+      verified_text: 'old persisted code',
+      grading_results: persistedResults,
+      passed_test_cases: 1,
+      total_test_cases: 1,
+      score_percent: 100,
+      graded_at: '2026-09-22T00:00:00.000Z',
+    };
+    const post = vi.fn().mockReturnValue(of({ cleaned_text: 'fresh OCR code' }));
+    const getSubmissions = vi.fn().mockResolvedValue({
+      data: [{ ...persistedSubmission }],
+      error: null,
+    });
+    const { component } = createWorkflowComponent({ post, getSubmissions });
+    component.submissions = [{ ...persistedSubmission }];
+    component.editableText[persistedSubmission.id] =
+      persistedSubmission.verified_text;
+    component.openModal(component.submissions[0]);
+
+    await component.extractText();
+
+    expect(component.editableText[persistedSubmission.id]).toBe(
+      'fresh OCR code',
+    );
+    expect(component.submissionTestResults[persistedSubmission.id]).toEqual(
+      [],
+    );
+
+    await component.loadSubmissions();
+
+    expect(component.editableText[persistedSubmission.id]).toBe(
+      'fresh OCR code',
+    );
+  });
+
   it('advances to grading only after verified code saves successfully', async () => {
-    const updateSubmissionText = vi.fn().mockResolvedValue(undefined);
+    const updateSubmissionText = vi.fn().mockResolvedValue(5);
     const { component } = createWorkflowComponent({ updateSubmissionText });
     selectSubmission(component, 'submission-1');
     component.questions = [
@@ -602,6 +1520,7 @@ describe('SubmissionsListComponent save feedback', () => {
 
     expect(updateSubmissionText).toHaveBeenCalled();
     expect(component.reviewStep).toBe(3);
+    expect(component.selectedSubmission?.grading_revision).toBe(5);
   });
 
   it('does not advance to grading when verified code fails to save', async () => {

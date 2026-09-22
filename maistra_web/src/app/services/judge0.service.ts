@@ -25,8 +25,19 @@ export class Judge0Service {
       `${this.apiUrl}/run`,
       {
         source_code: sourceCode,
-        language_id: 50,
         stdin,
+      },
+    );
+  }
+
+  runCCodeBatch(runs: ReadonlyArray<{ sourceCode: string; stdin?: string }>) {
+    return this.http.post<Judge0RunResult[]>(
+      `${this.apiUrl}/run-batch`,
+      {
+        runs: runs.map(({ sourceCode, stdin = '' }) => ({
+          source_code: sourceCode,
+          stdin,
+        })),
       },
     );
   }

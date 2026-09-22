@@ -1,12 +1,13 @@
 import os
 import asyncio
+import math
 from typing import Optional
 import base64
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
@@ -26,6 +27,41 @@ app.add_middleware(
 JUDGE0_BASE_URL = os.getenv("JUDGE0_BASE_URL")
 JUDGE0_API_KEY = os.getenv("JUDGE0_API_KEY")
 
+
+def positive_integer_setting(name: str, default: int) -> int:
+    raw_value = os.getenv(name, str(default))
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be a positive integer") from exc
+    if value <= 0:
+        raise RuntimeError(f"{name} must be a positive integer")
+    return value
+
+
+JUDGE0_C_LANGUAGE_ID = positive_integer_setting("JUDGE0_C_LANGUAGE_ID", 50)
+# Sandbox limits the wrapper owns, so runaway code (e.g. an infinite loop) is
+# killed on a deadline this service controls rather than whatever the Judge0 box
+# happens to be configured with.
+JUDGE0_CPU_TIME_LIMIT_SECONDS = positive_integer_setting(
+    "JUDGE0_CPU_TIME_LIMIT_SECONDS", 5
+)
+JUDGE0_WALL_TIME_LIMIT_SECONDS = positive_integer_setting(
+    "JUDGE0_WALL_TIME_LIMIT_SECONDS", 10
+)
+MAX_BATCH_RUNS = 30
+BATCH_CONCURRENCY = 3
+
+# How long the wrapper waits for a result before giving up. Must comfortably
+# exceed the wall-time limit so a timed-out run reports its own TLE status
+# instead of tripping this poll budget.
+_POLL_INTERVAL_SECONDS = 0.5
+_MAX_POLL_ATTEMPTS = max(
+    1,
+    math.ceil((JUDGE0_WALL_TIME_LIMIT_SECONDS + 5) / _POLL_INTERVAL_SECONDS),
+)
+
+
 if not JUDGE0_BASE_URL:
     raise RuntimeError(
         "JUDGE0_BASE_URL is not set. Create a .env file with JUDGE0_BASE_URL=http://<host>:<port>"
@@ -34,8 +70,11 @@ if not JUDGE0_BASE_URL:
 
 class RunCodeRequest(BaseModel):
     source_code: str
-    language_id: int
     stdin: Optional[str] = ""
+
+
+class RunCodeBatchRequest(BaseModel):
+    runs: list[RunCodeRequest] = Field(min_length=1, max_length=MAX_BATCH_RUNS)
 
 
 @app.get("/")
@@ -55,8 +94,10 @@ async def run_code(payload: RunCodeRequest):
 
     submission_payload = {
     "source_code": encode_base64(payload.source_code),
-    "language_id": payload.language_id,
+    "language_id": JUDGE0_C_LANGUAGE_ID,
     "stdin": encode_base64(payload.stdin or ""),
+    "cpu_time_limit": JUDGE0_CPU_TIME_LIMIT_SECONDS,
+    "wall_time_limit": JUDGE0_WALL_TIME_LIMIT_SECONDS,
     }
 
     try:  # catches httpx.RequestError for both POST and polling GETs
@@ -82,7 +123,7 @@ async def run_code(payload: RunCodeRequest):
             if not token:
                 raise HTTPException(status_code=500, detail="Judge0 did not return a token")
 
-            for _ in range(20):
+            for _ in range(_MAX_POLL_ATTEMPTS):
                 result_response = await client.get(
                     f"{JUDGE0_BASE_URL}/submissions/{token}",
                     params={
@@ -107,7 +148,15 @@ async def run_code(payload: RunCodeRequest):
                 if status_id not in [1, 2]:
                     return result
 
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+
+            # Judge0 was still queued/processing when the poll budget ran out.
+            # Return an explicit timeout instead of falling through to None
+            # (which FastAPI would serialize as a 200 with a null body).
+            raise HTTPException(
+                status_code=504,
+                detail="Judge0 did not return a result in time. Try again.",
+            )
     except httpx.RequestError as exc:
         raise HTTPException(
             status_code=502,
@@ -118,6 +167,17 @@ async def run_code(payload: RunCodeRequest):
         ) from exc
 
     raise HTTPException(status_code=504, detail="Judge0 execution timed out")
+
+
+@app.post("/api/judge0/run-batch")
+async def run_code_batch(payload: RunCodeBatchRequest):
+    semaphore = asyncio.Semaphore(BATCH_CONCURRENCY)
+
+    async def run_bounded(run: RunCodeRequest):
+        async with semaphore:
+            return await run_code(run)
+
+    return await asyncio.gather(*(run_bounded(run) for run in payload.runs))
 
 
 def encode_base64(value: str) -> str:

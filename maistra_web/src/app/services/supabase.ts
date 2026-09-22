@@ -41,6 +41,12 @@ async getSubmissions() {
       extracted_text,
       verified_text,
       question_id,
+      grading_results,
+      passed_test_cases,
+      total_test_cases,
+      score_percent,
+      graded_at,
+      grading_revision,
       questions (
         id,
         question_name,
@@ -56,19 +62,22 @@ async getSubmissions() {
     id: string,
     topic: string,
     questionId: string | null,
-  ): Promise<void> {
-    const { error } = await this.supabase
+  ): Promise<number> {
+    const { data, error } = await this.supabase
       .from('submissions')
       .update({ topic, question_id: questionId })
-      .eq('id', id);
+      .eq('id', id)
+      .select('grading_revision')
+      .single();
     if (error) throw error;
+    return data.grading_revision;
   }
 
   async updateSubmissionText(
     submissionId: string,
     verifiedText: string,
     extractedText?: string
-  ): Promise<void> {
+  ): Promise<number> {
     // extracted_text must keep the OCR's own output (it is the baseline the
     // verified text is compared against), so it is only written when a fresh
     // extraction produced it — never overwritten with the teacher's edits.
@@ -80,17 +89,46 @@ async getSubmissions() {
     if (extractedText !== undefined) {
       update['extracted_text'] = extractedText;
     }
-    const { error } = await this.supabase
+    const { data, error } = await this.supabase
       .from('submissions')
       .update(update)
-      .eq('id', submissionId);
+      .eq('id', submissionId)
+      .select('grading_revision')
+      .single();
     if (error) throw error;
+    return data.grading_revision;
+  }
+
+  async updateSubmissionGrade(
+    submissionId: string,
+    results: ReadonlyArray<{ passed: boolean }>,
+    gradingRevision: number,
+    questionId: string,
+  ): Promise<number | null> {
+    const passedTestCases = results.filter((result) => result.passed).length;
+    const { data, error } = await this.supabase
+      .from('submissions')
+      .update({
+        grading_results: results,
+        passed_test_cases: passedTestCases,
+        total_test_cases: results.length,
+        graded_at: new Date().toISOString(),
+        status: 'graded',
+      })
+      .eq('id', submissionId)
+      .eq('grading_revision', gradingRevision)
+      .eq('question_id', questionId)
+      .select('grading_revision')
+      .maybeSingle();
+    if (error) throw error;
+    return data?.grading_revision ?? null;
   }
 
   subscribeToSubmissions(callback: (payload: any) => void) {
     return this.supabase
       .channel('submissions')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'submissions' }, callback)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'submissions' }, callback)
       .subscribe();
   }
   

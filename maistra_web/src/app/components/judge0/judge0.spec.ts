@@ -1,5 +1,5 @@
 import '@angular/compiler';
-import { ChangeDetectorRef } from '@angular/core';
+import { ChangeDetectorRef, SimpleChange } from '@angular/core';
 import { of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -219,9 +219,9 @@ describe('Judge0', () => {
     );
     component.stdout = '5\n';
     component.firstRunTestCasePassed = true;
-    component.isSubmitting = true;
 
     component.requestSubmit();
+    component.isSubmitting = true;
 
     expect(component.shouldShowTerminalResults).toBe(false);
     expect(component.shouldShowSubmitResults).toBe(false);
@@ -318,5 +318,61 @@ describe('Judge0', () => {
 
     expect(component.testCaseScorePercentage).toBe(0);
     expect(component.testCaseScoreSummary).toBe('');
+  });
+
+  it('shows persisted test-case results when a graded submission is reopened', () => {
+    const component = new Judge0(
+      {} as Judge0Service,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+    const persistedResults = [
+      {
+        caseNumber: 1,
+        stdin: '2 3',
+        expectedOutput: '5',
+        actualOutput: '5',
+        status: 'Accepted',
+        passed: true,
+      },
+    ];
+    component.testCaseResults = persistedResults;
+
+    component.ngOnChanges({
+      testCaseResults: new SimpleChange(undefined, persistedResults, true),
+    });
+
+    expect(component.resultMode).toBe('submit');
+    expect(component.shouldShowSubmitResults).toBe(true);
+    expect(component.testCaseScoreSummary).toBe(
+      '1/1 test cases passed — Score: 100%',
+    );
+  });
+
+  it('does not start a sample run while full grading is active', () => {
+    const runCCode = vi.fn();
+    const component = new Judge0(
+      { runCCode } as unknown as Judge0Service,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+    component.isSubmitting = true;
+
+    component.executeCode();
+
+    expect(runCCode).not.toHaveBeenCalled();
+    expect(component.isExecutionBusy).toBe(true);
+  });
+
+  it('does not request full grading while a sample run is active', () => {
+    const component = new Judge0(
+      {} as Judge0Service,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+    const emit = vi.spyOn(component.submitCode, 'emit');
+    component.isRunning = true;
+
+    component.requestSubmit();
+
+    expect(emit).not.toHaveBeenCalled();
+    expect(component.isExecutionBusy).toBe(true);
   });
 });

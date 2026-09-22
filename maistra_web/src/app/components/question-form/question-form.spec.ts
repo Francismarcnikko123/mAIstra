@@ -3,7 +3,7 @@ import { ChangeDetectorRef } from '@angular/core';
 import { describe, expect, it, vi } from 'vitest';
 import { SupabaseService } from '../../services/supabase';
 import { Judge0Service } from '../../services/judge0.service';
-import { of, Subject, throwError } from 'rxjs';
+import { firstValueFrom, from, of, Subject, throwError } from 'rxjs';
 import { QuestionFormComponent } from './question-form';
 
 describe('QuestionFormComponent', () => {
@@ -13,7 +13,17 @@ describe('QuestionFormComponent', () => {
   ) {
     const supabase = { saveQuestion } as unknown as SupabaseService;
     const cdr = { detectChanges: vi.fn() } as unknown as ChangeDetectorRef;
-    const judge0 = { runCCode } as unknown as Judge0Service;
+    const judge0 = {
+      runCCode,
+      runCCodeBatch: (runs: ReadonlyArray<{ sourceCode: string; stdin?: string }>) =>
+        from(
+          Promise.all(
+            runs.map(({ sourceCode, stdin = '' }) =>
+              firstValueFrom(runCCode(sourceCode, stdin)),
+            ),
+          ),
+        ),
+    } as unknown as Judge0Service;
 
     return new QuestionFormComponent(supabase, cdr, judge0);
   }
@@ -85,6 +95,44 @@ describe('QuestionFormComponent', () => {
     ];
     return { component, runCCode, saveQuestion };
   }
+
+  it('validates all test cases with one batch request', async () => {
+    const runCCode = vi.fn();
+    const runCCodeBatch = vi.fn().mockReturnValue(
+      of([
+        { stdout: '5', status: { id: 3, description: 'Accepted' } },
+        { stdout: '7', status: { id: 3, description: 'Accepted' } },
+      ]),
+    );
+    const component = new QuestionFormComponent(
+      { saveQuestion: vi.fn() } as unknown as SupabaseService,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+      { runCCode, runCCodeBatch } as unknown as Judge0Service,
+    );
+    component.modelAnswer = 'int add(int a, int b) { return a + b; }';
+    component.testCases = [
+      {
+        test_code: 'printf("%d", add(2, 3));',
+        test_input: '',
+        expected_output: '5',
+      },
+      {
+        test_code: 'printf("%d", add(3, 4));',
+        test_input: '',
+        expected_output: '7',
+      },
+    ];
+
+    await component.validateModelAnswer();
+
+    expect(runCCodeBatch).toHaveBeenCalledOnce();
+    expect(runCCodeBatch).toHaveBeenCalledWith([
+      expect.objectContaining({ stdin: '' }),
+      expect.objectContaining({ stdin: '' }),
+    ]);
+    expect(runCCode).not.toHaveBeenCalled();
+    expect(component.canPublish).toBe(true);
+  });
 
   it.each([
     [

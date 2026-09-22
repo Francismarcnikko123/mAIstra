@@ -4,23 +4,25 @@
     [value]="codeToRun"
     (valueChange)="updateCode($event)"
   ></app-code-editor>
+
+
   <div class="runner-actions">
     <button
       class="execute-button"
       type="button"
       (click)="executeCode()"
-      [disabled]="isRunning"
+      [disabled]="isExecutionBusy"
       [class.running]="isRunning"
     >
       <span class="spinner" *ngIf="isRunning"></span>
-      <span>{{ isRunning ? 'Running...' : 'Run Code' }}</span>
+      <span>{{ isRunning ? 'Running...' : 'Run Sample' }}</span>
     </button>
 
     <button
       class="submit-button"
       type="button"
       (click)="requestSubmit()"
-      [disabled]="isSubmitting"
+      [disabled]="isExecutionBusy"
       [class.running]="isSubmitting"
     >
       {{ isSubmitting ? 'Submitting...' : 'Submit Code' }}

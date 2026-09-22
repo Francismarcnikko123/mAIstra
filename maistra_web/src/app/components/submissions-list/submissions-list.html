@@ -75,6 +75,9 @@
             <div class="card-content">
               <strong>{{ submission.student_name || 'Unnamed student' }}</strong>
               <span>{{ getQuestionName(submission) }}</span>
+              <span *ngIf="getSubmissionGradeSummary(submission) as gradeSummary">
+                {{ gradeSummary }}
+              </span>
               <time>{{ submission.captured_at | date:'mediumDate' }}</time>
             </div>
           </button>
@@ -184,6 +187,13 @@
               <span>Status</span>
               <strong>{{ getSubmissionStatusLabel(selectedSubmission) }}</strong>
             </div>
+            <div
+              class="status-summary"
+              *ngIf="getSubmissionGradeSummary(selectedSubmission) as gradeSummary"
+            >
+              <span>Grade</span>
+              <strong>{{ gradeSummary }}</strong>
+            </div>
           </div>
         </div>
       </ng-container>
@@ -238,7 +248,8 @@
               *ngIf="hasExtractedText(selectedSubmission.id)"
               #codeEditor
               class="text-editor"
-              [(value)]="editableText[selectedSubmission.id]"
+              [value]="editableText[selectedSubmission.id]"
+              (valueChange)="updateSubmissionCode(selectedSubmission.id, $event)"
             ></app-code-editor>
 
             <p class="extract-error" *ngIf="extractionError[selectedSubmission.id]">
