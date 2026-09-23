@@ -19,6 +19,7 @@ function createComponent(options?: {
     getSubmissions:
       options?.getSubmissions ?? vi.fn().mockResolvedValue({ data: [], error: null }),
     updateSubmissionText,
+    answersColumnAvailable: true,
   } as unknown as SupabaseService;
   const post =
     options?.post ?? vi.fn().mockReturnValue(of({ cleaned_text: 'fresh ocr' }));
@@ -28,7 +29,7 @@ function createComponent(options?: {
     cdr,
     {} as Judge0Service,
   );
-  return { component, updateSubmissionText, post };
+  return { component, updateSubmissionText, post, supabase };
 }
 
 function select(component: SubmissionsListComponent, id = 'paper-1') {
@@ -228,5 +229,32 @@ describe('SubmissionsListComponent program tabs', () => {
 
     expect(component.editableText['paper-1']).toBe('fresh ocr');
     expect(component.getExtraAnswers('paper-1')[0].code).toBe('pasted program two');
+  });
+
+  it('blocks saving extra programs while the answers column is missing', async () => {
+    const { component, updateSubmissionText, supabase } = createComponent();
+    supabase.answersColumnAvailable = false;
+    select(component);
+    component.addExtraAnswer();
+    component.updateExtraAnswerCode(0, 'int f(void) { return 1; }');
+    component.chooseExtraQuestion(0, 'q-2');
+
+    await component.saveVerifiedText();
+
+    expect(updateSubmissionText).not.toHaveBeenCalled();
+    expect(component.extraAnswersError['paper-1']).toBe(
+      "Programs 2 and up can't be saved yet: the database is missing the answers column. Ask Jayrald to apply the migration.",
+    );
+  });
+
+  it('still saves Program 1 alone while the answers column is missing', async () => {
+    const { component, updateSubmissionText, supabase } = createComponent();
+    supabase.answersColumnAvailable = false;
+    select(component);
+
+    await component.saveVerifiedText();
+
+    expect(updateSubmissionText).toHaveBeenCalledTimes(1);
+    expect(component.saveStatus['paper-1']).toBe('saved');
   });
 });

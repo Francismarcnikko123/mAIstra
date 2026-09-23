@@ -58,6 +58,9 @@ interface TopicGroup {
 }
 
 type ReviewStep = 1 | 2 | 3;
+
+const EXTRA_PROGRAMS_UNSAVABLE =
+  "Programs 2 and up can't be saved yet: the database is missing the answers column. Ask Jayrald to apply the migration.";
 type SubmissionFilter = 'all' | 'new' | 'extracted' | 'verified' | 'graded';
 
 @Component({
@@ -392,6 +395,14 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       this.cdr.detectChanges();
       return;
     }
+    // Until the answers migration is applied, Programs 2..n have nowhere to
+    // go. Refuse rather than silently dropping them; Program 1 alone saves.
+    if (!this.extraProgramsSavable && answersToSave(this.getExtraAnswers(id)).length) {
+      this.extraAnswersError[id] = EXTRA_PROGRAMS_UNSAVABLE;
+      this.saveStatus[id] = '';
+      this.cdr.detectChanges();
+      return;
+    }
     this.extraAnswersError[id] = '';
 
     const generation = this.startSaveGeneration(id);
@@ -508,6 +519,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   updateSubmissionCode(id: string, code: string) {
     this.editableText[id] = code;
+  }
+
+  /** False while the database lacks submissions.answers (migration pending). */
+  get extraProgramsSavable(): boolean {
+    return this.supabase.answersColumnAvailable !== false;
   }
 
   getExtraAnswers(id: string): SubmissionAnswer[] {

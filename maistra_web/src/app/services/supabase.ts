@@ -3,6 +3,25 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { environment } from '../../environment';
 import { SubmissionAnswer } from '../components/submissions-list/extra-answers';
 
+const SUBMISSION_COLUMNS = `
+  id,
+  image_url,
+  captured_at,
+  status,
+  topic,
+  student_name,
+  extracted_text,
+  verified_text,
+  question_id,
+  questions (
+    id,
+    question_name,
+    question_type,
+    model_answer,
+    test_cases
+  )
+`;
+
 @Injectable({
   providedIn: 'root'
 })
@@ -29,30 +48,29 @@ async saveQuestion(question: any) {
   }
 
   // ── SUBMISSIONS ─────────────────────────────────────────
-async getSubmissions() {
-  return await this.supabase
-    .from('submissions')
-    .select(`
-      id,
-      image_url,
-      captured_at,
-      status,
-      topic,
-      student_name,
-      extracted_text,
-      verified_text,
-      answers,
-      question_id,
-      questions (
-        id,
-        question_name,
-        question_type,
-        model_answer,
-        test_cases
-      )
-    `)
-    .order('captured_at', { ascending: false });
-}
+  /**
+   * False once the database reports that submissions.answers doesn't exist,
+   * i.e. the program-tabs migration hasn't been applied to it yet. The list
+   * still loads without the column; Programs 2..n just can't be saved.
+   */
+  answersColumnAvailable = true;
+
+  async getSubmissions() {
+    if (this.answersColumnAvailable !== false) {
+      const result = await this.querySubmissions(`answers, ${SUBMISSION_COLUMNS}`);
+      // 42703 = undefined column: the answers migration isn't applied yet.
+      if (result.error?.code !== '42703') return result;
+      this.answersColumnAvailable = false;
+    }
+    return this.querySubmissions(SUBMISSION_COLUMNS);
+  }
+
+  private querySubmissions(columns: string) {
+    return this.supabase
+      .from('submissions')
+      .select(columns)
+      .order('captured_at', { ascending: false });
+  }
 
   async updateSubmissionDetails(
     id: string,
@@ -85,7 +103,7 @@ async getSubmissions() {
     }
     // Programs 2..n from the review tabs, saved in the same update so they
     // share Program 1's save guards.
-    if (answers !== undefined) {
+    if (answers !== undefined && this.answersColumnAvailable !== false) {
       update['answers'] = answers;
     }
     const { error } = await this.supabase

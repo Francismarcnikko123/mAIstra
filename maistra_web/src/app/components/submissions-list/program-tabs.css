@@ -254,3 +254,10 @@
   color: #64748b;
   font-size: 12px;
 }
+
+.program-tabs-note {
+  margin: 8px 0 0;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 600;
+}

@@ -73,4 +73,39 @@ describe('SupabaseService', () => {
       answers: expect.anything(),
     }));
   });
+
+  it('loads submissions without answers when the column is missing', async () => {
+    const order = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null, error: { code: '42703' } })
+      .mockResolvedValueOnce({ data: [{ id: 'a' }], error: null });
+    const select = vi.fn().mockReturnValue({ order });
+    const from = vi.fn().mockReturnValue({ select });
+    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+    (service as unknown as { supabase: { from: typeof from } }).supabase = { from };
+    service.answersColumnAvailable = true;
+
+    const result = await service.getSubmissions();
+
+    expect(select).toHaveBeenCalledTimes(2);
+    expect(select.mock.calls[0][0]).toContain('answers');
+    expect(select.mock.calls[1][0]).not.toContain('answers');
+    expect(result.data).toEqual([{ id: 'a' }]);
+    expect(service.answersColumnAvailable).toBe(false);
+  });
+
+  it('does not write answers while the column is missing', async () => {
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ update });
+    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+    (service as unknown as { supabase: { from: typeof from } }).supabase = { from };
+    service.answersColumnAvailable = false;
+
+    await service.updateSubmissionText('submission-1', 'verified text', undefined, []);
+
+    expect(update).toHaveBeenCalledWith(expect.not.objectContaining({
+      answers: expect.anything(),
+    }));
+  });
 });

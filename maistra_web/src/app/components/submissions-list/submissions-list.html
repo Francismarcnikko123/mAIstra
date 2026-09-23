@@ -368,6 +368,12 @@
               </div>
             </ng-container>
 
+            <p
+              class="program-tabs-note"
+              *ngIf="!extraProgramsSavable && getExtraAnswers(selectedSubmission.id).length && !extraAnswersError[selectedSubmission.id]"
+            >
+              Preview only: Programs 2 and up can't be saved until the database has the answers column.
+            </p>
             <p class="extract-error" *ngIf="extraAnswersError[selectedSubmission.id]">
               {{ extraAnswersError[selectedSubmission.id] }}
             </p>
