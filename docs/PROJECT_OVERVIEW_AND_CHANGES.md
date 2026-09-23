@@ -391,6 +391,14 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - Verification: **207 tests pass**. Live evaluator unchanged: clean_ws CER **0.099**,
   WER **0.328**, token accuracy **0.716**, `green_writer10` clean_ws CER **0.061**.
 
+## Current OCR state: waiting on new datasets (2026-09-23)
+
+> **Owner:** Nombrado
+
+- No OCR code work is pending. 207 tests pass with zero expected failures, and the live evaluator remains at clean_ws CER **0.099**, clean WER **0.328** and clean token accuracy **0.716**.
+- The next step is data. New **bond paper** and **yellow pad** datasets are expected. These paper types have the thinnest evidence: training has 131 greenbook, 20 bond and 17 yellow pages. The 20-page held-out set has 14 greenbook, 2 bond and 4 yellow pages. The bond and yellow test pages share writers with training, so new-writer accuracy on those types is unmeasured.
+- Planned at import: record `literal_verified*` provenance through `import_verified_batch.py --verified-by`, and add the deferred `writer_id` column to both `labels.csv` files. Hold out whole new bond/yellow writers for testing; `select_holdout.py` currently selects pages for these types and needs updating first. Then rebuild crops, retrain, and compare on the same test set.
+
 ## Code cleanup completed
 
 > **Owner:** Shared (Jayrald + Nombrado)
@@ -450,9 +458,9 @@ Focused tests now cover:
 
 Before deploying mAIstra beyond a trusted development environment:
 
-- Rotate the Supabase `service_role` key currently exposed in Angular configuration and replace it with an anon or publishable key.
+- ~~Rotate the Supabase `service_role` key exposed in Angular configuration.~~ **Done 2026-09-23 (`a448198`):** Supabase disabled the project's legacy keys on 2026-09-21. `maistra_web/src/environment.ts` now uses a publishable key. The legacy `service_role` JWT must stay disabled and must not be re-enabled.
 - Never place a Supabase service-role key in browser or mobile code.
-- Add complete Row Level Security policies for questions, submissions, and storage objects.
+- Add complete Row Level Security policies for questions, submissions, and storage objects. RLS is currently enabled on `questions` only. `submissions` has a permissive policy but RLS is **not enabled**, so the publishable key does not restrict access to it.
 - Restrict access to handwritten submission images or serve them with signed URLs.
 - Authenticate and rate-limit the OCR and Judge0 wrapper APIs.
 - Restrict the OCR URL downloader to trusted storage hosts and enforce download-size limits.
@@ -463,8 +471,8 @@ Before deploying mAIstra beyond a trusted development environment:
 
 > **Owner:** Shared
 
-1. Rotate the exposed Supabase service-role key and correct the frontend key.
-2. Add and verify Supabase migrations and RLS policies.
+1. **OCR:** import the incoming bond paper and yellow pad datasets, which are the current blocker for OCR work. They should add new writers, give both paper types a writer-disjoint holdout, and support a retrain and re-evaluation on the same test set.
+2. Add and verify Supabase migrations and RLS policies, starting with enabling RLS on `submissions`. (The frontend key was corrected in `a448198`.)
 3. Reinstall Angular dependencies on the operating system used for testing, then run the complete frontend suite.
 4. Add authentication and rate limiting to the OCR and Judge0 wrapper services.
 5. Move API endpoints and mobile Supabase configuration into environment-specific configuration.

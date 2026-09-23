@@ -7,6 +7,10 @@
 > 0.716 clean token accuracy (`green_writer10` 0.061). The historical notes remain
 > below for provenance. The frozen prototype is unchanged; reserved Example 10 is
 > still outside the live column gate, and additional writers remain necessary.
+>
+> **2026-09-23:** 207 tests pass. OCR work is now waiting for the incoming bond
+> paper and yellow pad datasets, which will supply the additional writers mentioned
+> above. See `docs/PROJECT_OVERVIEW_AND_CHANGES.md`.
 
 Date: 2026-09-14. Branch: `feature/reading-order-reassembly`.
 Read this before resuming OCR association work. This is the current summary;
@@ -23,7 +27,8 @@ character. Wrong student syntax must not be repaired by the ordering layer.
 ## Current implementation boundary
 
 - **Production:** `core/ocr_pipeline.py` loads the fine-tuned recognizer, extracts
-  and filters records, invokes `core/layout.py`, and keeps raw/cleaned text separate.
+  and filters records, invokes `core/layout.py` (since 2026-09-17 the `core/layout/`
+  package), and keeps raw/cleaned text separate.
   Its shorter size comes from the September 13 layout-module extraction. The
   offline experiment did not remove recognition code or shorten the pipeline.
 - **Existing ordering:** full two-column, banded, severance and brace-assisted
