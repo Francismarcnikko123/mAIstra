@@ -3,7 +3,9 @@ import {
   OnInit,
   OnDestroy,
   ChangeDetectorRef,
+  QueryList,
   ViewChild,
+  ViewChildren,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -13,6 +15,13 @@ import { CodeEditorComponent } from '../code-editor/code-editor';
 import { Judge0, LogicAnalysisResult, TestCaseResult } from '../judge0/judge0';
 import { Judge0Service } from '../../services/judge0.service';
 import { firstValueFrom } from 'rxjs';
+import {
+  SubmissionAnswer,
+  answerProblems,
+  answersToSave,
+  parseAnswers,
+  takenQuestionIds,
+} from './extra-answers';
 
 interface TestCase {
   test_code: string;
@@ -23,6 +32,7 @@ interface TestCase {
 interface SubmissionQuestion {
   id: string;
   question_name: string;
+  question_text?: string;
   question_type: 'function' | 'program';
   model_answer: string;
   test_cases: TestCase[];
@@ -36,6 +46,7 @@ interface Submission {
   status?: string;
   extracted_text?: string;
   verified_text?: string;
+  answers?: unknown;
   topic?: string;
   question_id?: string;
   questions?: SubmissionQuestion | SubmissionQuestion[];
@@ -58,6 +69,7 @@ type SubmissionFilter = 'all' | 'new' | 'extracted' | 'verified' | 'graded';
 })
 export class SubmissionsListComponent implements OnInit, OnDestroy {
   @ViewChild('codeEditor') codeEditor?: CodeEditorComponent;
+  @ViewChildren('extraEditor') extraEditors?: QueryList<CodeEditorComponent>;
   selectedQuestionId = '';
   questions: SubmissionQuestion[] = [];
   submissions: Submission[] = [];
@@ -81,6 +93,16 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   saveStatus: Record<string, string> = {}; // '' | 'saved' | 'error'
   // Submission id whose re-extract confirmation dialog is open, or null.
   reextractConfirmId: string | null = null;
+
+  // Program tabs. Program 1 is editableText; Programs 2..n are extraAnswers,
+  // saved to submissions.answers under the same submission id.
+  extraAnswers: Record<string, SubmissionAnswer[]> = {};
+  // 0 = Program 1; n = extraAnswers[id][n - 1].
+  activeTab = 0;
+  // Index (into extraAnswers) of the tab whose × awaits a second click.
+  removeConfirmIndex: number | null = null;
+  questionPickerOpen = false;
+  extraAnswersError: Record<string, string> = {};
 
   // code checking state
   isChecking = false;
@@ -156,6 +178,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     for (const s of this.submissions) {
       const saved = s.verified_text || s.extracted_text || '';
       if (saved) this.editableText[s.id] = saved;
+      // Seed saved program tabs once. Never replace a loaded list: the teacher
+      // may have pasted programs that aren't saved yet.
+      if (!this.extraAnswers[s.id]) {
+        this.extraAnswers[s.id] = parseAnswers(s.answers);
+      }
     }
     this.groupSubmissions();
     this.cdr.detectChanges();
@@ -214,6 +241,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     const linkedQuestion = this.getLinkedQuestion(submission);
     this.selectedQuestionId = submission.question_id || linkedQuestion?.id || '';
     this.reviewStep = 1;
+    this.activeTab = 0;
+    this.removeConfirmIndex = null;
+    this.questionPickerOpen = false;
+    this.extraAnswersError[submission.id] = '';
 
     this.checkError = '';
     this.isChecking = false;
@@ -462,8 +493,122 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.editableText[id] = code;
   }
 
+  getExtraAnswers(id: string): SubmissionAnswer[] {
+    return this.extraAnswers[id] ?? [];
+  }
+
+  getActiveExtraAnswer(): SubmissionAnswer | undefined {
+    if (this.activeTab === 0) return undefined;
+    return this.getSelectedExtraAnswer(this.activeTab - 1);
+  }
+
+  addExtraAnswer() {
+    if (!this.selectedSubmission) return;
+    const id = this.selectedSubmission.id;
+    const answers = [...this.getExtraAnswers(id), { code: '', question_id: null }];
+    this.extraAnswers[id] = answers;
+    this.selectTab(answers.length);
+  }
+
+  selectTab(tab: number) {
+    this.activeTab = tab;
+    this.removeConfirmIndex = null;
+    this.questionPickerOpen = false;
+    // Show the tab first, then let Ace re-measure the now-visible editor.
+    this.cdr.detectChanges();
+    this.getActiveEditor()?.refresh();
+  }
+
+  updateExtraAnswerCode(index: number, code: string) {
+    const answer = this.getSelectedExtraAnswer(index);
+    // Mutate in place: replacing the object would re-render the Ace editor
+    // on every keystroke and lose the teacher's cursor.
+    if (answer) answer.code = code;
+    this.clearExtraAnswersError();
+  }
+
+  /** Program number already holding this question (other than tab `index`), or null. */
+  questionOwner(questionId: string, index: number): number | null {
+    if (!this.selectedSubmission) return null;
+    return (
+      takenQuestionIds(
+        this.selectedQuestionId || null,
+        this.getExtraAnswers(this.selectedSubmission.id),
+        index,
+      ).get(questionId) ?? null
+    );
+  }
+
+  /** Links (or with null, clears) a tab's question. Taken questions are refused. */
+  chooseExtraQuestion(index: number, questionId: string | null) {
+    const answer = this.getSelectedExtraAnswer(index);
+    if (!answer) return;
+    if (questionId !== null && this.questionOwner(questionId, index) !== null) return;
+    answer.question_id = questionId;
+    this.questionPickerOpen = false;
+    this.clearExtraAnswersError();
+  }
+
+  /** First click arms the tab's ×; the second click on the same tab removes it. */
+  requestRemoveExtraAnswer(index: number) {
+    if (!this.selectedSubmission) return;
+    if (this.removeConfirmIndex !== index) {
+      this.removeConfirmIndex = index;
+      return;
+    }
+    const id = this.selectedSubmission.id;
+    this.extraAnswers[id] = this.getExtraAnswers(id).filter((_, i) => i !== index);
+    const removedTab = index + 1;
+    const nextTab =
+      this.activeTab === removedTab
+        ? removedTab - 1
+        : this.activeTab > removedTab
+          ? this.activeTab - 1
+          : this.activeTab;
+    this.clearExtraAnswersError();
+    this.selectTab(nextTab);
+  }
+
+  getQuestionTitle(questionId: string): string {
+    return (
+      this.questions.find((question) => question.id === questionId)?.question_name ||
+      'Unknown question'
+    );
+  }
+
+  questionPreview(question: SubmissionQuestion): string {
+    const text = (question.question_text ?? '').trim();
+    return text.length > 70 ? `${text.slice(0, 70)}…` : text;
+  }
+
+  onPickerFocusOut(event: FocusEvent) {
+    const next = event.relatedTarget as Node | null;
+    const picker = event.currentTarget as HTMLElement;
+    if (!next || !picker.contains(next)) this.questionPickerOpen = false;
+  }
+
+  trackByIndex(index: number): number {
+    return index;
+  }
+
+  private getSelectedExtraAnswer(index: number): SubmissionAnswer | undefined {
+    if (!this.selectedSubmission) return undefined;
+    return this.getExtraAnswers(this.selectedSubmission.id)[index];
+  }
+
+  private getActiveEditor(): CodeEditorComponent | undefined {
+    return this.activeTab === 0
+      ? this.codeEditor
+      : this.extraEditors?.get(this.activeTab - 1);
+  }
+
+  private clearExtraAnswersError() {
+    if (this.selectedSubmission) this.extraAnswersError[this.selectedSubmission.id] = '';
+  }
+
+  /** Formats the open tab only. */
   formatCode() {
-    this.codeEditor?.format();
+    this.getActiveEditor()?.format();
   }
 
   onSelectedQuestionChange(questionId: string) {
