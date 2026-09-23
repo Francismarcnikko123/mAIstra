@@ -216,7 +216,7 @@
             <div class="editor-panel-header">
               <div>
                 <strong>Verified code</strong>
-                <span>Edit OCR mistakes before continuing.</span>
+                <span>Move each program into its own tab. Each question can be linked to one tab.</span>
               </div>
               <button
                 *ngIf="hasExtractedText(selectedSubmission.id)"
@@ -234,12 +234,143 @@
               <span>Choose “Extract code” to create an editable OCR result.</span>
             </div>
 
-            <app-code-editor
-              *ngIf="hasExtractedText(selectedSubmission.id)"
-              #codeEditor
-              class="text-editor"
-              [(value)]="editableText[selectedSubmission.id]"
-            ></app-code-editor>
+            <ng-container *ngIf="hasExtractedText(selectedSubmission.id)">
+              <div class="program-tabs" role="tablist" aria-label="Programs on this paper">
+                <button
+                  type="button"
+                  role="tab"
+                  class="program-tab"
+                  [class.active]="activeTab === 0"
+                  [attr.aria-selected]="activeTab === 0"
+                  (click)="selectTab(0)"
+                >
+                  <span class="program-tab-label">
+                    <strong>Program 1</strong> · {{ getQuestionName(selectedSubmission) }}
+                  </span>
+                </button>
+
+                <div
+                  *ngFor="let answer of getExtraAnswers(selectedSubmission.id); let i = index; trackBy: trackByIndex"
+                  role="tab"
+                  tabindex="0"
+                  class="program-tab"
+                  [class.active]="activeTab === i + 1"
+                  [attr.aria-selected]="activeTab === i + 1"
+                  (click)="selectTab(i + 1)"
+                  (keydown.enter)="selectTab(i + 1)"
+                >
+                  <span class="program-tab-label">
+                    <strong>Program {{ i + 2 }}</strong>
+                    <ng-container *ngIf="answer.question_id"> · {{ getQuestionTitle(answer.question_id) }}</ng-container>
+                  </span>
+                  <span class="program-tab-warn" *ngIf="!answer.question_id" aria-label="No question yet">!</span>
+                  <button
+                    type="button"
+                    class="program-tab-close"
+                    [class.armed]="removeConfirmIndex === i"
+                    [attr.aria-label]="'Remove program ' + (i + 2)"
+                    (click)="$event.stopPropagation(); requestRemoveExtraAnswer(i)"
+                  >
+                    {{ removeConfirmIndex === i ? 'Remove?' : '×' }}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  class="program-tab-add"
+                  aria-label="Add program"
+                  title="Add another program from this paper"
+                  (click)="addExtraAnswer()"
+                >
+                  +
+                </button>
+              </div>
+
+              <div class="program-panel" role="tabpanel">
+                <div class="program-question">
+                  <span>Question</span>
+
+                  <span class="question-locked" *ngIf="activeTab === 0">
+                    {{ getQuestionName(selectedSubmission) }} · set in Details
+                  </span>
+
+                  <div
+                    class="question-picker"
+                    *ngIf="getActiveExtraAnswer() as answer"
+                    (focusout)="onPickerFocusOut($event)"
+                    (keydown.escape)="questionPickerOpen = false"
+                  >
+                    <button
+                      type="button"
+                      class="question-picker-button"
+                      [class.empty]="!answer.question_id"
+                      aria-haspopup="listbox"
+                      [attr.aria-expanded]="questionPickerOpen"
+                      (click)="questionPickerOpen = !questionPickerOpen"
+                    >
+                      <span class="question-picker-value">
+                        {{ answer.question_id ? getQuestionTitle(answer.question_id) : 'Choose a question…' }}
+                      </span>
+                      <span aria-hidden="true">▾</span>
+                    </button>
+
+                    <div class="question-picker-menu" role="listbox" *ngIf="questionPickerOpen">
+                      <p class="question-picker-label">Question bank</p>
+                      <button
+                        *ngFor="let question of questions"
+                        type="button"
+                        role="option"
+                        class="question-option"
+                        [class.selected]="answer.question_id === question.id"
+                        [attr.aria-selected]="answer.question_id === question.id"
+                        [disabled]="questionOwner(question.id, activeTab - 1) !== null"
+                        (click)="chooseExtraQuestion(activeTab - 1, question.id)"
+                      >
+                        <span class="question-option-text">
+                          <strong>{{ question.question_name }}</strong>
+                          <small>{{ questionPreview(question) }} · {{ question.test_cases.length }} test cases</small>
+                        </span>
+                        <span class="question-option-used" *ngIf="questionOwner(question.id, activeTab - 1) as owner">
+                          In Program {{ owner }}
+                        </span>
+                        <span class="question-option-check" *ngIf="answer.question_id === question.id" aria-hidden="true">✓</span>
+                      </button>
+                      <p class="question-picker-empty" *ngIf="!questions.length">
+                        No questions in the question bank yet.
+                      </p>
+                      <button
+                        type="button"
+                        class="question-option clear"
+                        *ngIf="answer.question_id"
+                        (click)="chooseExtraQuestion(activeTab - 1, null)"
+                      >
+                        Clear question
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <app-code-editor
+                  #codeEditor
+                  class="text-editor"
+                  [hidden]="activeTab !== 0"
+                  [(value)]="editableText[selectedSubmission.id]"
+                ></app-code-editor>
+
+                <app-code-editor
+                  *ngFor="let answer of getExtraAnswers(selectedSubmission.id); let i = index; trackBy: trackByIndex"
+                  #extraEditor
+                  class="text-editor"
+                  [hidden]="activeTab !== i + 1"
+                  [value]="answer.code"
+                  (valueChange)="updateExtraAnswerCode(i, $event)"
+                ></app-code-editor>
+              </div>
+            </ng-container>
+
+            <p class="extract-error" *ngIf="extraAnswersError[selectedSubmission.id]">
+              {{ extraAnswersError[selectedSubmission.id] }}
+            </p>
 
             <p class="extract-error" *ngIf="extractionError[selectedSubmission.id]">
               {{ extractionError[selectedSubmission.id] }}
@@ -293,6 +424,9 @@
       </div>
       <div class="footer-guidance" *ngIf="reviewStep === 2 && hasExtractedText(selectedSubmission.id) && !selectedQuestionId && !selectedSubmission.questions">
         Go back to Details and select a question before grading.
+      </div>
+      <div class="footer-guidance" *ngIf="reviewStep === 2 && hasExtractedText(selectedSubmission.id) && getExtraAnswers(selectedSubmission.id).length">
+        Every program is saved with this paper. Only Program 1 is graded for now.
       </div>
 
       <button
