@@ -114,6 +114,15 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   /**
+   * Re-measure the editor after its container was hidden (an inactive
+   * program tab). Ace sizes itself on show, so without this a tab switched
+   * to can render blank until the window resizes.
+   */
+  refresh(): void {
+    this.editor?.resize(true);
+  }
+
+  /**
    * Complete C indentation reindenter -- whitespace-only. It rewrites ONLY the
    * leading whitespace of each line; every other character is emitted verbatim,
    * so it can never change the student's code content. It covers all of C's

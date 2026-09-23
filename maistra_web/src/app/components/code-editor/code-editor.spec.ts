@@ -1,5 +1,5 @@
 import '@angular/compiler';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CodeEditorComponent } from './code-editor';
 
@@ -185,5 +185,22 @@ describe('CodeEditorComponent.reindent', () => {
     const input = ['}', '}', 'int x;', '{'].join('\n');
     const out = reindent(input);
     expect(stripLeading(out)).toBe(stripLeading(input));
+  });
+});
+
+describe('CodeEditorComponent.refresh', () => {
+  it('asks Ace to re-measure after the editor was hidden', () => {
+    const component = Object.create(CodeEditorComponent.prototype) as CodeEditorComponent;
+    const resize = vi.fn();
+    (component as unknown as { editor: { resize: typeof resize } }).editor = { resize };
+
+    component.refresh();
+
+    expect(resize).toHaveBeenCalledWith(true);
+  });
+
+  it('does nothing before the editor exists', () => {
+    const component = Object.create(CodeEditorComponent.prototype) as CodeEditorComponent;
+    expect(() => component.refresh()).not.toThrow();
   });
 });
