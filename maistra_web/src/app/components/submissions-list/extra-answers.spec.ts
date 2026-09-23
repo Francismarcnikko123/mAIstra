@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   answerProblems,
+  programsForGrading,
   answersToSave,
   parseAnswers,
   takenQuestionIds,
@@ -108,5 +109,38 @@ describe('answerProblems', () => {
     ).toEqual([
       'Program 3 uses the same question as Program 2. Each question can only be linked to one program.',
     ]);
+  });
+});
+
+describe('programsForGrading', () => {
+  it('lists Program 1 then every saved tab, each with its question', () => {
+    expect(
+      programsForGrading('int main() {}', 'q-1', [
+        { code: 'int f(void);', question_id: 'q-2' },
+        { code: 'int g(void);', question_id: 'q-3' },
+      ]),
+    ).toEqual([
+      { program: 1, code: 'int main() {}', question_id: 'q-1' },
+      { program: 2, code: 'int f(void);', question_id: 'q-2' },
+      { program: 3, code: 'int g(void);', question_id: 'q-3' },
+    ]);
+  });
+
+  it('reads the saved answers column and skips blank or unlinked entries', () => {
+    expect(
+      programsForGrading('int main() {}', 'q-1', [
+        { code: '', question_id: null },
+        { code: 'int f(void);', question_id: null },
+        { code: 'int g(void);', question_id: 'q-3' },
+      ]),
+    ).toEqual([
+      { program: 1, code: 'int main() {}', question_id: 'q-1' },
+      { program: 4, code: 'int g(void);', question_id: 'q-3' },
+    ]);
+  });
+
+  it('leaves out Program 1 when it has no code or no question', () => {
+    expect(programsForGrading('', 'q-1', [])).toEqual([]);
+    expect(programsForGrading('int main() {}', null, [])).toEqual([]);
   });
 });

@@ -99,3 +99,35 @@ export function answerProblems(
 
   return problems;
 }
+
+/** One program on a paper, linked to the question it answers. */
+export interface GradableProgram {
+  /** 1 = Program 1 (verified_text); 2.. = answers[program - 2]. */
+  program: number;
+  code: string;
+  question_id: string;
+}
+
+/**
+ * Hand-off for grading: every program on a paper, each with the question
+ * whose model answer and test cases it should be graded against. Program 1
+ * comes from verified_text + question_id, Programs 2..n from the saved
+ * `answers` column (passed raw, straight from the submission row). Entries
+ * without code or without a question are left out: they can't be graded.
+ */
+export function programsForGrading(
+  verifiedText: string | null | undefined,
+  questionId: string | null | undefined,
+  answers: unknown,
+): GradableProgram[] {
+  const programs: GradableProgram[] = [];
+  if (verifiedText?.trim() && questionId) {
+    programs.push({ program: 1, code: verifiedText, question_id: questionId });
+  }
+  parseAnswers(answers).forEach((answer, index) => {
+    if (answer.code.trim() && answer.question_id) {
+      programs.push({ program: index + 2, code: answer.code, question_id: answer.question_id });
+    }
+  });
+  return programs;
+}
