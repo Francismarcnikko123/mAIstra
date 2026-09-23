@@ -379,6 +379,21 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   async saveVerifiedText() {
     if (!this.selectedSubmission || this.destroyed) return;
     const id = this.selectedSubmission.id;
+
+    // Save rules for Programs 2..n are checked before any database write,
+    // so a blocked save never touches the generation/timer guards below.
+    const problems = answerProblems(
+      this.selectedQuestionId || null,
+      this.getExtraAnswers(id),
+    );
+    if (problems.length) {
+      this.extraAnswersError[id] = problems[0];
+      this.saveStatus[id] = '';
+      this.cdr.detectChanges();
+      return;
+    }
+    this.extraAnswersError[id] = '';
+
     const generation = this.startSaveGeneration(id);
     this.savingId = id;
     this.clearSaveStatusTimer(id);
@@ -388,13 +403,15 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       // The OCR's own output (if extraction ran this session) is saved as
       // extracted_text; the teacher's edits only ever become verified_text.
       const ocrText = this.extractedText[id];
-      await this.supabase.updateSubmissionText(id, text, ocrText);
+      const extras = answersToSave(this.getExtraAnswers(id));
+      await this.supabase.updateSubmissionText(id, text, ocrText, extras);
       if (!this.isCurrentSave(id, generation)) return;
 
       const s = this.submissions.find((x) => x.id === id);
       if (s) {
         s.verified_text = text;
         if (ocrText !== undefined) s.extracted_text = ocrText;
+        s.answers = extras;
       }
       if (this.selectedSubmission?.id === id) {
         this.selectedSubmission.verified_text = text;

@@ -174,4 +174,59 @@ describe('SubmissionsListComponent program tabs', () => {
 
     expect(component.activeTab).toBe(0);
   });
+
+  it('saves every program in the same update as Program 1', async () => {
+    const { component, updateSubmissionText } = createComponent();
+    select(component);
+    component.addExtraAnswer();
+    component.updateExtraAnswerCode(0, 'int f(void) { return 1; }');
+    component.chooseExtraQuestion(0, 'q-2');
+
+    await component.saveVerifiedText();
+
+    expect(updateSubmissionText).toHaveBeenCalledTimes(1);
+    expect(updateSubmissionText).toHaveBeenCalledWith(
+      'paper-1',
+      'int main() { return 0; }',
+      undefined,
+      [{ code: 'int f(void) { return 1; }', question_id: 'q-2' }],
+    );
+    expect(component.saveStatus['paper-1']).toBe('saved');
+  });
+
+  it('blocks the save and explains why when a tab breaks a rule', async () => {
+    const { component, updateSubmissionText } = createComponent();
+    select(component);
+    component.addExtraAnswer();
+    component.updateExtraAnswerCode(0, 'int x;');
+
+    await component.saveVerifiedText();
+
+    expect(updateSubmissionText).not.toHaveBeenCalled();
+    expect(component.extraAnswersError['paper-1']).toBe('Choose a question for Program 2.');
+    expect(component.saveStatus['paper-1']).not.toBe('saved');
+  });
+
+  it('drops empty tabs when saving', async () => {
+    const { component, updateSubmissionText } = createComponent();
+    select(component);
+    component.addExtraAnswer();
+
+    await component.saveVerifiedText();
+
+    expect(updateSubmissionText.mock.calls[0][3]).toEqual([]);
+  });
+
+  it('re-extract replaces Program 1 only', async () => {
+    const { component } = createComponent();
+    select(component);
+    component.extractedText['paper-1'] = 'int main() { return 0; }';
+    component.addExtraAnswer();
+    component.updateExtraAnswerCode(0, 'pasted program two');
+
+    await component.extractText();
+
+    expect(component.editableText['paper-1']).toBe('fresh ocr');
+    expect(component.getExtraAnswers('paper-1')[0].code).toBe('pasted program two');
+  });
 });
