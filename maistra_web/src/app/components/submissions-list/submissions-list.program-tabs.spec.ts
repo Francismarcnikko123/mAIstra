@@ -257,4 +257,17 @@ describe('SubmissionsListComponent program tabs', () => {
     expect(updateSubmissionText).toHaveBeenCalledTimes(1);
     expect(component.saveStatus['paper-1']).toBe('saved');
   });
+
+  it('cancels an armed remove when the teacher clicks elsewhere', () => {
+    const { component } = createComponent();
+    select(component);
+    component.addExtraAnswer();
+    component.requestRemoveExtraAnswer(0);
+    expect(component.removeConfirmIndex).toBe(0);
+
+    component.cancelPendingRemove();
+
+    expect(component.removeConfirmIndex).toBeNull();
+    expect(component.getExtraAnswers('paper-1')).toHaveLength(1);
+  });
 });

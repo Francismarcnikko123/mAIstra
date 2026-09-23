@@ -97,7 +97,7 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="review-title"
-    (click)="$event.stopPropagation()"
+    (click)="$event.stopPropagation(); cancelPendingRemove()"
   >
     <header class="review-header">
       <div>

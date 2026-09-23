@@ -602,6 +602,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.selectTab(nextTab);
   }
 
+  /** Any click outside a tab's × disarms a pending "Remove?". */
+  cancelPendingRemove() {
+    this.removeConfirmIndex = null;
+  }
+
   getQuestionTitle(questionId: string): string {
     return (
       this.questions.find((question) => question.id === questionId)?.question_name ||
