@@ -34,7 +34,7 @@ A short, shared record of **what each of us changed that affects the others**, *
 
 ### Status
 - (2026-09-24) **OCR:** waiting on the new bond paper and yellow pad datasets. No OCR code change is pending.
-- (2026-09-24) **Program tabs** (one paper → several programs, each linked to a question) built on branch `feature/program-tabs` (tip `a49d737`, local, not pushed yet). Base branch: `feature/reading-order-reassembly`. 89/89 web tests; `ng build` clean.
+- (2026-09-24) **Program tabs** (one paper → several programs, each linked to a question) built on branch `feature/program-tabs`, pushed to `origin/feature/program-tabs`. Base branch: `feature/reading-order-reassembly`. 89/89 web tests; `ng build` clean.
 
 ### Changed (affects others)
 - (2026-09-24) **New column `submissions.answers jsonb`**, migration `supabase/migrations/20260923000000_add_submission_answers.sql`. It holds Programs 2..n as `[{ code, question_id }]`. Program 1 is still `verified_text` + `question_id`. Until the migration runs, the app still works: it detects the missing column and marks extra tabs as preview-only.
