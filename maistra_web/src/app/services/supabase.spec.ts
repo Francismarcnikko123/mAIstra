@@ -77,7 +77,10 @@ describe('SupabaseService', () => {
   it('loads submissions without answers when the column is missing', async () => {
     const order = vi
       .fn()
-      .mockResolvedValueOnce({ data: null, error: { code: '42703' } })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: '42703', message: 'column submissions.answers does not exist' },
+      })
       .mockResolvedValueOnce({ data: [{ id: 'a' }], error: null });
     const select = vi.fn().mockReturnValue({ order });
     const from = vi.fn().mockReturnValue({ select });
@@ -107,5 +110,24 @@ describe('SupabaseService', () => {
     expect(update).toHaveBeenCalledWith(expect.not.objectContaining({
       answers: expect.anything(),
     }));
+  });
+
+  it('keeps the answers column when a different column is missing', async () => {
+    const missingTopic = {
+      data: null,
+      error: { code: '42703', message: 'column submissions.topic does not exist' },
+    };
+    const order = vi.fn().mockResolvedValue(missingTopic);
+    const select = vi.fn().mockReturnValue({ order });
+    const from = vi.fn().mockReturnValue({ select });
+    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+    (service as unknown as { supabase: { from: typeof from } }).supabase = { from };
+    service.answersColumnAvailable = true;
+
+    const result = await service.getSubmissions();
+
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(result.error).toBe(missingTopic.error);
+    expect(service.answersColumnAvailable).toBe(true);
   });
 });

@@ -58,8 +58,12 @@ async saveQuestion(question: any) {
   async getSubmissions() {
     if (this.answersColumnAvailable !== false) {
       const result = await this.querySubmissions(`answers, ${SUBMISSION_COLUMNS}`);
-      // 42703 = undefined column: the answers migration isn't applied yet.
-      if (result.error?.code !== '42703') return result;
+      // 42703 = undefined column. Only fall back when it's `answers` that is
+      // missing (migration not applied); any other missing column is a real
+      // error and is returned as before.
+      const answersMissing =
+        result.error?.code === '42703' && /\banswers\b/.test(result.error.message ?? '');
+      if (!answersMissing) return result;
       this.answersColumnAvailable = false;
     }
     return this.querySubmissions(SUBMISSION_COLUMNS);
