@@ -399,6 +399,19 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - The next step is data. New **bond paper** and **yellow pad** datasets are expected. These paper types have the thinnest evidence: training has 131 greenbook, 20 bond and 17 yellow pages. The 20-page held-out set has 14 greenbook, 2 bond and 4 yellow pages. The bond and yellow test pages share writers with training, so new-writer accuracy on those types is unmeasured.
 - Planned at import: record `literal_verified*` provenance through `import_verified_batch.py --verified-by`, and add the deferred `writer_id` column to both `labels.csv` files. Hold out whole new bond/yellow writers for testing; `select_holdout.py` currently selects pages for these types and needs updating first. Then rebuild crops, retrain, and compare on the same test set.
 
+## Program tabs in Review Code (2026-09-24)
+
+> **Owner:** Nombrado (review editor); schema needs Jayrald's approval
+
+- One paper can hold several programs. Step 2 shows browser-style tabs above the editor. Program 1 is the existing editor, and its question comes from Details. **+** adds Programs 2..n. The teacher moves each program's code into its own tab and links it to a question from the bank through a question picker. The picker shows each question's name, a prompt preview and its test-case count.
+- Each question can be linked to only one program. The picker greys out questions another tab holds ("In Program N"). Saving is blocked for a tab with code but no question, a tab with a question but no code, or a duplicate question. Fully empty tabs are ignored.
+- Programs 2..n are saved as `{ code, question_id }` in the new `submissions.answers jsonb` column. They sit under the same submission ID and use the same guarded save as Program 1. `extracted_text` is never modified, and Re-extract replaces Program 1 only. There is no OCR change.
+- Programs 2..n are saved but not graded yet. Grading them is a follow-up for Jayrald.
+- The split is manual by design. OCR program-boundary detection exists, but its consistency is unmeasured.
+- Code: `submissions-list/extra-answers.ts` holds the pure parse, taken-question and save-rule helpers. `submissions-list/program-tabs.css` holds the tab styles, kept separate so the component stylesheet stays under its 12 kB build budget. `CodeEditorComponent.refresh()` re-measures a previously hidden tab.
+- **Deploy order:** the migration `supabase/migrations/20260923000000_add_submission_answers.sql` must be applied before this web change runs against a database. `getSubmissions()` now selects `answers`, and without the column the submissions list fails to load.
+- Verification: 80/80 web tests (50 existing + 30 new); TypeScript check and `ng build` pass. The manual in-app check is pending until the migration is applied.
+
 ## Code cleanup completed
 
 > **Owner:** Shared (Jayrald + Nombrado)
