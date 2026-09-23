@@ -40,4 +40,37 @@ describe('SupabaseService', () => {
       status: 'verified'
     }));
   });
+
+  it('writes extra programs when they are provided', async () => {
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ update });
+    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+    (service as unknown as { supabase: { from: typeof from } }).supabase = { from };
+
+    const answers = [{ code: 'int main() {}', question_id: 'q-2' }];
+    await service.updateSubmissionText('submission-1', 'verified text', undefined, answers);
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      verified_text: 'verified text',
+      answers,
+    }));
+    expect(update).toHaveBeenCalledWith(expect.not.objectContaining({
+      extracted_text: expect.anything(),
+    }));
+  });
+
+  it('leaves answers untouched when none are provided', async () => {
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ update });
+    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+    (service as unknown as { supabase: { from: typeof from } }).supabase = { from };
+
+    await service.updateSubmissionText('submission-1', 'verified text');
+
+    expect(update).toHaveBeenCalledWith(expect.not.objectContaining({
+      answers: expect.anything(),
+    }));
+  });
 });

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { environment } from '../../environment';
+import { SubmissionAnswer } from '../components/submissions-list/extra-answers';
 
 @Injectable({
   providedIn: 'root'
@@ -40,6 +41,7 @@ async getSubmissions() {
       student_name,
       extracted_text,
       verified_text,
+      answers,
       question_id,
       questions (
         id,
@@ -67,7 +69,8 @@ async getSubmissions() {
   async updateSubmissionText(
     submissionId: string,
     verifiedText: string,
-    extractedText?: string
+    extractedText?: string,
+    answers?: SubmissionAnswer[],
   ): Promise<void> {
     // extracted_text must keep the OCR's own output (it is the baseline the
     // verified text is compared against), so it is only written when a fresh
@@ -79,6 +82,11 @@ async getSubmissions() {
     };
     if (extractedText !== undefined) {
       update['extracted_text'] = extractedText;
+    }
+    // Programs 2..n from the review tabs, saved in the same update so they
+    // share Program 1's save guards.
+    if (answers !== undefined) {
+      update['answers'] = answers;
     }
     const { error } = await this.supabase
       .from('submissions')
