@@ -410,7 +410,17 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - **Grading hand-off (for Jayrald):** `programsForGrading(verified_text, question_id, answers)` in `submissions-list/extra-answers.ts` returns every gradable program on a paper as `{ program, code, question_id }`: Program 1 first, then each saved tab. Entries without code or without a question are skipped. Each `question_id` points at the `questions` row whose `model_answer` and `test_cases` that program should be graded against, so the grading step can loop over this list instead of reading `verified_text` alone. The review screen guarantees each question appears at most once per paper.
 - The split is manual by design. OCR program-boundary detection exists, but its consistency is unmeasured.
 - Code: `submissions-list/extra-answers.ts` holds the pure parse, taken-question and save-rule helpers. `submissions-list/program-tabs.css` holds the tab styles, kept separate so the component stylesheet stays under its 12 kB build budget. `CodeEditorComponent.refresh()` re-measures a previously hidden tab.
-- **Migration:** apply `supabase/migrations/20260923000000_add_submission_answers.sql` to enable saving Programs 2..n. Until it runs, the app still works. `getSubmissions()` retries without `answers` when Postgres reports the column missing (42703), Program 1 saves as before, and Step 2 marks extra tabs as preview-only. Saving them is blocked with a message instead of being silently dropped.
+- **Migration:** apply `supabase/migrations/20260923000000_add_submission_answers.sql` to enable saving Programs 2..n. Until it runs, the app still works. `getSubmissions()` retries without `answers` when Postgres reports the column missing (42703), Program 1 saves as before, and Step 2 marks extra tabs as preview-only. On save, Program 1 is saved, the extra tabs stay on screen unsaved, and a message says so ("Program 1 was saved. Programs 2 and up can't be saved yet…").
+- **Code-review fixes (2026-09-24):**
+  - A realtime reload no longer replaces unsaved Program 1 edits.
+  - Removing a tab no longer hands its editor's undo history to the next tab.
+  - The open review's `answers` update after a save.
+  - OCR backend (`ocr_feature/`):
+    - The cleanup no longer rewrites float literals like `1.1f` into `1.if`.
+    - Each request works in a temporary folder that is deleted afterwards. Photos and debug dumps are no longer kept in `uploads/` / `outputs/`, and client file names never reach a path.
+    - Downloads are capped at 25 MB and must be http(s).
+    - Predictions are serialized with a lock.
+    - The upload endpoint no longer blocks the server.
 - Verification: 89/89 web tests (50 existing + 39 new); TypeScript check and `ng build` pass. Checked in the running app against the cloud database without the column: all 209 submissions load, the tabs and picker render, the Program 1 question is greyed as "In Program 1", the preview-only note shows, and clicking elsewhere cancels an armed "Remove?". Saving Programs 2..n end to end is untested until the migration is applied.
 
 ## Code cleanup completed
