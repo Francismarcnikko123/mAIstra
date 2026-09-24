@@ -1,3 +1,4 @@
+import os
 import shutil
 import tempfile
 from contextlib import asynccontextmanager
@@ -10,6 +11,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
+from core.auto_extract import start_auto_extract
 from core.ocr_pipeline import extract_text_from_image, warmup
 
 
@@ -20,7 +22,12 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     # Load the OCR models on startup so the first real request is fast.
     warmup()
+    # Pre-extraction on arrival: off unless AUTO_EXTRACT=true in .env
+    # (see core/auto_extract.py). Uses the same extraction as the endpoint.
+    worker = start_auto_extract(os.environ, extract_image_url)
     yield
+    if worker is not None:
+        worker.stop()
 
 
 app = FastAPI(title="MaestrAI OCR Backend", lifespan=lifespan)
@@ -122,17 +129,26 @@ def download_image(url: str, dest: Path) -> None:
     )
 
 
-@app.post("/api/ocr/extract-from-url")
-def extract_from_url(request: ImageUrlRequest):
+def extract_image_url(image_url: str) -> dict:
+    """Download one image and run the OCR pipeline on it, in a temporary
+    folder that is deleted afterwards. Shared by the endpoint and the
+    auto-extract worker, so both always produce the same text."""
     with tempfile.TemporaryDirectory(prefix="maistra-ocr-") as work_dir:
         image_path = Path(work_dir) / "submission.jpg"
-        download_image(request.image_url, image_path)
+        download_image(image_url, image_path)
         result = extract_text_from_image(str(image_path), output_dir=work_dir)
-
     return {
-        "submission_id": request.submission_id,
         "raw_text": result["raw_text"],
         "cleaned_text": result["cleaned_text"],
         "average_confidence": result["average_confidence"],
+    }
+
+
+@app.post("/api/ocr/extract-from-url")
+def extract_from_url(request: ImageUrlRequest):
+    result = extract_image_url(request.image_url)
+    return {
+        "submission_id": request.submission_id,
+        **result,
         "saved_to_db": False,
     }
