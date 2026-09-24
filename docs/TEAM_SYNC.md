@@ -71,6 +71,9 @@ A short, shared record of **what each of us changed that affects the others**, *
 - [ ] (2026-09-24, from Nombrado) **Apply `supabase/migrations/20260923000000_add_submission_answers.sql`** to the cloud project, unless we choose option B.
 - [ ] (2026-09-24, from Nombrado) **Grade every program on a paper:** loop over `programsForGrading(verified_text, question_id, answers)` and grade each entry against its own question's model answer and test cases. Decide how per-program results are keyed and how scores combine.
 - [ ] (2026-09-24, from Nombrado) **Enable RLS on `submissions`.** It is currently enabled only on `questions`.
+- [ ] (2026-09-24, from Nikko) **Add `submissions.gate_result text`** and add `gate_result` to the submissions INSERT grant (and allow it in `submissions_public_insert`). The phone's quality gate decides PASS / FIXABLE / RETAKE and currently throws that away; without it a low grade can't be traced back to a bad photo. Every screen reads submissions, so a column avoids a join in three places. Until this is applied, **mobile uploads fail**.
+- [ ] (2026-09-24, from Nikko) **Add a reliable "model answer validated" flag on `questions`.** `can_publish` was dropped in `20260917000000_remove_unused_question_validation_columns.sql`. The mobile picker filters on `questions.can_publish = true`; if you prefer another name, tell me and I'll switch the query. Until this exists, the picker shows "Could not load questions".
+- [ ] (2026-09-24, from Nikko) **Apply `supabase/migrations/20260924000000_add_question_sections.sql`** (two new tables, `question_sections` and `question_section_items`; nothing on `questions` changes).
 - Do **not** change `ocr_feature/` or the program-tabs code. If grading needs something from them, add it under Needs from others.
 
 When you finish an item: tick it, add the date and commit, and note anything that affects others under **Changed (affects others)**.
@@ -100,10 +103,15 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 When you finish an item: tick it, add the date and commit, and note anything that affects others under **Changed (affects others)**.
 
 ### Status
+- (2026-09-24) **Question linking, mobile part** built on `feature/question-linking` (spec: `IMPLEMENTATION_SPEC_question_linking.md`). The phone now picks a validated, sectioned question before capture and sends `question_id` + `gate_result` with every page. Web bank/form/folders are next. Blocked on Jayrald's three items above for an end-to-end run.
 
 ### Changed (affects others)
+- (2026-09-24) **New migration `supabase/migrations/20260924000000_add_question_sections.sql`** (not applied). Tables `question_sections(id, name, position)` and `question_section_items(section_id, question_id, number)`; a question belongs to at most one section, and numbers are unique within a section. RLS + column grants mirror `20260921000000_lock_down_public_api.sql`. A question with no section never appears on the phone.
+- (2026-09-24) **Mobile inserts into `submissions` now always set `question_id` and `gate_result`** (`'PASS' | 'FIXABLE' | 'RETAKE'`; a page the gate auto-corrected is stored as `FIXABLE`). RETAKE pages can't be uploaded. Each page is still one row.
 
 ### Needs from others
+- (2026-09-24) **Jayrald:** `submissions.gate_result` + grant, a validated flag on `questions`, and applying the sections migration (see his To do).
+- (2026-09-24) **Nombrado:** confirm one `question_id` per paper from the phone (Program 1) is what program tabs expect.
 
 ### Open questions
 
