@@ -434,6 +434,8 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 
 > **Owner:** Nombrado (OCR server, review editor). The worker writes to the shared `submissions` table, so it's announced in `docs/TEAM_SYNC.md`.
 
+- **Branch and handoff:** `feature/pre-extraction` is pushed and includes the pushed `feature/program-tabs` branch. Nikko owns mobile selection/sending of `question_id` for Program 1. Jayrald owns applying the `answers` migration and the remaining cloud schema for Nikko's complete question-linking flow. The worker and badge can be tested on new papers before that integration; neither branch is merged to `main` yet.
+
 - **What it does:** when the OCR server runs with `AUTO_EXTRACT=true`, a background worker reads papers that arrived from the phone and saves `extracted_text`, so teachers open them already extracted. It's off by default.
 - **Same results:** it uses the same extraction function as the Extract button (`extract_image_url` in `ocr_feature/main.py`) under the same lock. The pipeline is unchanged, so the recorded accuracy numbers still apply.
 - **Never overwrites work:** the save only goes through if `extracted_text` and `verified_text` are still empty at that moment. It writes nothing else: not `verified_text`, `answers` or `status`.
@@ -498,11 +500,8 @@ Focused tests now cover:
 
 > **Owner:** Shared
 
-- Angular application TypeScript compilation passes.
-- The focused submission-list test file passes isolated TypeScript validation.
-- Angular template compilation passed after the submission workflow changes.
-- Running Vitest from the current WSL environment is blocked because `node_modules` contains Windows-native Rollup/esbuild packages. Run `npm ci` and the tests in the same operating system environment, or run them directly from Windows where the dependencies were installed.
-- Repository-wide spec type-checking currently also reports an unrelated missing Node `fs` type used by `question-form.spec.ts`.
+- **2026-09-24 pre-extraction checkpoint:** OCR 231/231, web 114/114; Angular application and spec TypeScript checks pass, and Angular build passes with the existing CSS budget warning. The live phone-photo, server-off and restart catch-up badge checks passed. See the pre-extraction section above for scope.
+- **Earlier environment limitation (historical):** Vitest was blocked in WSL when `node_modules` held Windows-native Rollup/esbuild packages; this did not apply to the later macOS verification above.
 
 ## Important security work
 
@@ -525,6 +524,6 @@ Before deploying mAIstra beyond a trusted development environment:
 
 1. **OCR:** import the incoming bond paper and yellow pad datasets, which are the current blocker for OCR work. They should add new writers, give both paper types a writer-disjoint holdout, and support a retrain and re-evaluation on the same test set.
 2. Add and verify Supabase migrations and RLS policies, starting with enabling RLS on `submissions`. (The frontend key was corrected in `a448198`.)
-3. Reinstall Angular dependencies on the operating system used for testing, then run the complete frontend suite.
+3. Keep the Angular dependency install matched to the operating system used for testing; the complete frontend suite passed at the 2026-09-24 checkpoint.
 4. Add authentication and rate limiting to the OCR and Judge0 wrapper services.
 5. Move API endpoints and mobile Supabase configuration into environment-specific configuration.
