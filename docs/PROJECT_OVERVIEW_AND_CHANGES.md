@@ -441,10 +441,15 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - **Failures:** a paper that fails 3 times is left "Needs OCR" for the manual **Extract now**.
 - **Web review:**
   - Opening a paper re-reads it (`getSubmission(id)` in `supabase.ts`), so text saved after the list loaded shows up.
+  - The OCR server's `GET /` reports whether the worker is running, its start date and papers it has given up on. The web checks this on load, every 30 seconds and after list reloads; an unreachable server counts as off.
+  - An unread paper captured after that start date shows **Extracting…** while the worker is running. It remains in the **Needs OCR** filter. Old papers, failed papers and papers seen while the server is off show **Needs OCR**.
+  - The Supabase realtime UPDATE listener fills empty OCR and editor fields and changes the badge to **Needs review** when the worker saves. It preserves teacher edits, verified text and program tabs. Opening a paper uses the same guarded merge.
   - Re-extracting an untouched pre-extracted paper no longer asks to discard edits.
   - The empty state and button now say **Extract now**.
 - **Key:** `ocr_feature/.env` holds `SUPABASE_URL` / `SUPABASE_KEY` (template: `.env.example`). The publishable key works while `submissions` has no RLS; switch to a secret key once RLS is on. Never put a secret key in the browser or mobile app.
-- **Not yet:** a realtime UPDATE subscription so the list badge updates without reopening (needs Jayrald's OK), and provenance columns.
+- **Live check:** one new phone paper changed from **Extracting…** to **Needs review** without a reload. A second paper showed **Needs OCR** while the server was off, then changed to **Needs review** on the same open page after the server restarted with a temporary start date covering the offline capture.
+- **Not yet:** provenance columns.
+- **Verification:** OCR 231/231 tests and web 114/114 tests pass; TypeScript checks and Angular build pass with the existing CSS budget warning. The unchanged 20-sample evaluator still reports clean_ws CER **0.099**, clean WER **0.328**, and clean token accuracy **0.716**.
 
 ## Code cleanup completed
 
