@@ -87,6 +87,10 @@ class RunCodeRequest(BaseModel):
 
 class RunCodeBatchRequest(BaseModel):
     runs: list[RunCodeRequest] = Field(min_length=1, max_length=MAX_BATCH_RUNS)
+    # Grading needs every test case, so by default the first failed run fails
+    # the whole batch. Model-answer validation sets this to False to get each
+    # run's own outcome, with a failed run reported as {"error": {...}}.
+    stop_on_error: bool = True
 
 
 @app.get("/")
@@ -202,6 +206,22 @@ async def run_code_batch(payload: RunCodeBatchRequest):
             return await run_code(run)
 
     tasks = [asyncio.create_task(run_bounded(run)) for run in payload.runs]
+    if not payload.stop_on_error:
+        outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+        for outcome in outcomes:
+            # Only Judge0/HTTP failures belong to a single run; anything else
+            # is a wrapper bug and should surface as a 500.
+            if isinstance(outcome, BaseException) and not isinstance(
+                outcome, HTTPException
+            ):
+                raise outcome
+        return [
+            {"error": {"status_code": outcome.status_code, "detail": outcome.detail}}
+            if isinstance(outcome, HTTPException)
+            else outcome
+            for outcome in outcomes
+        ]
+
     try:
         return await asyncio.gather(*tasks)
     except BaseException:

@@ -12,6 +12,20 @@ export interface Judge0RunResult {
   };
 }
 
+export interface Judge0RunError {
+  error: {
+    status_code: number;
+    detail: string;
+  };
+}
+
+export type Judge0BatchOutcome = Judge0RunResult | Judge0RunError;
+
+export interface Judge0BatchRun {
+  sourceCode: string;
+  stdin?: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -30,15 +44,27 @@ export class Judge0Service {
     );
   }
 
-  runCCodeBatch(runs: ReadonlyArray<{ sourceCode: string; stdin?: string }>) {
-    return this.http.post<Judge0RunResult[]>(
-      `${this.apiUrl}/run-batch`,
-      {
-        runs: runs.map(({ sourceCode, stdin = '' }) => ({
-          source_code: sourceCode,
-          stdin,
-        })),
-      },
-    );
+  // All-or-nothing: the first failed run fails the whole request. Use this
+  // when every result is required, e.g. to persist a grade.
+  runCCodeBatch(runs: ReadonlyArray<Judge0BatchRun>) {
+    return this.http.post<Judge0RunResult[]>(`${this.apiUrl}/run-batch`, {
+      runs: this.toBatchRuns(runs),
+    });
+  }
+
+  // Each run reports its own outcome; a failed run comes back as
+  // { error: { status_code, detail } } in its slot instead of failing the rest.
+  runCCodeBatchSettled(runs: ReadonlyArray<Judge0BatchRun>) {
+    return this.http.post<Judge0BatchOutcome[]>(`${this.apiUrl}/run-batch`, {
+      runs: this.toBatchRuns(runs),
+      stop_on_error: false,
+    });
+  }
+
+  private toBatchRuns(runs: ReadonlyArray<Judge0BatchRun>) {
+    return runs.map(({ sourceCode, stdin = '' }) => ({
+      source_code: sourceCode,
+      stdin,
+    }));
   }
 }

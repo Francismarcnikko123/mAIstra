@@ -278,6 +278,35 @@ def test_run_code_returns_504_when_result_never_ready(monkeypatch):
     )
 
 
+def test_batch_run_can_report_each_failed_run_in_its_own_slot(monkeypatch):
+    async def failing_or_accepted_run(payload):
+        if payload.source_code == "fail":
+            raise main.HTTPException(status_code=504, detail="timed out")
+        return {"status": {"id": 3, "description": "Accepted"}}
+
+    monkeypatch.setattr(main, "run_code", failing_or_accepted_run)
+
+    client = TestClient(main.app)
+    response = client.post(
+        "/api/judge0/run-batch",
+        json={
+            "runs": [
+                {"source_code": "first"},
+                {"source_code": "fail"},
+                {"source_code": "third"},
+            ],
+            "stop_on_error": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"status": {"id": 3, "description": "Accepted"}},
+        {"error": {"status_code": 504, "detail": "timed out"}},
+        {"status": {"id": 3, "description": "Accepted"}},
+    ]
+
+
 class ScriptedStatusJudge0Client:
     """Reports the scripted status ids in order, repeating the last one."""
 

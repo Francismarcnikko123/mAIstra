@@ -13,13 +13,21 @@ describe('QuestionFormComponent', () => {
   ) {
     const supabase = { saveQuestion } as unknown as SupabaseService;
     const cdr = { detectChanges: vi.fn() } as unknown as ChangeDetectorRef;
+    // Mirrors the server's settled batch: each run reports its own result, and
+    // a failed run takes the { error: { detail } } shape in its own slot.
     const judge0 = {
       runCCode,
-      runCCodeBatch: (runs: ReadonlyArray<{ sourceCode: string; stdin?: string }>) =>
+      runCCodeBatchSettled: (
+        runs: ReadonlyArray<{ sourceCode: string; stdin?: string }>,
+      ) =>
         from(
           Promise.all(
             runs.map(({ sourceCode, stdin = '' }) =>
-              firstValueFrom(runCCode(sourceCode, stdin)),
+              firstValueFrom(runCCode(sourceCode, stdin)).catch(
+                (error: { error?: { detail?: string } }) => ({
+                  error: { status_code: 502, detail: error?.error?.detail },
+                }),
+              ),
             ),
           ),
         ),
@@ -96,18 +104,12 @@ describe('QuestionFormComponent', () => {
     return { component, runCCode, saveQuestion };
   }
 
-  it('validates all test cases with one batch request', async () => {
+  function batchFixture(runCCodeBatchSettled: ReturnType<typeof vi.fn>) {
     const runCCode = vi.fn();
-    const runCCodeBatch = vi.fn().mockReturnValue(
-      of([
-        { stdout: '5', status: { id: 3, description: 'Accepted' } },
-        { stdout: '7', status: { id: 3, description: 'Accepted' } },
-      ]),
-    );
     const component = new QuestionFormComponent(
       { saveQuestion: vi.fn() } as unknown as SupabaseService,
       { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
-      { runCCode, runCCodeBatch } as unknown as Judge0Service,
+      { runCCode, runCCodeBatchSettled } as unknown as Judge0Service,
     );
     component.modelAnswer = 'int add(int a, int b) { return a + b; }';
     component.testCases = [
@@ -122,16 +124,75 @@ describe('QuestionFormComponent', () => {
         expected_output: '7',
       },
     ];
+    return { component, runCCode };
+  }
+
+  it('validates all test cases with one batch request', async () => {
+    const runCCodeBatchSettled = vi.fn().mockReturnValue(
+      of([
+        { stdout: '5', status: { id: 3, description: 'Accepted' } },
+        { stdout: '7', status: { id: 3, description: 'Accepted' } },
+      ]),
+    );
+    const { component, runCCode } = batchFixture(runCCodeBatchSettled);
 
     await component.validateModelAnswer();
 
-    expect(runCCodeBatch).toHaveBeenCalledOnce();
-    expect(runCCodeBatch).toHaveBeenCalledWith([
+    expect(runCCodeBatchSettled).toHaveBeenCalledOnce();
+    expect(runCCodeBatchSettled).toHaveBeenCalledWith([
       expect.objectContaining({ stdin: '' }),
       expect.objectContaining({ stdin: '' }),
     ]);
     expect(runCCode).not.toHaveBeenCalled();
     expect(component.canPublish).toBe(true);
+  });
+
+  it('keeps the other results when one test case run fails', async () => {
+    const { component } = batchFixture(
+      vi.fn().mockReturnValue(
+        of([
+          { stdout: '5', status: { id: 3, description: 'Accepted' } },
+          {
+            error: {
+              status_code: 504,
+              detail: 'Judge0 did not return a result in time. Try again.',
+            },
+          },
+        ]),
+      ),
+    );
+
+    await component.validateModelAnswer();
+
+    expect(component.validationResults[0].passed).toBe(true);
+    expect(component.validationResults[0].status).toBe('Accepted');
+    expect(component.validationResults[1]).toEqual(
+      expect.objectContaining({
+        passed: false,
+        status: 'Validation request failed',
+        message: 'Judge0 did not return a result in time. Try again.',
+      }),
+    );
+    expect(component.testRunStatuses).toEqual(['passed', 'failed']);
+    expect(component.canPublish).toBe(false);
+  });
+
+  it('fails every test case when the batch request itself fails', async () => {
+    const { component } = batchFixture(
+      vi
+        .fn()
+        .mockReturnValue(
+          throwError(() => ({ error: { detail: 'Judge0 is unreachable.' } })),
+        ),
+    );
+
+    await component.validateModelAnswer();
+
+    expect(component.validationResults.map((result) => result.message)).toEqual(
+      ['Judge0 is unreachable.', 'Judge0 is unreachable.'],
+    );
+    expect(component.testRunStatuses).toEqual(['failed', 'failed']);
+    expect(component.canPublish).toBe(false);
   });
 
   it.each([

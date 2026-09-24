@@ -37,4 +37,19 @@ describe('Judge0Service', () => {
       },
     );
   });
+
+  it('asks the batch endpoint for per-run outcomes when settling', () => {
+    const post = vi.fn().mockReturnValue(of([]));
+    const service = new Judge0Service({ post } as unknown as HttpClient);
+
+    service.runCCodeBatchSettled([{ sourceCode: 'only source' }]);
+
+    expect(post).toHaveBeenCalledWith(
+      'http://127.0.0.1:8001/api/judge0/run-batch',
+      {
+        runs: [{ source_code: 'only source', stdin: '' }],
+        stop_on_error: false,
+      },
+    );
+  });
 });

@@ -130,8 +130,9 @@ export class QuestionFormComponent {
     try {
       let results: ValidationResult[];
       try {
-        const runResults = await firstValueFrom(
-          this.judge0.runCCodeBatch(
+        // Settled, so one slow or failed run does not hide the other results.
+        const outcomes = await firstValueFrom(
+          this.judge0.runCCodeBatchSettled(
             testCases.map((testCase) => ({
               sourceCode: buildCQuestionSource(
                 type,
@@ -142,21 +143,16 @@ export class QuestionFormComponent {
             })),
           ),
         );
-        results = testCases.map((testCase, index) =>
-          this.executionValidation(
-            runResults[index],
-            testCase.expected_output,
-            type,
-          ),
-        );
+        results = testCases.map((testCase, index) => {
+          const outcome = outcomes[index];
+          return 'error' in outcome
+            ? this.requestFailedValidation(testCase.expected_output, outcome)
+            : this.executionValidation(outcome, testCase.expected_output, type);
+        });
       } catch (error) {
-        results = testCases.map((testCase) => ({
-          passed: false,
-          expected: testCase.expected_output.trim(),
-          actual: '',
-          status: 'Validation request failed',
-          message: this.validationRequestError(error),
-        }));
+        results = testCases.map((testCase) =>
+          this.requestFailedValidation(testCase.expected_output, error),
+        );
       }
 
       if (!isCurrent()) {
@@ -354,6 +350,21 @@ export class QuestionFormComponent {
     return type === 'program' ? input : '';
   }
 
+  private requestFailedValidation(
+    expected: string,
+    error: unknown,
+  ): ValidationResult {
+    return {
+      passed: false,
+      expected: expected.trim(),
+      actual: '',
+      status: 'Validation request failed',
+      message: this.validationRequestError(error),
+    };
+  }
+
+  // Reads `error.detail` from both an HttpErrorResponse and a settled batch
+  // run's { error: { detail } } outcome.
   private validationRequestError(error: unknown): string {
     const detail = (error as { error?: { detail?: unknown } } | null)?.error
       ?.detail;
