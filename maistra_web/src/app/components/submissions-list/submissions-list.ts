@@ -15,7 +15,7 @@ import { SupabaseService } from '../../services/supabase';
 import { CodeEditorComponent } from '../code-editor/code-editor';
 import { Judge0, LogicAnalysisResult, TestCaseResult } from '../judge0/judge0';
 import { Judge0Service } from '../../services/judge0.service';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, timeout } from 'rxjs';
 import {
   SubmissionAnswer,
   answerProblems,
@@ -59,6 +59,12 @@ interface TopicGroup {
   submissions: Submission[];
 }
 
+interface AutoExtractHealth {
+  enabled: boolean;
+  since: string | null;
+  failed: string[];
+}
+
 type ReviewStep = 1 | 2 | 3;
 
 const EXTRA_PROGRAMS_UNSAVABLE =
@@ -97,6 +103,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   editableText: Record<string, string> = {};
   extractionError: Record<string, string> = {};
   saveStatus: Record<string, string> = {}; // '' | 'saved' | 'error'
+  autoExtract: { enabled: boolean; since: string | null; failed: Set<string> } = {
+    enabled: false, since: null, failed: new Set<string>(),
+  };
   // Submission id whose re-extract confirmation dialog is open, or null.
   reextractConfirmId: string | null = null;
 
@@ -132,6 +141,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   >;
   private saveStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private saveGenerations = new Map<string, number>();
+  private ocrHealthInterval?: ReturnType<typeof setInterval>;
+  private ocrHealthGeneration = 0;
   private destroyed = false;
 
   constructor(
@@ -142,16 +153,22 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   ) {}
 
   async ngOnInit() {
+    void this.checkOcrServer();
+    this.ocrHealthInterval = setInterval(() => void this.checkOcrServer(), 30_000);
     await this.loadQuestions();
     await this.loadSubmissions();
+    if (this.destroyed) return;
 
-    this.subscription = this.supabase.subscribeToSubmissions(() => {
-      void this.loadSubmissions();
-    });
+    this.subscription = this.supabase.subscribeToSubmissions(
+      () => void this.loadSubmissions(),
+      (payload) => this.applyFreshSubmission(payload.new as Submission),
+    );
   }
 
   ngOnDestroy() {
     this.destroyed = true;
+    this.ocrHealthGeneration++;
+    if (this.ocrHealthInterval !== undefined) clearInterval(this.ocrHealthInterval);
 
     for (const timer of this.saveStatusTimers.values()) {
       clearTimeout(timer);
@@ -181,6 +198,25 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     return !this.destroyed && this.saveGenerations.get(id) === generation;
   }
 
+  async checkOcrServer() {
+    const generation = ++this.ocrHealthGeneration;
+    try {
+      const response = await firstValueFrom(
+        this.http.get<{ auto_extract?: AutoExtractHealth }>('http://localhost:8000/')
+          .pipe(timeout(2000)),
+      );
+      if (this.destroyed || generation !== this.ocrHealthGeneration) return;
+      const state = response?.auto_extract;
+      this.autoExtract = state?.enabled && !!state.since && Array.isArray(state.failed)
+        ? { enabled: true, since: state.since, failed: new Set(state.failed) }
+        : { enabled: false, since: null, failed: new Set<string>() };
+    } catch {
+      if (this.destroyed || generation !== this.ocrHealthGeneration) return;
+      this.autoExtract = { enabled: false, since: null, failed: new Set<string>() };
+    }
+    this.cdr.detectChanges();
+  }
+
   async loadSubmissions() {
     const { data, error } = await this.supabase.getSubmissions();
     if (error) {
@@ -205,6 +241,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     }
     this.groupSubmissions();
     this.cdr.detectChanges();
+    void this.checkOcrServer();
   }
 
   groupSubmissions() {
@@ -290,26 +327,30 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     try {
       const { data, error } = await this.supabase.getSubmission(id);
       if (error || !data) return;
-      const fresh = data as unknown as Submission;
-      if (!fresh.extracted_text) return;
-
-      for (const target of [
-        this.submissions.find((x) => x.id === id),
-        this.selectedSubmission?.id === id ? this.selectedSubmission : undefined,
-      ]) {
-        if (target && !target.extracted_text) target.extracted_text = fresh.extracted_text;
-      }
-      if (!this.editableText[id]) {
-        const text = fresh.verified_text || fresh.extracted_text;
-        this.editableText[id] = text;
-        // Arrived from the database, so it isn't an unsaved change.
-        if (!this.savedProgram1[id]) this.savedProgram1[id] = text;
-      }
-      this.groupSubmissions();
-      this.cdr.detectChanges();
+      this.applyFreshSubmission(data as unknown as Submission);
     } catch (err) {
       console.error('Could not refresh the opened submission:', err);
     }
+  }
+
+  /** Merge worker/re-read data without replacing any teacher-owned review state. */
+  private applyFreshSubmission(fresh: Submission) {
+    if (this.destroyed || !fresh?.id) return;
+    const id = fresh.id;
+    for (const target of [
+      this.submissions.find((submission) => submission.id === id),
+      this.selectedSubmission?.id === id ? this.selectedSubmission : undefined,
+    ]) {
+      if (!target) continue;
+      if (!target.extracted_text && fresh.extracted_text) target.extracted_text = fresh.extracted_text;
+      if (fresh.status !== undefined) target.status = fresh.status;
+    }
+    if (!this.editableText[id] && !this.savedProgram1[id] && fresh.extracted_text) {
+      this.editableText[id] = fresh.extracted_text;
+      this.savedProgram1[id] = fresh.extracted_text;
+    }
+    this.groupSubmissions();
+    this.cdr.detectChanges();
   }
 
   closeModal() {
@@ -597,7 +638,19 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       verified: 'Ready to grade',
       graded: 'Graded',
     };
-    return labels[this.getSubmissionStatus(submission)];
+    return this.isBeingExtracted(submission)
+      ? 'Extracting…'
+      : labels[this.getSubmissionStatus(submission)];
+  }
+
+  isBeingExtracted(submission: Submission): boolean {
+    if (this.getSubmissionStatus(submission) !== 'new' ||
+        submission.extracted_text || submission.verified_text ||
+        !this.autoExtract.enabled || !this.autoExtract.since ||
+        this.autoExtract.failed.has(submission.id)) return false;
+    const capturedAt = Date.parse(submission.captured_at);
+    const since = Date.parse(this.autoExtract.since);
+    return Number.isFinite(capturedAt) && Number.isFinite(since) && capturedAt >= since;
   }
 
   getQuestionName(submission: Submission): string {

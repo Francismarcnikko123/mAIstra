@@ -128,10 +128,14 @@ async saveQuestion(question: any) {
     if (error) throw error;
   }
 
-  subscribeToSubmissions(callback: (payload: any) => void) {
+  subscribeToSubmissions(
+    onInsert: (payload: any) => void,
+    onUpdate?: (payload: any) => void,
+  ) {
     return this.supabase
       .channel('submissions')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'submissions' }, callback)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'submissions' }, onInsert)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'submissions' }, onUpdate ?? (() => {}))
       .subscribe();
   }
   

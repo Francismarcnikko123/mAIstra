@@ -391,3 +391,8 @@
 .close-confirm .confirm-actions button {
   white-space: nowrap;
 }
+/* The worker is reading this new paper; it still belongs to Needs OCR. */
+.status-badge.is-extracting {
+  background: #e0f2fe;
+  color: #075985;
+}

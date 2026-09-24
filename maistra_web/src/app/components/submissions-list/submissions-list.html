@@ -68,6 +68,7 @@
               <span
                 class="status-badge"
                 [attr.data-status]="getSubmissionStatus(submission)"
+                [class.is-extracting]="isBeingExtracted(submission)"
               >
                 {{ getSubmissionStatusLabel(submission) }}
               </span>

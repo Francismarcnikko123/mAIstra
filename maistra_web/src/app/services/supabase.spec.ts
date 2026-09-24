@@ -2,6 +2,27 @@ import { describe, expect, it, vi } from 'vitest';
 import { SupabaseService } from './supabase';
 
 describe('SupabaseService', () => {
+  it('registers INSERT and UPDATE callbacks on the same submissions channel', () => {
+    const channel = { on: vi.fn(), subscribe: vi.fn() };
+    channel.on.mockReturnValue(channel);
+    const createChannel = vi.fn().mockReturnValue(channel);
+    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+    (service as unknown as { supabase: { channel: typeof createChannel } }).supabase = {
+      channel: createChannel,
+    };
+    const onInsert = vi.fn();
+    const onUpdate = vi.fn();
+
+    service.subscribeToSubmissions(onInsert, onUpdate);
+
+    expect(createChannel).toHaveBeenCalledWith('submissions');
+    expect(channel.on).toHaveBeenCalledWith('postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'submissions' }, onInsert);
+    expect(channel.on).toHaveBeenCalledWith('postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'submissions' }, onUpdate);
+    expect(channel.subscribe).toHaveBeenCalledOnce();
+  });
+
   it('rejects updateSubmissionText when Supabase returns an error', async () => {
     const error = new Error('permission denied');
     const eq = vi.fn().mockResolvedValue({ error });
