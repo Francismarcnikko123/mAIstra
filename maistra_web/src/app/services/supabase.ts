@@ -2,6 +2,31 @@ import { Injectable } from '@angular/core';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { environment } from '../../environment';
 
+const SUBMISSION_COLUMNS = `
+  id,
+  image_url,
+  captured_at,
+  status,
+  topic,
+  student_name,
+  extracted_text,
+  verified_text,
+  question_id,
+  grading_results,
+  passed_test_cases,
+  total_test_cases,
+  score_percent,
+  graded_at,
+  grading_revision,
+  questions (
+    id,
+    question_name,
+    question_type,
+    model_answer,
+    test_cases
+  )
+`;
+
 @Injectable({
   providedIn: 'root'
 })
@@ -31,53 +56,47 @@ async saveQuestion(question: any) {
 async getSubmissions() {
   return await this.supabase
     .from('submissions')
-    .select(`
-      id,
-      image_url,
-      captured_at,
-      status,
-      topic,
-      student_name,
-      extracted_text,
-      verified_text,
-      question_id,
-      grading_results,
-      passed_test_cases,
-      total_test_cases,
-      score_percent,
-      graded_at,
-      grading_revision,
-      questions (
-        id,
-        question_name,
-        question_type,
-        model_answer,
-        test_cases
-      )
-    `)
+    .select(SUBMISSION_COLUMNS)
     .order('captured_at', { ascending: false });
 }
 
+  // One row with the same shape as getSubmissions(), so a realtime event can
+  // refresh just the submission that changed instead of the whole list.
+  async getSubmission(id: string) {
+    return await this.supabase
+      .from('submissions')
+      .select(SUBMISSION_COLUMNS)
+      .eq('id', id)
+      .maybeSingle();
+  }
+
+  // Both edit saves are compare-and-set on grading_revision, which advances
+  // whenever the code, the question or the grade changes. They write only while
+  // the row is still at expectedRevision (the version the edit started from) and
+  // return the new revision, or null when someone else changed it meanwhile.
   async updateSubmissionDetails(
     id: string,
     topic: string,
     questionId: string | null,
-  ): Promise<number> {
+    expectedRevision: number,
+  ): Promise<number | null> {
     const { data, error } = await this.supabase
       .from('submissions')
       .update({ topic, question_id: questionId })
       .eq('id', id)
+      .eq('grading_revision', expectedRevision)
       .select('grading_revision')
-      .single();
+      .maybeSingle();
     if (error) throw error;
-    return data.grading_revision;
+    return data?.grading_revision ?? null;
   }
 
   async updateSubmissionText(
     submissionId: string,
     verifiedText: string,
-    extractedText?: string
-  ): Promise<number> {
+    extractedText: string | undefined,
+    expectedRevision: number,
+  ): Promise<number | null> {
     // extracted_text must keep the OCR's own output (it is the baseline the
     // verified text is compared against), so it is only written when a fresh
     // extraction produced it — never overwritten with the teacher's edits.
@@ -93,10 +112,11 @@ async getSubmissions() {
       .from('submissions')
       .update(update)
       .eq('id', submissionId)
+      .eq('grading_revision', expectedRevision)
       .select('grading_revision')
-      .single();
+      .maybeSingle();
     if (error) throw error;
-    return data.grading_revision;
+    return data?.grading_revision ?? null;
   }
 
   async updateSubmissionGrade(
@@ -104,24 +124,20 @@ async getSubmissions() {
     results: ReadonlyArray<{ passed: boolean }>,
     gradingRevision: number,
     questionId: string,
+    gradedCode: string,
   ): Promise<number | null> {
-    const passedTestCases = results.filter((result) => result.passed).length;
-    const { data, error } = await this.supabase
-      .from('submissions')
-      .update({
-        grading_results: results,
-        passed_test_cases: passedTestCases,
-        total_test_cases: results.length,
-        graded_at: new Date().toISOString(),
-        status: 'graded',
-      })
-      .eq('id', submissionId)
-      .eq('grading_revision', gradingRevision)
-      .eq('question_id', questionId)
-      .select('grading_revision')
-      .maybeSingle();
+    // The database saves the grade only while gradedCode is exactly the stored
+    // verified_text and the question and revision are unchanged; it derives
+    // the pass counts from the results. Returns null when anything differs.
+    const { data, error } = await this.supabase.rpc('save_submission_grade', {
+      p_submission_id: submissionId,
+      p_grading_revision: gradingRevision,
+      p_question_id: questionId,
+      p_graded_code: gradedCode,
+      p_grading_results: results,
+    });
     if (error) throw error;
-    return data?.grading_revision ?? null;
+    return data === null || data === undefined ? null : Number(data);
   }
 
   subscribeToSubmissions(callback: (payload: any) => void) {

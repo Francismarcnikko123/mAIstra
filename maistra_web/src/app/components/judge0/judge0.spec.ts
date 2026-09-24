@@ -348,6 +348,136 @@ describe('Judge0', () => {
     );
   });
 
+  it('keeps the sample run view when the same results are re-sent', () => {
+    const component = new Judge0(
+      {} as Judge0Service,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+    const persistedResults = [
+      {
+        caseNumber: 1,
+        stdin: '2 3',
+        expectedOutput: '5',
+        actualOutput: '5',
+        status: 'Accepted',
+        passed: true,
+      },
+    ];
+    component.testCaseResults = persistedResults;
+    component.ngOnChanges({
+      testCaseResults: new SimpleChange(undefined, persistedResults, true),
+    });
+    component.resultMode = 'run';
+
+    // A realtime reload restores the same persisted grade as a new array.
+    const reloadedResults = persistedResults.map((result) => ({ ...result }));
+    component.testCaseResults = reloadedResults;
+    component.ngOnChanges({
+      testCaseResults: new SimpleChange(
+        persistedResults,
+        reloadedResults,
+        false,
+      ),
+    });
+
+    expect(component.resultMode).toBe('run');
+  });
+
+  it('switches to a regrade that arrives while a sample run is shown', () => {
+    const component = new Judge0(
+      {} as Judge0Service,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+    const result = (caseNumber: number, passed: boolean) => ({
+      caseNumber,
+      stdin: '',
+      expectedOutput: '5',
+      actualOutput: passed ? '5' : '4',
+      status: passed ? 'Accepted' : 'Wrong Answer',
+      passed,
+    });
+    const earlierGrade = [result(1, true), result(2, true), result(3, false)];
+    component.testCaseResults = earlierGrade;
+    component.ngOnChanges({
+      testCaseResults: new SimpleChange(undefined, earlierGrade, true),
+    });
+    component.resultMode = 'run';
+
+    // Another teacher regrades: 2/3 becomes 3/3.
+    const regrade = [result(1, true), result(2, true), result(3, true)];
+    component.testCaseResults = regrade;
+    component.ngOnChanges({
+      testCaseResults: new SimpleChange(earlierGrade, regrade, false),
+    });
+
+    expect(component.resultMode).toBe('submit');
+  });
+
+  it('treats a reload with fields in database order as the same grade', () => {
+    const component = new Judge0(
+      {} as Judge0Service,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+    const localGrade = [
+      {
+        caseNumber: 1,
+        stdin: '2 3',
+        expectedOutput: '5',
+        actualOutput: '5',
+        status: 'Accepted',
+        passed: true,
+      },
+    ];
+    component.testCaseResults = localGrade;
+    component.ngOnChanges({
+      testCaseResults: new SimpleChange(undefined, localGrade, true),
+    });
+    component.resultMode = 'run';
+
+    // jsonb stores object keys in its own order, so a reload differs in shape only.
+    const reloadedGrade = [
+      {
+        stdin: '2 3',
+        passed: true,
+        status: 'Accepted',
+        caseNumber: 1,
+        actualOutput: '5',
+        expectedOutput: '5',
+      },
+    ];
+    component.testCaseResults = reloadedGrade;
+    component.ngOnChanges({
+      testCaseResults: new SimpleChange(localGrade, reloadedGrade, false),
+    });
+
+    expect(component.resultMode).toBe('run');
+  });
+
+  it('switches to the submit view when a new grade arrives', () => {
+    const component = new Judge0(
+      {} as Judge0Service,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+    component.resultMode = 'run';
+    const gradedResults = [
+      {
+        caseNumber: 1,
+        stdin: '2 3',
+        expectedOutput: '5',
+        actualOutput: '5',
+        status: 'Accepted',
+        passed: true,
+      },
+    ];
+    component.testCaseResults = gradedResults;
+
+    component.ngOnChanges({
+      testCaseResults: new SimpleChange([], gradedResults, false),
+    });
+
+    expect(component.resultMode).toBe('submit');
+  });
+
   it('does not start a sample run while full grading is active', () => {
     const runCCode = vi.fn();
     const component = new Judge0(

@@ -39,6 +39,9 @@ export class Judge0 implements OnChanges {
   @Input() testCaseResults: TestCaseResult[] = [];
   @Input() hasQuestion = true;
   @Input() requiresQuestion = false;
+  // Show the code without letting it be edited, e.g. when grading must run on
+  // the saved code and edits belong in an earlier step.
+  @Input() codeReadOnly = false;
   codeToRun = ''; // editable copy
   stdout = '';
   stderr = '';
@@ -65,9 +68,40 @@ export class Judge0 implements OnChanges {
     if (changes['initialCode']) {
       this.codeToRun = this.initialCode || '';
     }
-    if (changes['testCaseResults'] && this.testCaseResults.length > 0) {
+    // Only a different grade switches the view: a new one, or a regrade from
+    // another tab. The parent re-sends the same persisted grade as a fresh
+    // array on every realtime reload, which must not pull the teacher away
+    // from a sample run they are reading.
+    const resultsChange = changes['testCaseResults'];
+    if (
+      resultsChange &&
+      this.testCaseResults.length > 0 &&
+      !Judge0.sameResults(resultsChange.previousValue ?? [], this.testCaseResults)
+    ) {
       this.resultMode = 'submit';
     }
+  }
+
+  // Field by field rather than by reference or JSON: a reloaded grade is a new
+  // array whose objects come back from jsonb with their keys reordered.
+  private static sameResults(
+    previous: TestCaseResult[],
+    next: TestCaseResult[],
+  ): boolean {
+    return (
+      previous.length === next.length &&
+      previous.every((result, index) => {
+        const other = next[index];
+        return (
+          result.caseNumber === other.caseNumber &&
+          result.stdin === other.stdin &&
+          result.expectedOutput === other.expectedOutput &&
+          result.actualOutput === other.actualOutput &&
+          result.status === other.status &&
+          result.passed === other.passed
+        );
+      })
+    );
   }
 
   get isExecutionBusy(): boolean {

@@ -41,6 +41,7 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
   @ViewChild('host', { static: true }) host!: ElementRef<HTMLElement>;
 
   @Input() value = '';
+  @Input() readOnly = false;
   @Output() valueChange = new EventEmitter<string>();
 
   private editor?: ace.Ace.Editor;
@@ -60,6 +61,7 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
       highlightActiveLine: true,
     });
     this.editor.setValue(this.value ?? '', -1);
+    this.editor.setReadOnly(this.readOnly);
 
     // Shift-Alt-F is the conventional "format document" chord. Formatting is
     // teacher-triggered on purpose (see format()), never automatic on load.
@@ -94,7 +96,8 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
    * C beautifier.
    */
   format(): void {
-    if (!this.editor) return;
+    // session.replace below is programmatic, so Ace's read-only mode would not stop it.
+    if (!this.editor || this.readOnly) return;
     const current = this.editor.getValue();
     const formatted = CodeEditorComponent.reindent(current);
     if (formatted === current) return;
@@ -178,6 +181,9 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
       this.value !== this.editor.getValue()
     ) {
       this.editor.setValue(this.value ?? '', -1);
+    }
+    if (this.editor && changes['readOnly']) {
+      this.editor.setReadOnly(this.readOnly);
     }
   }
 

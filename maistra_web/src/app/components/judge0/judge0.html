@@ -2,6 +2,7 @@
   <p class="runner-title">Code Execution</p>
   <app-code-editor
     [value]="codeToRun"
+    [readOnly]="codeReadOnly"
     (valueChange)="updateCode($event)"
   ></app-code-editor>
 

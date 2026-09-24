@@ -1,6 +1,6 @@
 begin;
 
-select plan(26);
+select plan(31);
 
 select ok(
   exists (
@@ -430,6 +430,128 @@ select is(
   ),
   0::bigint,
   'anon stale compare-and-set grade writes affect zero rows'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc
+    where oid = 'public.save_submission_grade(uuid, bigint, uuid, text, jsonb)'::regprocedure
+      and not prosecdef
+  ),
+  'grades are saved through a security-invoker function'
+);
+
+insert into public.questions (
+  id,
+  question_name,
+  question_text,
+  model_answer,
+  question_type
+)
+values (
+  '00000000-0000-0000-0000-000000000a01',
+  'Contract question',
+  'Print a number.',
+  'int main(void) { return 0; }',
+  'program'
+);
+
+insert into public.submissions (
+  id,
+  image_url,
+  verified_text,
+  question_id,
+  status
+)
+values (
+  '00000000-0000-0000-0000-000000000903',
+  'https://example.test/third-submission.png',
+  'stored code',
+  '00000000-0000-0000-0000-000000000a01',
+  'verified'
+);
+
+create temporary table anon_save_grade_results (
+  attempt text,
+  revision bigint
+);
+
+grant insert, select on table anon_save_grade_results to anon;
+
+set local role anon;
+
+insert into anon_save_grade_results (attempt, revision)
+select 'unsaved code', public.save_submission_grade(
+  '00000000-0000-0000-0000-000000000903',
+  0,
+  '00000000-0000-0000-0000-000000000a01',
+  'edited but never saved code',
+  '[{"passed": true}]'::jsonb
+);
+
+insert into anon_save_grade_results (attempt, revision)
+select 'stored code', public.save_submission_grade(
+  '00000000-0000-0000-0000-000000000903',
+  0,
+  '00000000-0000-0000-0000-000000000a01',
+  'stored code',
+  '[{"passed": true}, {"passed": false}]'::jsonb
+);
+
+insert into anon_save_grade_results (attempt, revision)
+select 'stale revision', public.save_submission_grade(
+  '00000000-0000-0000-0000-000000000903',
+  0,
+  '00000000-0000-0000-0000-000000000a01',
+  'stored code',
+  '[{"passed": true}, {"passed": true}]'::jsonb
+);
+
+reset role;
+
+select is(
+  (
+    select revision
+    from anon_save_grade_results
+    where attempt = 'unsaved code'
+  ),
+  null::bigint,
+  'a grade for code that differs from the stored code is not saved'
+);
+
+select is(
+  (
+    select revision
+    from anon_save_grade_results
+    where attempt = 'stored code'
+  ),
+  1::bigint,
+  'a grade for the stored code is saved and returns the new revision'
+);
+
+select ok(
+  (
+    select grading_revision = 1
+      and status = 'graded'
+      and passed_test_cases = 1
+      and total_test_cases = 2
+      and score_percent = 50.00
+      and graded_at is not null
+    from public.submissions
+    where id = '00000000-0000-0000-0000-000000000903'
+  ),
+  'the saved grade derives its counts from the submitted results'
+);
+
+select is(
+  (
+    select revision
+    from anon_save_grade_results
+    where attempt = 'stale revision'
+  ),
+  null::bigint,
+  'a grade computed against a stale revision is not saved'
 );
 
 select * from finish();

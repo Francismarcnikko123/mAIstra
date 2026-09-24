@@ -81,3 +81,15 @@ def test_anon_grade_contract_covers_fresh_and_stale_compare_and_set_writes():
     assert "returning grading_revision" in DATABASE_CONTRACT_SQL
     assert "anon can save a grade and receive the atomically incremented revision" in DATABASE_CONTRACT_SQL
     assert "anon stale compare-and-set grade writes affect zero rows" in DATABASE_CONTRACT_SQL
+
+
+def test_grades_are_saved_only_for_the_stored_code():
+    assert "create or replace function public.save_submission_grade(" in MIGRATION_SQL
+    assert "and verified_text = p_graded_code" in MIGRATION_SQL
+    assert "and grading_revision = p_grading_revision" in MIGRATION_SQL
+    assert "security invoker" in MIGRATION_SQL
+    assert (
+        "grant execute on function public.save_submission_grade(uuid, bigint, uuid, text, jsonb)"
+        in MIGRATION_SQL
+    )
+    assert "public.save_submission_grade(" in DATABASE_CONTRACT_SQL

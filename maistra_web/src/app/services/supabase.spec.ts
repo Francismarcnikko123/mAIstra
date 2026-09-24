@@ -31,243 +31,206 @@ describe('SupabaseService', () => {
     expect(result).toBe(subscription);
   });
 
-  it('returns the new grading revision after submission details change', async () => {
+  it('fetches one submission with the same columns as the list', async () => {
+    const query = {
+      select: vi.fn(),
+      eq: vi.fn(),
+      order: vi.fn().mockResolvedValue({ data: [], error: null }),
+      maybeSingle: vi
+        .fn()
+        .mockResolvedValue({ data: { id: 'submission-1' }, error: null }),
+    };
+    query.select.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    const from = vi.fn().mockReturnValue(query);
+    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+
+    (service as unknown as { supabase: { from: typeof from } }).supabase = {
+      from,
+    };
+
+    await service.getSubmissions();
+    const listColumns = query.select.mock.calls[0][0];
+    const result = await service.getSubmission('submission-1');
+
+    expect(from).toHaveBeenLastCalledWith('submissions');
+    expect(query.select).toHaveBeenLastCalledWith(listColumns);
+    expect(query.eq).toHaveBeenCalledWith('id', 'submission-1');
+    expect(result.data).toEqual({ id: 'submission-1' });
+  });
+
+  function updateService(result: { data: unknown; error: unknown }) {
     const query = {
       eq: vi.fn(),
       select: vi.fn(),
-      single: vi.fn().mockResolvedValue({
-        data: { grading_revision: 2 },
-        error: null,
-      }),
+      maybeSingle: vi.fn().mockResolvedValue(result),
     };
     query.eq.mockReturnValue(query);
     query.select.mockReturnValue(query);
     const update = vi.fn().mockReturnValue(query);
     const from = vi.fn().mockReturnValue({ update });
     const service = Object.create(SupabaseService.prototype) as SupabaseService;
-
     (service as unknown as { supabase: { from: typeof from } }).supabase = {
       from,
     };
+    return { service, query, update, from };
+  }
+
+  it('saves details only while the row is at the expected revision', async () => {
+    const { service, query } = updateService({
+      data: { grading_revision: 2 },
+      error: null,
+    });
 
     const revision = await service.updateSubmissionDetails(
       'submission-1',
       'Loops',
       'question-1',
+      1,
     );
 
+    expect(query.eq.mock.calls).toEqual([
+      ['id', 'submission-1'],
+      ['grading_revision', 1],
+    ]);
     expect(query.select).toHaveBeenCalledWith('grading_revision');
     expect(revision).toBe(2);
   });
 
-  it('returns the new grading revision after verified code changes', async () => {
-    const query = {
-      eq: vi.fn(),
-      select: vi.fn(),
-      single: vi.fn().mockResolvedValue({
-        data: { grading_revision: 3 },
-        error: null,
-      }),
-    };
-    query.eq.mockReturnValue(query);
-    query.select.mockReturnValue(query);
-    const update = vi.fn().mockReturnValue(query);
-    const from = vi.fn().mockReturnValue({ update });
-    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+  it('reports a details save as a conflict when the row moved on', async () => {
+    const { service } = updateService({ data: null, error: null });
 
-    (service as unknown as { supabase: { from: typeof from } }).supabase = {
-      from,
-    };
+    const revision = await service.updateSubmissionDetails(
+      'submission-1',
+      'Loops',
+      'question-1',
+      1,
+    );
+
+    expect(revision).toBeNull();
+  });
+
+  it('saves verified code only while the row is at the expected revision', async () => {
+    const { service, query } = updateService({
+      data: { grading_revision: 3 },
+      error: null,
+    });
 
     const revision = await service.updateSubmissionText(
       'submission-1',
       'verified text',
+      undefined,
+      2,
     );
 
-    expect(query.select).toHaveBeenCalledWith('grading_revision');
+    expect(query.eq.mock.calls).toEqual([
+      ['id', 'submission-1'],
+      ['grading_revision', 2],
+    ]);
     expect(revision).toBe(3);
   });
 
-  it('persists a completed grade and marks the submission graded', async () => {
-    const query = {
-      eq: vi.fn(),
-      select: vi.fn(),
-      maybeSingle: vi.fn().mockResolvedValue({
-        data: { grading_revision: 8 },
-        error: null,
-      }),
-    };
-    query.eq.mockReturnValue(query);
-    query.select.mockReturnValue(query);
-    const update = vi.fn().mockReturnValue(query);
-    const from = vi.fn().mockReturnValue({ update });
+  it('reports a code save as a conflict when the row moved on', async () => {
+    const { service } = updateService({ data: null, error: null });
+
+    const revision = await service.updateSubmissionText(
+      'submission-1',
+      'verified text',
+      undefined,
+      2,
+    );
+
+    expect(revision).toBeNull();
+  });
+
+  function gradeService(rpcResult: { data: unknown; error: unknown }) {
+    const rpc = vi.fn().mockResolvedValue(rpcResult);
     const service = Object.create(SupabaseService.prototype) as SupabaseService;
-    const updateSubmissionGrade = (
-      service as unknown as {
-        updateSubmissionGrade?: (
-          id: string,
-          results: unknown[],
-          gradingRevision: number,
-          questionId: string,
-        ) => Promise<number | null>;
-      }
-    ).updateSubmissionGrade;
+    (service as unknown as { supabase: { rpc: typeof rpc } }).supabase = { rpc };
+    return { service, rpc };
+  }
 
-    (service as unknown as { supabase: { from: typeof from } }).supabase = {
-      from,
-    };
-
-    expect(typeof updateSubmissionGrade).toBe('function');
-
+  it('saves a grade through the stored-code check and returns the new revision', async () => {
+    const { service, rpc } = gradeService({ data: 8, error: null });
     const results = [
       { caseNumber: 1, passed: true },
-      { caseNumber: 2, passed: true },
-      { caseNumber: 3, passed: true },
-      { caseNumber: 4, passed: false },
+      { caseNumber: 2, passed: false },
     ];
-    const saved = await updateSubmissionGrade!.call(
-      service,
+
+    const saved = await service.updateSubmissionGrade(
       'submission-1',
       results,
       7,
       'question-1',
+      'int main(void) { return 0; }',
     );
 
-    expect(from).toHaveBeenCalledWith('submissions');
-    expect(update).toHaveBeenCalledWith({
-      grading_results: results,
-      passed_test_cases: 3,
-      total_test_cases: 4,
-      graded_at: expect.any(String),
-      status: 'graded',
+    expect(rpc).toHaveBeenCalledWith('save_submission_grade', {
+      p_submission_id: 'submission-1',
+      p_grading_revision: 7,
+      p_question_id: 'question-1',
+      p_graded_code: 'int main(void) { return 0; }',
+      p_grading_results: results,
     });
-    expect(query.eq.mock.calls).toEqual([
-      ['id', 'submission-1'],
-      ['grading_revision', 7],
-      ['question_id', 'question-1'],
-    ]);
-    expect(query.select).toHaveBeenCalledWith('grading_revision');
     expect(saved).toBe(8);
   });
 
   it('rejects updateSubmissionText when Supabase returns an error', async () => {
     const error = new Error('permission denied');
-    const query = {
-      eq: vi.fn(),
-      select: vi.fn(),
-      single: vi.fn().mockResolvedValue({ data: null, error }),
-    };
-    query.eq.mockReturnValue(query);
-    query.select.mockReturnValue(query);
-    const update = vi.fn().mockReturnValue(query);
-    const from = vi.fn().mockReturnValue({ update });
-    const service = Object.create(SupabaseService.prototype) as SupabaseService;
-
-    (service as unknown as { supabase: { from: typeof from } }).supabase = { from };
+    const { service, update, from, query } = updateService({ data: null, error });
 
     await expect(
-      service.updateSubmissionText('submission-1', 'verified text', 'raw ocr text')
+      service.updateSubmissionText('submission-1', 'verified text', 'raw ocr text', 0),
     ).rejects.toBe(error);
     expect(from).toHaveBeenCalledWith('submissions');
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       extracted_text: 'raw ocr text',
       verified_text: 'verified text',
-      status: 'verified'
+      status: 'verified',
     }));
     expect(query.eq).toHaveBeenCalledWith('id', 'submission-1');
   });
 
   it('leaves extracted_text untouched when no fresh OCR text is provided', async () => {
-    const query = {
-      eq: vi.fn(),
-      select: vi.fn(),
-      single: vi.fn().mockResolvedValue({
-        data: { grading_revision: 0 },
-        error: null,
-      }),
-    };
-    query.eq.mockReturnValue(query);
-    query.select.mockReturnValue(query);
-    const update = vi.fn().mockReturnValue(query);
-    const from = vi.fn().mockReturnValue({ update });
-    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+    const { service, update } = updateService({
+      data: { grading_revision: 0 },
+      error: null,
+    });
 
-    (service as unknown as { supabase: { from: typeof from } }).supabase = { from };
-
-    await service.updateSubmissionText('submission-1', 'verified text');
+    await service.updateSubmissionText('submission-1', 'verified text', undefined, 0);
     expect(update).toHaveBeenCalledWith(expect.not.objectContaining({
-      extracted_text: expect.anything()
+      extracted_text: expect.anything(),
     }));
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       verified_text: 'verified text',
-      status: 'verified'
+      status: 'verified',
     }));
   });
 
   it('rejects updateSubmissionGrade when Supabase returns an error', async () => {
     const error = new Error('grade write failed');
-    const query = {
-      eq: vi.fn(),
-      select: vi.fn(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null, error }),
-    };
-    query.eq.mockReturnValue(query);
-    query.select.mockReturnValue(query);
-    const update = vi.fn().mockReturnValue(query);
-    const from = vi.fn().mockReturnValue({ update });
-    const service = Object.create(SupabaseService.prototype) as SupabaseService;
-    const updateSubmissionGrade = (
-      service as unknown as {
-        updateSubmissionGrade?: (
-          id: string,
-          results: unknown[],
-          gradingRevision: number,
-          questionId: string,
-        ) => Promise<number | null>;
-      }
-    ).updateSubmissionGrade;
+    const { service } = gradeService({ data: null, error });
 
-    (service as unknown as { supabase: { from: typeof from } }).supabase = {
-      from,
-    };
-
-    expect(typeof updateSubmissionGrade).toBe('function');
     await expect(
-      updateSubmissionGrade!.call(service, 'submission-1', [
-        { caseNumber: 1, passed: true },
-      ], 4, 'question-1'),
+      service.updateSubmissionGrade(
+        'submission-1',
+        [{ passed: true }],
+        4,
+        'question-1',
+        'code',
+      ),
     ).rejects.toBe(error);
   });
 
-  it('rejects a stale grade when the persisted inputs have changed', async () => {
-    const query = {
-      eq: vi.fn(),
-      select: vi.fn(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-    };
-    query.eq.mockReturnValue(query);
-    query.select.mockReturnValue(query);
-    const update = vi.fn().mockReturnValue(query);
-    const from = vi.fn().mockReturnValue({ update });
-    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+  it('reports a grade that no longer matches the stored inputs as not saved', async () => {
+    const { service } = gradeService({ data: null, error: null });
 
-    (service as unknown as { supabase: { from: typeof from } }).supabase = {
-      from,
-    };
-
-    const saved = await (
-      service.updateSubmissionGrade as unknown as (
-        id: string,
-        results: unknown[],
-        gradingRevision: number,
-        questionId: string,
-      ) => Promise<number | null>
-    ).call(
-      service,
+    const saved = await service.updateSubmissionGrade(
       'submission-1',
-      [{ caseNumber: 1, passed: true }],
+      [{ passed: true }],
       3,
       'question-1',
+      'code that differs from the stored code',
     );
 
     expect(saved).toBeNull();
