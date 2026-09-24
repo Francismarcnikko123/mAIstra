@@ -1,0 +1,263 @@
+/* Program tabs (Step 2): one tab per program on the paper. */
+.text-editor[hidden] {
+  display: none !important; /* :host { display: block } would otherwise win over [hidden] */
+}
+
+.program-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 6px 6px 0;
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+  background: #f1f5f9;
+}
+
+.program-tab {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  max-width: 230px;
+  height: 38px;
+  padding: 0 8px 0 12px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 9px 9px 0 0;
+  color: #475569;
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.program-tab:hover {
+  background: #e2e8f0;
+}
+
+.program-tab.active {
+  border-color: #e2e8f0;
+  color: #172033;
+  background: #fff;
+  box-shadow: inset 0 3px 0 #4f46e5;
+}
+
+.program-tab-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.program-tab-warn {
+  color: #b45309;
+  font-weight: 800;
+}
+
+.program-tab-close {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  color: #64748b;
+  background: transparent;
+}
+
+.program-tab-close:hover {
+  background: #cbd5e1;
+}
+
+.program-tab-close.armed {
+  color: #fff;
+  background: #b91c1c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.program-tab-add {
+  flex: none;
+  width: 34px;
+  height: 32px;
+  margin: 0 4px 3px;
+  border: 0;
+  border-radius: 8px;
+  color: #4f46e5;
+  background: transparent;
+  font-size: 20px;
+}
+
+.program-tab-add:hover {
+  background: #e0e7ff;
+}
+
+.program-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  background: #fff;
+}
+
+.program-question {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.question-locked {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #334155;
+  background: #f8fafc;
+  font-weight: 600;
+}
+
+.question-picker {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.question-picker-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #172033;
+  background: #fff;
+  font-size: 13px;
+  text-align: left;
+}
+
+.question-picker-button:focus-visible {
+  border-color: #4f46e5;
+  outline: 3px solid rgba(79, 70, 229, 0.12);
+}
+
+.question-picker-button.empty {
+  border-color: #dc9090;
+  color: #b91c1c;
+  background: #fffafa;
+  font-weight: 600;
+}
+
+.question-picker-value {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.question-picker-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+}
+
+.question-picker-label {
+  margin: 0;
+  padding: 6px 10px 4px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.question-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  color: #172033;
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+}
+
+.question-option:not(:disabled):hover {
+  background: #f1f5f9;
+}
+
+.question-option.selected {
+  background: #eef2ff;
+}
+
+.question-option:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.question-option-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.question-option-text small {
+  overflow: hidden;
+  color: #64748b;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.question-option-used {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #64748b;
+  background: #f1f5f9;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.question-option-check {
+  color: #4f46e5;
+  font-weight: 800;
+}
+
+.question-option.clear {
+  margin-top: 4px;
+  border-top: 1px solid #e2e8f0;
+  border-radius: 0 0 7px 7px;
+  color: #64748b;
+}
+
+.question-picker-empty {
+  margin: 0;
+  padding: 8px 10px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.program-tabs-note {
+  margin: 8px 0 0;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 600;
+}

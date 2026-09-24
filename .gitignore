@@ -12,3 +12,9 @@ ocr_feature/models/
 # Demo animation shipped with the vendored WeScan source (~10MB, iOS-only,
 # never referenced by the app).
 maistra_mobile/packages/edge_detection/ios/WeScan-3.0.0/Assets/WeScan.gif
+
+# Local environment and generated Python files
+.env
+*.pyc
+__pycache__/
+.pytest_cache/

@@ -42,8 +42,20 @@ FIXES = {
 _KNOWN_HEADERS = ("stdio", "stdlib", "stddef", "string", "math", "ctype", "time")
 # '#' is optional in the pattern: OCR sometimes drops it, but "include
 # <stdio.h>" is still unambiguous, so it gets added back.
+#
+# The tail after the header name is bounded to just a (possibly garbled) file
+# extension and closing bracket -- an optional '.', an optional single letter
+# ('.h', or '.n' when 'h' is misread), and an optional close ('>' or a '7'
+# misread of it). It deliberately does NOT end in '.*': a broad tail would let
+# a line that merely STARTS like an include but continues with real student
+# code (a fused OCR row such as "#include <stdio.h> printf(...)") match, and the
+# canonical replacement below would then silently drop everything after the
+# header. Bounding the tail means such a line simply fails to match and is
+# returned untouched -- never normalized, but never truncated either, keeping
+# the module's promise to leave content outside literals intact.
 _INCLUDE_LINE = re.compile(
-    r"^\s*#?\s*[Ii]nclude\s*<\s*(" + "|".join(_KNOWN_HEADERS) + r")\b.*$"
+    r"^\s*#?\s*[Ii]nclude\s*<\s*(" + "|".join(_KNOWN_HEADERS)
+    + r")\b\s*\.?\s*[A-Za-z]?\s*[>7]?\s*$"
 )
 
 

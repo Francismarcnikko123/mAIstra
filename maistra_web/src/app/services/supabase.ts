@@ -1,6 +1,26 @@
 import { Injectable } from '@angular/core';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { environment } from '../../environment';
+import { SubmissionAnswer } from '../components/submissions-list/extra-answers';
+
+const SUBMISSION_COLUMNS = `
+  id,
+  image_url,
+  captured_at,
+  status,
+  topic,
+  student_name,
+  extracted_text,
+  verified_text,
+  question_id,
+  questions (
+    id,
+    question_name,
+    question_type,
+    model_answer,
+    test_cases
+  )
+`;
 
 @Injectable({
   providedIn: 'root'
@@ -13,12 +33,13 @@ export class SupabaseService {
   }
 
   // ── QUESTIONS ──────────────────────────────────────────
-  async saveQuestion(question: any) {
-    return await this.supabase
-      .from('questions')
-      .insert([question]);
-  }
-
+async saveQuestion(question: any) {
+  return await this.supabase
+    .from('questions')
+    .insert([question])
+    .select()
+    .single();
+}
   async getQuestions() {
     return await this.supabase
       .from('questions')
@@ -27,17 +48,42 @@ export class SupabaseService {
   }
 
   // ── SUBMISSIONS ─────────────────────────────────────────
+  /**
+   * False once the database reports that submissions.answers doesn't exist,
+   * i.e. the program-tabs migration hasn't been applied to it yet. The list
+   * still loads without the column; Programs 2..n just can't be saved.
+   */
+  answersColumnAvailable = true;
+
   async getSubmissions() {
-    return await this.supabase
+    if (this.answersColumnAvailable !== false) {
+      const result = await this.querySubmissions(`answers, ${SUBMISSION_COLUMNS}`);
+      // 42703 = undefined column. Only fall back when it's `answers` that is
+      // missing (migration not applied); any other missing column is a real
+      // error and is returned as before.
+      const answersMissing =
+        result.error?.code === '42703' && /\banswers\b/.test(result.error.message ?? '');
+      if (!answersMissing) return result;
+      this.answersColumnAvailable = false;
+    }
+    return this.querySubmissions(SUBMISSION_COLUMNS);
+  }
+
+  private querySubmissions(columns: string) {
+    return this.supabase
       .from('submissions')
-      .select('id, image_url, captured_at, status, topic, student_name, extracted_text, verified_text')
+      .select(columns)
       .order('captured_at', { ascending: false });
   }
 
-  async updateSubmissionTopic(id: string, topic: string): Promise<void> {
+  async updateSubmissionDetails(
+    id: string,
+    topic: string,
+    questionId: string | null,
+  ): Promise<void> {
     const { error } = await this.supabase
       .from('submissions')
-      .update({ topic })
+      .update({ topic, question_id: questionId })
       .eq('id', id);
     if (error) throw error;
   }
@@ -45,7 +91,8 @@ export class SupabaseService {
   async updateSubmissionText(
     submissionId: string,
     verifiedText: string,
-    extractedText?: string
+    extractedText?: string,
+    answers?: SubmissionAnswer[],
   ): Promise<void> {
     // extracted_text must keep the OCR's own output (it is the baseline the
     // verified text is compared against), so it is only written when a fresh
@@ -57,6 +104,11 @@ export class SupabaseService {
     };
     if (extractedText !== undefined) {
       update['extracted_text'] = extractedText;
+    }
+    // Programs 2..n from the review tabs, saved in the same update so they
+    // share Program 1's save guards.
+    if (answers !== undefined && this.answersColumnAvailable !== false) {
+      update['answers'] = answers;
     }
     const { error } = await this.supabase
       .from('submissions')
@@ -71,4 +123,5 @@ export class SupabaseService {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'submissions' }, callback)
       .subscribe();
   }
+  
 }

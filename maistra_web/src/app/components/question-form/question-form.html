@@ -4,7 +4,11 @@
   <!-- Question Name -->
   <div class="form-group">
     <label>Question Name *</label>
-    <input type="text" [(ngModel)]="questionName" placeholder="e.g. Skill Test 1A" />
+    <input
+      type="text"
+      [(ngModel)]="questionName"
+      placeholder="e.g. Skill Test 1A"
+    />
   </div>
 
   <!-- Question Type -->
@@ -12,12 +16,22 @@
     <label>Question Type *</label>
     <div class="radio-group">
       <label>
-        <input type="radio" [(ngModel)]="questionType" value="program" (change)="onTypeChange()">
-        Write a Program
+        <input
+          type="radio"
+          [(ngModel)]="questionType"
+          value="function"
+          (change)="onTypeChange()"
+        />
+        Write a Function
       </label>
       <label>
-        <input type="radio" [(ngModel)]="questionType" value="function" (change)="onTypeChange()">
-        Write a Function
+        <input
+          type="radio"
+          [(ngModel)]="questionType"
+          value="program"
+          (change)="onTypeChange()"
+        />
+        Write a Program
       </label>
     </div>
   </div>
@@ -25,50 +39,143 @@
   <!-- Question Text -->
   <div class="form-group">
     <label>Question Text *</label>
-    <textarea [(ngModel)]="questionText" rows="3" placeholder="Describe the problem..."></textarea>
+    <textarea
+      [(ngModel)]="questionText"
+      rows="3"
+      placeholder="Describe the problem..."
+    ></textarea>
   </div>
 
-  <!-- Model Answer -->
-  <div class="form-group">
-    <label>Model Answer *</label>
-    <textarea [(ngModel)]="modelAnswer" rows="6" placeholder="Enter correct C code..."></textarea>
-  </div>
-
-  <!-- Test Cases -->
-  <div class="test-cases-header">
-    <span>Test Cases</span>
-    <button class="btn-add" (click)="addTestCase()">+ Add</button>
-  </div>
-
-  <div class="test-case-card" *ngFor="let tc of testCases; let i = index">
-    <div class="test-case-header">
-      <span>Test Case {{ i + 1 }}</span>
-      <button class="btn-remove" (click)="removeTestCase(i)">Remove</button>
-    </div>
-
-    <div class="form-group">
-      <label>Test Code</label>
-      <textarea [(ngModel)]="tc.test_code" rows="3" placeholder="Test code..."></textarea>
-    </div>
-
-    <div class="form-group">
-      <label>Expected Output</label>
-      <input type="text" [(ngModel)]="tc.expected_output" placeholder="e.g. 8" />
-    </div>
-
-    <div class="form-group">
-      <label>Mark</label>
-      <input type="number" [(ngModel)]="tc.mark" style="width: 80px;" />
-    </div>
-  </div>
-
-  <!-- Messages -->
   <div class="error-message" *ngIf="errorMessage">{{ errorMessage }}</div>
   <div class="success-message" *ngIf="successMessage">{{ successMessage }}</div>
 
+  <!-- Model Answer -->
+  <div class="form-group">
+    <label>Model Answer</label>
+    <app-code-editor
+      [(value)]="modelAnswer"
+      (valueChange)="clearValidationResults()"
+    ></app-code-editor>
+    <div class="test-cases-header">
+      <!-- Test Cases -->
+      <span>Test Cases</span>
+      <button class="btn-add" (click)="addTestCase()">+ Add</button>
+    </div>
+
+    <div
+      class="test-case-card"
+      *ngFor="let tc of testCases; let i = index"
+      [class.running]="getTestCaseStatus(i) === 'running'"
+      [class.passed]="getTestCaseStatus(i) === 'passed'"
+      [class.failed]="getTestCaseStatus(i) === 'failed'"
+    >
+      <button
+        type="button"
+        class="test-case-toggle"
+        (click)="toggleTestCase(i)"
+      >
+        <span>
+          {{ isTestCaseCollapsed(i) ? '▶' : '▼' }} Test Case {{ i + 1 }}
+        </span>
+
+        <span class="test-status" [class]="getTestCaseStatus(i)">
+          <span
+            class="status-spinner"
+            *ngIf="getTestCaseStatus(i) === 'running'"
+          ></span>
+
+          {{ getTestCaseStatus(i) === 'running' ? 'Running' :
+          getTestCaseStatus(i) === 'passed' ? 'Passed' : getTestCaseStatus(i)
+          === 'failed' ? 'Failed' : '' }}
+        </span>
+        <button class="btn-remove" (click)="removeTestCase(i)">Remove</button>
+      </button>
+
+      <div class="test-case-body" *ngIf="!isTestCaseCollapsed(i)">
+        <ng-container *ngIf="questionType === 'function'">
+          <label>Test Code</label>
+
+          <div
+            class="test-editor-shell"
+            [class.running]="getTestCaseStatus(i) === 'running'"
+            [class.passed]="getTestCaseStatus(i) === 'passed'"
+            [class.failed]="getTestCaseStatus(i) === 'failed'"
+          >
+            <app-code-editor
+              [(value)]="tc.test_code"
+              (valueChange)="clearValidationResults()"
+            ></app-code-editor>
+          </div>
+        </ng-container>
+
+        <label>Expected Output</label>
+        <textarea
+          [(ngModel)]="tc.expected_output"
+          (ngModelChange)="clearValidationResults()"
+        ></textarea>
+
+        <label>Standard Input</label>
+        <textarea
+          [(ngModel)]="tc.test_input"
+          rows="3"
+          placeholder="Input passed to scanf"
+          (ngModelChange)="clearValidationResults()"
+        ></textarea>
+
+        <div class="form-group">
+          <label>Mark</label>
+          <input type="number" [(ngModel)]="tc.mark" style="width: 80px" />
+        </div>
+      </div>
+
+      <div
+        class="test-result-row"
+        *ngIf="validationResults[i]"
+        [class.passed]="validationResults[i].passed"
+        [class.failed]="!validationResults[i].passed"
+      >
+        <!--Expected / Got / Result table here -->
+        <div class="test-cell test-code">
+          <strong>Test Case {{ i + 1 }}</strong>
+          <pre>{{ tc.test_code }}</pre>
+        </div>
+
+        <div class="test-cell">
+          <strong>Expected</strong>
+          <pre>{{ validationResults[i].expected || '(no output)' }}</pre>
+        </div>
+
+        <div class="test-cell">
+          <strong>Got</strong>
+          <pre>
+            {{ validationResults[i].actual || validationResults[i].compile_output || validationResults[i].stderr || '(no output)' }}
+          </pre>
+        </div>
+
+        <div class="test-cell result-cell">
+          <strong>Result</strong>
+          <span> {{ validationResults[i].passed ? 'Passed' : 'Failed' }} </span>
+        </div>
+      </div>
+    </div>
+    <div class="test-summary" *ngIf="validationResults.length">
+      {{ passedAllTests() ? 'Passed all tests' : 'Failed ' + failedTestCount() +
+      ' test(s)' }}
+    </div>
+  </div>
+</div>
+<div>
+  <!-- Validate Button -->
+  <button
+    class="btn-save"
+    type="button"
+    (click)="validateModelAnswer()"
+    [disabled]="isValidating"
+  >
+    {{ isValidating ? 'Validating...' : 'Validate Test Cases' }}
+  </button>
   <!-- Save -->
   <button class="btn-save" (click)="save()" [disabled]="isSaving">
     {{ isSaving ? 'Saving...' : 'Save Question' }}
   </button>
-
 </div>

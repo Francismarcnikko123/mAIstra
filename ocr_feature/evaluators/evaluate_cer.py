@@ -1,7 +1,18 @@
 """
-Character Error Rate (CER) against samples/labels.csv -- edit distance
-between OCR output and the correct text, divided by the correct text's
-length. Lower is better, 0 = perfect.
+Recognition accuracy against samples/labels.csv, reported as three metric
+families (thesis objective 7: CER, WER, and token-level accuracy):
+
+  - CER  -- character error rate (edit distance / reference length). Lower is
+    better. Reported strict and whitespace-normalized.
+  - WER  -- word error rate over whitespace-split tokens. Lower is better.
+    (No separate _ws variant: str.split() already ignores whitespace runs.)
+  - token-level recognition accuracy -- 1 - (edit distance over C-lexical
+    tokens / reference token count). HIGHER is better. Token boundaries follow
+    C syntax, so operator spacing (`x=5` vs `x = 5`) never counts as an error.
+
+CER and WER/token-accuracy print as two separate tables because their
+"good direction" differs (lower vs. higher). Each metric is reported for both
+raw and cleaned OCR output.
 
 Dev tool, not used by the live backend. Run it after any pipeline change,
 and before/after fine-tuning to measure the actual difference. Run from the
@@ -10,19 +21,16 @@ ocr_feature/ directory (module path, not the file path -- this file does
 import):
 
     .venv/bin/python -m evaluators.evaluate_cer
-
-Reports raw vs. cleaned text, each strict and whitespace-normalized (the
-latter isolates recognition errors from formatting, since the teacher
-reformats anyway).
 """
 import csv
 from pathlib import Path
 
 from evaluators.evaluation import (
     METRIC_KEYS,
+    WORD_TOKEN_METRIC_KEYS,
     evaluate_text_pair,
+    evaluate_word_token_pair,
     literal_provenance_issues,
-    suggestion_improves_reference,
     summarize_metrics,
 )
 
@@ -60,6 +68,32 @@ def _print_group_summary(
         print(_format_metric_row(group, metrics))
 
 
+def _format_word_token_row(label: str, metrics: dict[str, float]) -> str:
+    return (
+        f"{label[:26]:26s} "
+        f"{metrics['raw_wer']:8.3f} {metrics['clean_wer']:8.3f} "
+        f"{metrics['raw_token_accuracy']:14.3f} "
+        f"{metrics['clean_token_accuracy']:16.3f}"
+    )
+
+
+def _print_word_token_group_summary(
+    title: str,
+    evaluated: list[dict],
+    group_key: str,
+) -> None:
+    print(f"\n{title}")
+    print(f"{'group':26s} {'raw_wer':>8s} {'clean_wer':>8s} "
+          f"{'raw_tok_acc':>14s} {'clean_tok_acc':>16s}")
+    print("-" * 76)
+    for group, metrics in sorted(
+        summarize_metrics(
+            evaluated, group_key, WORD_TOKEN_METRIC_KEYS, "word_token_metrics"
+        ).items()
+    ):
+        print(_format_word_token_row(group, metrics))
+
+
 def main() -> int:
     if not LABELS_CSV.exists():
         print(f"No labels file at {LABELS_CSV}. Add samples + labels first.")
@@ -87,8 +121,6 @@ def main() -> int:
 
     evaluated = []
     exact_matches = []
-    suggestion_results = []
-    samples_with_suggestions = 0
 
     for row in rows:
         fname = row["filename"].strip()
@@ -106,23 +138,12 @@ def main() -> int:
         clean = result["cleaned_text"]
 
         metrics = evaluate_text_pair(raw, clean, truth)
+        word_token_metrics = evaluate_word_token_pair(raw, clean, truth)
         evaluated.append({
             **row,
             "metrics": metrics,
+            "word_token_metrics": word_token_metrics,
         })
-        suggestions = result.get("review_suggestions") or []
-        if suggestions:
-            samples_with_suggestions += 1
-        for suggestion in suggestions:
-            suggestion_results.append({
-                "filename": fname,
-                "suggestion": suggestion,
-                "helpful": suggestion_improves_reference(
-                    raw,
-                    truth,
-                    suggestion,
-                ),
-            })
         if raw == truth:
             exact_matches.append(f"{fname} (raw)")
         if clean == truth:
@@ -143,30 +164,19 @@ def main() -> int:
     _print_group_summary("BY PAPER TYPE", evaluated, "paper_type")
     _print_group_summary("BY WRITER", evaluated, "writer")
 
-    helpful_count = sum(item["helpful"] for item in suggestion_results)
-    suggestion_count = len(suggestion_results)
-    non_improving = [
-        item for item in suggestion_results if not item["helpful"]
-    ]
-    precision = (
-        helpful_count / suggestion_count if suggestion_count else None
-    )
-    print("\nREVIEW SUGGESTIONS")
-    precision_text = f"{precision:.3f}" if precision is not None else "n/a"
-    print(
-        f"total: {suggestion_count}  helpful: {helpful_count}  "
-        f"non-improving: {len(non_improving)}  precision: {precision_text}"
-    )
-    print(
-        f"sample coverage: {samples_with_suggestions}/{len(evaluated)}"
-    )
-    for item in non_improving:
-        suggestion = item["suggestion"]
-        print(
-            f"  {item['filename']}: {suggestion.get('original')!r} -> "
-            f"{suggestion.get('candidate')!r} "
-            f"({suggestion.get('rule_id')})"
-        )
+    overall_word_token = {
+        key: sum(row["word_token_metrics"][key] for row in evaluated) / len(evaluated)
+        for key in WORD_TOKEN_METRIC_KEYS
+    }
+    print(f"\n{'file':26s} {'raw_wer':>8s} {'clean_wer':>8s} "
+          f"{'raw_tok_acc':>14s} {'clean_tok_acc':>16s}")
+    print("-" * 76)
+    for row in evaluated:
+        print(_format_word_token_row(row["filename"].strip(), row["word_token_metrics"]))
+    print("-" * 76)
+    print(_format_word_token_row("AVERAGE WER/TOKEN-ACC", overall_word_token))
+    _print_word_token_group_summary("BY PAPER TYPE (WER/token-acc)", evaluated, "paper_type")
+    _print_word_token_group_summary("BY WRITER (WER/token-acc)", evaluated, "writer")
 
     if exact_matches:
         print("\nWARNING: exact prediction/reference matches require "
@@ -174,11 +184,22 @@ def main() -> int:
         for match in exact_matches:
             print(f"  {match}")
 
-    print("\nLower is better. Columns:")
+    print("\nCER table -- lower is better. Columns:")
     print("  raw       = raw OCR output vs ground truth (strict)")
     print("  clean     = after keyword cleanup vs ground truth (strict)")
     print("  raw_ws    = raw, whitespace-normalized (recognition errors only)")
     print("  clean_ws  = cleaned, whitespace-normalized")
+    print("\nWER/token-accuracy table:")
+    print("  raw_wer / clean_wer          = word error rate (LOWER is better);")
+    print("                                  word = whitespace-split token, so")
+    print("                                  there is no separate _ws variant")
+    print("                                  (str.split() already ignores")
+    print("                                  whitespace runs)")
+    print("  raw_tok_acc / clean_tok_acc  = token-level recognition accuracy")
+    print("                                  (HIGHER is better); token = a C")
+    print("                                  lexical unit (identifier, operator,")
+    print("                                  literal, ...), not whitespace-split,")
+    print("                                  so 'x=5' and 'x = 5' score identically")
     return 0
 
 

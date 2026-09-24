@@ -1,0 +1,1047 @@
+{
+  "schema_version": 1,
+  "writer": "writerX",
+  "split": "development",
+  "annotation_basis": "Manual photo inspection and writer-confirmed exercise intent; rectangles are coarse block extents, not OCR boxes or recognizer targets.",
+  "box_coordinates": "[x_min,y_min,x_max,y_max] normalized to original upright image width and height",
+  "membership_caveat": "Writer intent does not always follow uniquely from image evidence. Unnumbered independent functions can share one answer. Do not penalize justified ambiguity as an unsafe merge.",
+  "pages": [
+    {
+      "example": 1,
+      "layout": "independent",
+      "blocks": [
+        {
+          "id": "left",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.18,
+            0.065,
+            0.46,
+            0.18
+          ],
+          "detection_ids": [
+            0,
+            3,
+            4,
+            7
+          ],
+          "detection_union_processed_px": [
+            237,
+            116,
+            521,
+            282
+          ]
+        },
+        {
+          "id": "right",
+          "answer_id": "q2",
+          "box_normalized": [
+            0.59,
+            0.07,
+            0.84,
+            0.18
+          ],
+          "detection_ids": [
+            1,
+            2,
+            5,
+            6
+          ],
+          "detection_union_processed_px": [
+            721,
+            117,
+            992,
+            272
+          ]
+        }
+      ],
+      "expected_block_order": [
+        "left",
+        "right"
+      ],
+      "continuation_edges": [],
+      "answer_membership_visually_ambiguous": false,
+      "detection_annotation_status": "Manually assigned by text and position against photo regions; independent of pipeline ordering.",
+      "expected_detection_rows": [
+        [
+          0
+        ],
+        [
+          3
+        ],
+        [
+          4
+        ],
+        [
+          7
+        ],
+        [
+          1
+        ],
+        [
+          2
+        ],
+        [
+          5
+        ],
+        [
+          6
+        ]
+      ],
+      "fixture_sha256": "9d8408dd8a5e1b1a7aaf6f2c9b40e54dde704c379b68901da05f57bb12ec87cb",
+      "dropped_low_confidence": [],
+      "processed_image_size": [
+        1200,
+        1600
+      ],
+      "live_raw_text": "Question 1;\n  int sguare(int n) {\n    return n # n;\n  }\nQuestion 2;\n  int cube (int n) {\n  return n* n * n;\n}",
+      "live_cleaned_text": "Question 1;\n  int sguare(int n) {\n    return n # n;\n  }\nQuestion 2;\n  int cube (int n) {\n  return n* n * n;\n}",
+      "recognition_notes": "Recognition spelling and symbol errors preserved; annotation does not correct OCR.",
+      "source_image_sha256": "a0e3c898eb05597f03a8dfa6ea49e91b8d38b25ac681ed5e44cb82e0f1c37665",
+      "source_image_relative_path": "outputs/continuation_association_intake/development/writerX_page01.jpg"
+    },
+    {
+      "example": 2,
+      "layout": "independent",
+      "blocks": [
+        {
+          "id": "left",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.18,
+            0.105,
+            0.49,
+            0.27
+          ],
+          "detection_ids": [
+            0,
+            1,
+            4,
+            5,
+            8,
+            10
+          ],
+          "detection_union_processed_px": [
+            218,
+            176,
+            585,
+            423
+          ]
+        },
+        {
+          "id": "right",
+          "answer_id": "q2",
+          "box_normalized": [
+            0.54,
+            0.12,
+            0.81,
+            0.27
+          ],
+          "detection_ids": [
+            2,
+            3,
+            6,
+            7,
+            9,
+            11
+          ],
+          "detection_union_processed_px": [
+            641,
+            192,
+            943,
+            419
+          ]
+        }
+      ],
+      "expected_block_order": [
+        "left",
+        "right"
+      ],
+      "continuation_edges": [],
+      "answer_membership_visually_ambiguous": true,
+      "detection_annotation_status": "Manually assigned by text and position against photo regions; independent of pipeline ordering.",
+      "expected_detection_rows": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          4
+        ],
+        [
+          5
+        ],
+        [
+          8
+        ],
+        [
+          10
+        ],
+        [
+          2
+        ],
+        [
+          3
+        ],
+        [
+          6
+        ],
+        [
+          7
+        ],
+        [
+          9
+        ],
+        [
+          11
+        ]
+      ],
+      "fixture_sha256": "d702304eb4ce71724acbb98a076ecd97e436572b29a2d079be78aa1c26a35292",
+      "dropped_low_confidence": [],
+      "processed_image_size": [
+        1200,
+        1600
+      ],
+      "live_raw_text": "int larger(int a, int b) {\n    if (a > b) {\n        return a;\n    }\n    return b;\n  }\nint smalter(int a, int b) {\n  if (a < b) {\n      return a;\n  }\n  return b;\n}",
+      "live_cleaned_text": "int larger(int a, int b) {\n    if (a > b) {\n        return a;\n    }\n    return b;\n  }\nint smalter(int a, int b) {\n  if (a < b) {\n      return a;\n  }\n  return b;\n}",
+      "recognition_notes": "Recognition spelling and symbol errors preserved; annotation does not correct OCR.",
+      "source_image_sha256": "ba3f7b69fea5f335cc28e4c660a59b69e7385ff95fb8fedba9bd03636ea94a67",
+      "source_image_relative_path": "outputs/continuation_association_intake/development/writerX_page02.jpg"
+    },
+    {
+      "example": 4,
+      "layout": "independent",
+      "blocks": [
+        {
+          "id": "left",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.17,
+            0.13,
+            0.34,
+            0.225
+          ],
+          "detection_ids": [
+            0,
+            2,
+            4
+          ],
+          "detection_union_processed_px": [
+            203,
+            208,
+            391,
+            310
+          ]
+        },
+        {
+          "id": "right",
+          "answer_id": "q2",
+          "box_normalized": [
+            0.56,
+            0.135,
+            0.72,
+            0.23
+          ],
+          "detection_ids": [
+            1,
+            3,
+            5,
+            6
+          ],
+          "detection_union_processed_px": [
+            669,
+            216,
+            858,
+            358
+          ]
+        }
+      ],
+      "expected_block_order": [
+        "left",
+        "right"
+      ],
+      "continuation_edges": [],
+      "answer_membership_visually_ambiguous": false,
+      "detection_annotation_status": "Manually assigned by text and position against photo regions; independent of pipeline ordering.",
+      "expected_detection_rows": [
+        [
+          0
+        ],
+        [
+          2
+        ],
+        [
+          4
+        ],
+        [
+          1
+        ],
+        [
+          3
+        ],
+        [
+          5
+        ],
+        [
+          6
+        ]
+      ],
+      "fixture_sha256": "7504b1dfd225b5b36d8d70cd89ada9d3271ed8744e5539d7f6caa7f449a67776",
+      "dropped_low_confidence": [
+        {
+          "text": "",
+          "score": 0.0,
+          "box": [
+            212,
+            309,
+            235,
+            348
+          ]
+        }
+      ],
+      "processed_image_size": [
+        1200,
+        1600
+      ],
+      "live_raw_text": "int main(voind) {\n  int % = 3;\n    return *;\nint main(void) {\n  int * = 7;\n  return +;\n}",
+      "live_cleaned_text": "int main(voind) {\n  int % = 3;\n    return *;\nint main(void) {\n  int * = 7;\n  return +;\n}",
+      "recognition_notes": "Left program closing brace detected as empty text and filtered before grouping; retained-detection ordering excludes this missing brace.",
+      "source_image_sha256": "92bc2e519b1b074e7da7ea5880f2d6e8ae2275ece9cd75c31333bf6a3187b816",
+      "source_image_relative_path": "outputs/continuation_association_intake/development/writerX_page04.jpg"
+    },
+    {
+      "example": 5,
+      "layout": "two_local_continuations",
+      "blocks": [
+        {
+          "id": "upper_left",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.15,
+            0.065,
+            0.48,
+            0.185
+          ],
+          "detection_ids": [
+            0,
+            1,
+            3,
+            5
+          ],
+          "detection_union_processed_px": [
+            197,
+            108,
+            564,
+            292
+          ]
+        },
+        {
+          "id": "upper_right",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.62,
+            0.115,
+            0.84,
+            0.225
+          ],
+          "detection_ids": [
+            2,
+            4,
+            6,
+            7
+          ],
+          "detection_union_processed_px": [
+            750,
+            194,
+            993,
+            352
+          ]
+        },
+        {
+          "id": "lower_left",
+          "answer_id": "q2",
+          "box_normalized": [
+            0.15,
+            0.235,
+            0.44,
+            0.345
+          ],
+          "detection_ids": [
+            8,
+            9,
+            11
+          ],
+          "detection_union_processed_px": [
+            184,
+            379,
+            519,
+            530
+          ]
+        },
+        {
+          "id": "lower_right",
+          "answer_id": "q2",
+          "box_normalized": [
+            0.6,
+            0.285,
+            0.76,
+            0.385
+          ],
+          "detection_ids": [
+            10,
+            12,
+            13,
+            14
+          ],
+          "detection_union_processed_px": [
+            721,
+            460,
+            898,
+            604
+          ]
+        }
+      ],
+      "expected_block_order": [
+        "upper_left",
+        "upper_right",
+        "lower_left",
+        "lower_right"
+      ],
+      "continuation_edges": [
+        [
+          "upper_left",
+          "upper_right"
+        ],
+        [
+          "lower_left",
+          "lower_right"
+        ]
+      ],
+      "answer_membership_visually_ambiguous": false,
+      "detection_annotation_status": "Manually assigned by text and position against photo regions; independent of pipeline ordering.",
+      "expected_detection_rows": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          3
+        ],
+        [
+          5
+        ],
+        [
+          2
+        ],
+        [
+          4
+        ],
+        [
+          6
+        ],
+        [
+          7
+        ],
+        [
+          8
+        ],
+        [
+          9
+        ],
+        [
+          11
+        ],
+        [
+          10
+        ],
+        [
+          12
+        ],
+        [
+          13
+        ],
+        [
+          14
+        ]
+      ],
+      "fixture_sha256": "faf44dea2303f3cce3739c686b782183bfe737f452c97a2551d7e3e6d88adc0f",
+      "dropped_low_confidence": [],
+      "processed_image_size": [
+        1200,
+        1600
+      ],
+      "live_raw_text": "Question 1:\nint larger(int a, int b) {\n    if (9 > b) {\n      return 9;\n\n\nQuestion 2;\n  int is_even(int n) {\n      if (n % 2 == 0) {\n    } else {\n      return b;\n    }\n  }\n\n\n  return 1;\n  }\n  return 0;\n}",
+      "live_cleaned_text": "Question 1:\nint larger(int a, int b) {\n    if (9 > b) {\n      return 9;\n\n\nQuestion 2;\n  int is_even(int n) {\n      if (n % 2 == 0) {\n    } else {\n      return b;\n    }\n  }\n\n\n  return 1;\n  }\n  return 0;\n}",
+      "recognition_notes": "Recognition spelling and symbol errors preserved; annotation does not correct OCR.",
+      "source_image_sha256": "f001ce0856cd3ca20fad5a1fee113cf609e31e58fa5c1d348ca4c06e4ddf7660",
+      "source_image_relative_path": "outputs/continuation_association_intake/development/writerX_page05.jpg"
+    },
+    {
+      "example": 6,
+      "layout": "two_local_continuations",
+      "blocks": [
+        {
+          "id": "upper_left",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.155,
+            0.08,
+            0.52,
+            0.215
+          ],
+          "detection_ids": [
+            0,
+            1,
+            3,
+            5,
+            7
+          ],
+          "detection_union_processed_px": [
+            190,
+            133,
+            609,
+            328
+          ]
+        },
+        {
+          "id": "upper_right",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.63,
+            0.105,
+            0.8,
+            0.185
+          ],
+          "detection_ids": [
+            2,
+            4,
+            6
+          ],
+          "detection_union_processed_px": [
+            761,
+            183,
+            947,
+            285
+          ]
+        },
+        {
+          "id": "lower_left",
+          "answer_id": "q2",
+          "box_normalized": [
+            0.15,
+            0.215,
+            0.42,
+            0.35
+          ],
+          "detection_ids": [
+            8,
+            9,
+            11,
+            13,
+            16
+          ],
+          "detection_union_processed_px": [
+            177,
+            344,
+            466,
+            554
+          ]
+        },
+        {
+          "id": "lower_right",
+          "answer_id": "q2",
+          "box_normalized": [
+            0.53,
+            0.245,
+            0.7,
+            0.345
+          ],
+          "detection_ids": [
+            10,
+            12,
+            14,
+            15
+          ],
+          "detection_union_processed_px": [
+            637,
+            409,
+            824,
+            540
+          ]
+        }
+      ],
+      "expected_block_order": [
+        "upper_left",
+        "upper_right",
+        "lower_left",
+        "lower_right"
+      ],
+      "continuation_edges": [
+        [
+          "upper_left",
+          "upper_right"
+        ],
+        [
+          "lower_left",
+          "lower_right"
+        ]
+      ],
+      "answer_membership_visually_ambiguous": false,
+      "detection_annotation_status": "Manually assigned by text and position against photo regions; independent of pipeline ordering.",
+      "expected_detection_rows": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          3
+        ],
+        [
+          5
+        ],
+        [
+          7
+        ],
+        [
+          2
+        ],
+        [
+          4
+        ],
+        [
+          6
+        ],
+        [
+          8
+        ],
+        [
+          9
+        ],
+        [
+          11
+        ],
+        [
+          13
+        ],
+        [
+          16
+        ],
+        [
+          10
+        ],
+        [
+          12
+        ],
+        [
+          14
+        ],
+        [
+          15
+        ]
+      ],
+      "fixture_sha256": "02b0092d057a323059d80aa4719d08bc04beaafefae3bd229561bf58f729f89a",
+      "dropped_low_confidence": [],
+      "processed_image_size": [
+        1200,
+        1600
+      ],
+      "live_raw_text": "Questton 1;\n  int sum_to(int n) {\n    int total = 0;\n    for <int i = 1; i <= n; i++) {\n        total += i;\nQuestion 2\n  int fractoral(int n) {\n    int total = 1;\n    wite (n > >) {\n      total # = n;\n        }\n        return total;\n      }\n\n\n    n--;\n  }\n  return total;\n}",
+      "live_cleaned_text": "Questton 1;\n  int sum_to(int n) {\n    int total = 0;\n    for <int i = 1; i <= n; i++) {\n        total += i;\nQuestion 2\n  int fractoral(int n) {\n    int total = 1;\n    wite (n > >) {\n      total # = n;\n        }\n        return total;\n      }\n\n\n    n--;\n  }\n  return total;\n}",
+      "recognition_notes": "Recognition spelling and symbol errors preserved; annotation does not correct OCR.",
+      "source_image_sha256": "375feaea38a7c08a139e22bd5d928a591acb81d0f487eac3fb591ef3bfa62986",
+      "source_image_relative_path": "outputs/continuation_association_intake/development/writerX_page06.jpg"
+    },
+    {
+      "example": 8,
+      "layout": "two_local_continuations",
+      "blocks": [
+        {
+          "id": "upper_left",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.15,
+            0.065,
+            0.42,
+            0.15
+          ],
+          "detection_ids": [
+            0,
+            3,
+            5
+          ],
+          "detection_union_processed_px": [
+            182,
+            108,
+            490,
+            226
+          ]
+        },
+        {
+          "id": "upper_right",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.64,
+            0.065,
+            0.79,
+            0.15
+          ],
+          "detection_ids": [
+            1,
+            2,
+            4
+          ],
+          "detection_union_processed_px": [
+            766,
+            114,
+            939,
+            226
+          ]
+        },
+        {
+          "id": "lower_left",
+          "answer_id": "q2",
+          "box_normalized": [
+            0.13,
+            0.215,
+            0.35,
+            0.305
+          ],
+          "detection_ids": [
+            6,
+            8,
+            10
+          ],
+          "detection_union_processed_px": [
+            159,
+            348,
+            418,
+            482
+          ]
+        },
+        {
+          "id": "lower_right",
+          "answer_id": "q2",
+          "box_normalized": [
+            0.6,
+            0.22,
+            0.76,
+            0.305
+          ],
+          "detection_ids": [
+            7,
+            9,
+            11
+          ],
+          "detection_union_processed_px": [
+            723,
+            359,
+            906,
+            480
+          ]
+        }
+      ],
+      "expected_block_order": [
+        "upper_left",
+        "upper_right",
+        "lower_left",
+        "lower_right"
+      ],
+      "continuation_edges": [
+        [
+          "upper_left",
+          "upper_right"
+        ],
+        [
+          "lower_left",
+          "lower_right"
+        ]
+      ],
+      "answer_membership_visually_ambiguous": true,
+      "detection_annotation_status": "Manually assigned by text and position against photo regions; independent of pipeline ordering.",
+      "expected_detection_rows": [
+        [
+          0
+        ],
+        [
+          3
+        ],
+        [
+          5
+        ],
+        [
+          1
+        ],
+        [
+          2
+        ],
+        [
+          4
+        ],
+        [
+          6
+        ],
+        [
+          8
+        ],
+        [
+          10
+        ],
+        [
+          7
+        ],
+        [
+          9
+        ],
+        [
+          11
+        ]
+      ],
+      "fixture_sha256": "692fcea9374c91eec548ef24ddc5bf9f7d827a5eeeb16a8872064d9277c2c156",
+      "dropped_low_confidence": [],
+      "processed_image_size": [
+        1200,
+        1600
+      ],
+      "live_raw_text": "  int absolute (int x ) {\n    if (* < 0){\n      return *;\n\n\nint clarmnp(int x) {\n    if (+ > 1b0) {\n    return 100;\n    }\n    return +;\n  }\n\n\n  }\n  return x;\n}",
+      "live_cleaned_text": "  int absolute (int x ) {\n    if (* < 0){\n      return *;\n\n\nint clarmnp(int x) {\n    if (+ > 1b0) {\n    return 100;\n    }\n    return +;\n  }\n\n\n  }\n  return x;\n}",
+      "recognition_notes": "Recognition spelling and symbol errors preserved; annotation does not correct OCR.",
+      "source_image_sha256": "816a97c7c8e9de8e015abb9f79ba7c04d117a1ae8d13e64177138d9890d9d232",
+      "source_image_relative_path": "outputs/continuation_association_intake/development/writerX_page08.jpg"
+    },
+    {
+      "example": 9,
+      "layout": "multiple_functions_one_answer",
+      "blocks": [
+        {
+          "id": "helper",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.2,
+            0.085,
+            0.45,
+            0.19
+          ],
+          "detection_ids": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "detection_union_processed_px": [
+            242,
+            141,
+            519,
+            306
+          ]
+        },
+        {
+          "id": "main_left",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.215,
+            0.21,
+            0.5,
+            0.26
+          ],
+          "detection_ids": [
+            4,
+            6
+          ],
+          "detection_union_processed_px": [
+            264,
+            339,
+            585,
+            403
+          ]
+        },
+        {
+          "id": "main_right",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.6,
+            0.21,
+            0.81,
+            0.32
+          ],
+          "detection_ids": [
+            5,
+            7,
+            8,
+            9,
+            10
+          ],
+          "detection_union_processed_px": [
+            722,
+            339,
+            962,
+            506
+          ]
+        }
+      ],
+      "expected_block_order": [
+        "helper",
+        "main_left",
+        "main_right"
+      ],
+      "continuation_edges": [
+        [
+          "main_left",
+          "main_right"
+        ]
+      ],
+      "answer_membership_visually_ambiguous": false,
+      "detection_annotation_status": "Manually assigned by text and position against photo regions; independent of pipeline ordering.",
+      "expected_detection_rows": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          2
+        ],
+        [
+          3
+        ],
+        [
+          4
+        ],
+        [
+          6
+        ],
+        [
+          5
+        ],
+        [
+          7
+        ],
+        [
+          8
+        ],
+        [
+          9
+        ],
+        [
+          10
+        ]
+      ],
+      "fixture_sha256": "2d2eee43f55eb01d8f8226de064a504981939acab84420b6f3b317be432c4860",
+      "dropped_low_confidence": [],
+      "processed_image_size": [
+        1200,
+        1600
+      ],
+      "live_raw_text": "Question 1;\n  int twice(int *) {\n    return x * 2;\n  }\n\n  int main(void) {\n    int result = twice (4);\n  if (result == 8) {\n    return 0;\n  }\n  return 1;\n}",
+      "live_cleaned_text": "Question 1;\n  int twice(int *) {\n    return x * 2;\n  }\n\n  int main(void) {\n    int result = twice (4);\n  if (result == 8) {\n    return 0;\n  }\n  return 1;\n}",
+      "recognition_notes": "Recognition spelling and symbol errors preserved; annotation does not correct OCR.",
+      "source_image_sha256": "76111e9f50b7a153505a17a59b5008ab66ab22c7f2d0067ca1279655f5a2d2b9",
+      "source_image_relative_path": "outputs/continuation_association_intake/development/writerX_page09.jpg"
+    },
+    {
+      "example": 11,
+      "layout": "comment_and_continuation",
+      "blocks": [
+        {
+          "id": "left",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.16,
+            0.055,
+            0.575,
+            0.205
+          ],
+          "detection_ids": [
+            0,
+            1,
+            4,
+            6,
+            7
+          ],
+          "detection_union_processed_px": [
+            201,
+            91,
+            680,
+            311
+          ]
+        },
+        {
+          "id": "right",
+          "answer_id": "q1",
+          "box_normalized": [
+            0.6,
+            0.085,
+            0.75,
+            0.16
+          ],
+          "detection_ids": [
+            2,
+            3,
+            5
+          ],
+          "detection_union_processed_px": [
+            731,
+            145,
+            891,
+            250
+          ]
+        }
+      ],
+      "expected_block_order": [
+        "left",
+        "right"
+      ],
+      "continuation_edges": [
+        [
+          "left",
+          "right"
+        ]
+      ],
+      "answer_membership_visually_ambiguous": false,
+      "detection_annotation_status": "Manually assigned by text and position against photo regions; independent of pipeline ordering.",
+      "expected_detection_rows": [
+        [
+          0
+        ],
+        [
+          1
+        ],
+        [
+          4
+        ],
+        [
+          6
+        ],
+        [
+          7
+        ],
+        [
+          2
+        ],
+        [
+          3
+        ],
+        [
+          5
+        ]
+      ],
+      "fixture_sha256": "6d7abfe0df84db450fcc7af98594953eb9ede5724320a1f939e6f648879c558d",
+      "dropped_low_confidence": [],
+      "processed_image_size": [
+        1200,
+        1600
+      ],
+      "live_raw_text": "Question 1;\nint adjjst (nt x) {\n  1.* teep { and } in tms comment. *;\n  if (x < 0) {\n    x= -*;\n                }\n                return x;\n                }",
+      "live_cleaned_text": "Question 1;\nint adjjst (nt x) {\n  1.* teep { and } in tms comment. *;\n  if (x < 0) {\n    x= -*;\n                }\n                return x;\n                }",
+      "recognition_notes": "Comment delimiters misrecognized; lexical comment recognition cannot be assumed.",
+      "source_image_sha256": "011c4f296ee2264ced89838aa4af03bbddc83a2d929c81e40e2ed7dfe6252371",
+      "source_image_relative_path": "outputs/continuation_association_intake/development/writerX_page11.jpg"
+    }
+  ]
+}

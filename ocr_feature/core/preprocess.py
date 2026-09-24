@@ -32,8 +32,10 @@ class PreprocessConfig:
     # 3-channel 3x48xW input, RGB reportedly preferred). The real win is that
     # grayscale unlocks an effective single-channel denoiser; with denoise off,
     # color slightly beats grayscale. The threshold code stays functional
-    # behind threshold=True for evaluators / the old binarized pipeline; denoise
-    # runs either way. Full numbers + 4-way color A/B: docs/ocr/EVALUATION.md.
+    # behind threshold=True for compare_config.py (the binarization-vs-
+    # grayscale demo tool -- see docs/ocr/DEFENSE_PREP.md section 14) and any
+    # future evaluator that wants it; denoise runs either way. Full numbers +
+    # 4-way color A/B: docs/ocr/EVALUATION.md.
     threshold: bool = False
     threshold_block_size: int = 31
     threshold_c: int = 15
@@ -60,16 +62,33 @@ class PreprocessConfig:
     # relevant because the gallery-upload path bypasses the scanner and delivers
     # genuinely raw pages.
     #
-    # On GATE-framed input the branch is deliberately inert: the scanner's
-    # crop/de-warp smooths paper texture, so every current gate sample scores
-    # below the trigger (measured range 0.50-2.07) and receives the default
-    # denoise. This is not a miss -- gate greenbook reads fine at the default
-    # strength (clean_ws 0.159), and a full ON-vs-OFF A/B on the gate-framed
-    # test set is byte-identical (0.149 either way). Forcing gate greenbook
-    # into strong denoise by lowering the trigger was measured and made things
-    # worse overall (it also swept in yellow_pad, which shares the band). So
-    # 2.2 is kept: active where it helps (raw), inert where it isn't needed
-    # (gate). See docs/ocr/QUALITY_GATE_REVIEW.md and the
+    # UPDATE 2026-09-02: on the CURRENT gate test set the branch is NOT inert.
+    # It fires on 15 of 20 samples (measured background noise 0.49-4.52). The
+    # quality gate CROPS/frames the raw photo (capture_condition=gate_raw) but
+    # does not smooth the paper's inherent texture, so greenbook speckle (mostly
+    # 2.6-3.5) and yellow-pad grain (3.2-4.5) survive and correctly trigger the
+    # stronger denoise; smooth bond (0.49-0.54) stays at the default. This
+    # SUPERSEDES the earlier claim that gate input measured 0.50-2.07 and the
+    # branch was "deliberately inert on gate" -- that was an older, smoother
+    # cohort; the current select_holdout.py test set is textured enough to
+    # engage the branch, which is the design working as intended.
+    #
+    # RE-MEASURED 2026-09-04 (ON vs OFF, fine-tuned recognizer, current 20-image
+    # gate test set, historical recognition-only comparison before the
+    # two-column split): clean_ws CER 0.126 (ON, shipped) vs 0.123 (OFF) --
+    # a +0.003 difference that is within noise at n=20, NOT a real regression.
+    # Per paper type: bond 0.005/0.005 (branch never fires, noise ~0.46), yellow
+    # 0.071/0.077 (ON HELPS -0.006), greenbook 0.159/0.153 (ON worse +0.006,
+    # driven mostly by one file swinging). Net: adaptive_denoise is ~NEUTRAL on
+    # gate-framed input -- it does not degrade accuracy. Kept ON because (1) it's
+    # neutral-to-helpful, not harmful; (2) 0.126 is the validated recognition
+    # fine-tune result and the model was trained through this same config;
+    # (3) it helps the worst-textured pages (yellow). This SUPERSEDES the earlier
+    # "byte-identical 0.149 either way" claim, which was the stock model on an
+    # older, smoother cohort. Current end-to-end samples/ clean_ws CER after the
+    # two-column split is 0.099 with ON; the OFF ablation above was not rerun
+    # after that split. The 2.2 trigger and bond-vs-greenbook rationale still hold.
+    # See docs/ocr/EVALUATION.md, docs/ocr/QUALITY_GATE_REVIEW.md, and the
     # `quality-gate-should-not-binarize` memory.
     adaptive_denoise: bool = True
     textured_paper_threshold: float = 2.2

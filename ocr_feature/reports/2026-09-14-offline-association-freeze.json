@@ -1,0 +1,37 @@
+{
+  "frozen_at_utc": "2026-09-14T08:39:08.170475+00:00",
+  "rule_version": "local-gutter-scope-v1",
+  "prototype_path": "evaluators/continuation_prototype.py",
+  "prototype_sha256": "3cb2cdde542605d2f3cfa5c3b4f21599fa1a24b572e188810de567efdf0ff298",
+  "base_commit": "7634e7f",
+  "development_examples": [
+    1,
+    2,
+    4,
+    5,
+    6,
+    8,
+    9,
+    11
+  ],
+  "reserved_examples": [
+    3,
+    7,
+    10,
+    12
+  ],
+  "available_reserved": [
+    3,
+    10,
+    12
+  ],
+  "missing_reserved": [
+    7
+  ],
+  "policy": "No prototype changes after reserved OCR is inspected. Intake visual identification has already occurred; held out from rule tuning, not wholly unseen. One writer only.",
+  "heldout_expected_layouts": {
+    "3": "Two independent numbered answers: left sum_to, right product_to; left then right.",
+    "10": "Single adjust function: upper-left open if/body, then right close-if and x+=2, then lower-left return/function closer.",
+    "12": "Two complete unnumbered functions first/second. Writer intent separate, image-only membership ambiguous; left then right reference."
+  }
+}
