@@ -430,6 +430,22 @@ The following state is intentionally retained in `SubmissionsListComponent`:
     - The upload endpoint no longer blocks the server.
 - Verification: 89/89 web tests (50 existing + 39 new); TypeScript check and `ng build` pass. Checked in the running app against the cloud database without the column: all 209 submissions load, the tabs and picker render, the Program 1 question is greyed as "In Program 1", the preview-only note shows, and clicking elsewhere cancels an armed "Remove?". Saving Programs 2..n end to end is untested until the migration is applied.
 
+## Pre-extraction on arrival (2026-09-24, branch `feature/pre-extraction`)
+
+> **Owner:** Nombrado (OCR server, review editor). The worker writes to the shared `submissions` table, so it's announced in `docs/TEAM_SYNC.md`.
+
+- **What it does:** when the OCR server runs with `AUTO_EXTRACT=true`, a background worker reads papers that arrived from the phone and saves `extracted_text`, so teachers open them already extracted. It's off by default.
+- **Same results:** it uses the same extraction function as the Extract button (`extract_image_url` in `ocr_feature/main.py`) under the same lock. The pipeline is unchanged, so the recorded accuracy numbers still apply.
+- **Never overwrites work:** the save only goes through if `extracted_text` and `verified_text` are still empty at that moment. It writes nothing else: not `verified_text`, `answers` or `status`.
+- **Only new papers:** papers captured before the server started, or before `AUTO_EXTRACT_SINCE`, are never read. The existing backlog of test papers stays as it is.
+- **Failures:** a paper that fails 3 times is left "Needs OCR" for the manual **Extract now**.
+- **Web review:**
+  - Opening a paper re-reads it (`getSubmission(id)` in `supabase.ts`), so text saved after the list loaded shows up.
+  - Re-extracting an untouched pre-extracted paper no longer asks to discard edits.
+  - The empty state and button now say **Extract now**.
+- **Key:** `ocr_feature/.env` holds `SUPABASE_URL` / `SUPABASE_KEY` (template: `.env.example`). The publishable key works while `submissions` has no RLS; switch to a secret key once RLS is on. Never put a secret key in the browser or mobile app.
+- **Not yet:** a realtime UPDATE subscription so the list badge updates without reopening (needs Jayrald's OK), and provenance columns.
+
 ## Code cleanup completed
 
 > **Owner:** Shared (Jayrald + Nombrado)
