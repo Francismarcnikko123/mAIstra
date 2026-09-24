@@ -60,7 +60,7 @@ interface TopicGroup {
 type ReviewStep = 1 | 2 | 3;
 
 const EXTRA_PROGRAMS_UNSAVABLE =
-  "Programs 2 and up can't be saved yet: the database is missing the answers column. Ask Jayrald to apply the migration.";
+  "Program 1 was saved. Programs 2 and up can't be saved yet: the database is missing the answers column. Ask Jayrald to apply the migration.";
 type SubmissionFilter = 'all' | 'new' | 'extracted' | 'verified' | 'graded';
 
 @Component({
@@ -180,7 +180,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     // reappears when the page reloads or a submission is reopened.
     for (const s of this.submissions) {
       const saved = s.verified_text || s.extracted_text || '';
-      if (saved) this.editableText[s.id] = saved;
+      // Seed once. This also runs on every realtime INSERT, and must not
+      // replace unsaved edits in a review that is open.
+      if (saved && this.editableText[s.id] === undefined) this.editableText[s.id] = saved;
       // Seed saved program tabs once. Never replace a loaded list: the teacher
       // may have pasted programs that aren't saved yet.
       if (!this.extraAnswers[s.id]) {
@@ -396,13 +398,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       return;
     }
     // Until the answers migration is applied, Programs 2..n have nowhere to
-    // go. Refuse rather than silently dropping them; Program 1 alone saves.
-    if (!this.extraProgramsSavable && answersToSave(this.getExtraAnswers(id)).length) {
-      this.extraAnswersError[id] = EXTRA_PROGRAMS_UNSAVABLE;
-      this.saveStatus[id] = '';
-      this.cdr.detectChanges();
-      return;
-    }
+    // go. Program 1 still saves; the extra tabs stay on screen as a preview
+    // and the teacher is told they weren't saved.
+    const extrasUnsaved =
+      !this.extraProgramsSavable && answersToSave(this.getExtraAnswers(id)).length > 0;
     this.extraAnswersError[id] = '';
 
     const generation = this.startSaveGeneration(id);
@@ -422,13 +421,15 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       if (s) {
         s.verified_text = text;
         if (ocrText !== undefined) s.extracted_text = ocrText;
-        s.answers = extras;
+        if (!extrasUnsaved) s.answers = extras;
       }
       if (this.selectedSubmission?.id === id) {
         this.selectedSubmission.verified_text = text;
         if (ocrText !== undefined)
           this.selectedSubmission.extracted_text = ocrText;
+        if (!extrasUnsaved) this.selectedSubmission.answers = extras;
       }
+      if (extrasUnsaved) this.extraAnswersError[id] = EXTRA_PROGRAMS_UNSAVABLE;
       this.saveStatus[id] = 'saved';
       // Auto-clear the confirmation after a few seconds.
       const timer = setTimeout(() => {
@@ -627,6 +628,15 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   trackByIndex(index: number): number {
     return index;
+  }
+
+  /**
+   * Editors track their own tab object, so removing a tab destroys its
+   * editor instead of handing that editor (and its undo history) to the
+   * next tab. Tab objects are mutated in place, so the identity is stable.
+   */
+  trackByAnswer(_index: number, answer: SubmissionAnswer): SubmissionAnswer {
+    return answer;
   }
 
   private getSelectedExtraAnswer(index: number): SubmissionAnswer | undefined {

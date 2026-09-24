@@ -231,7 +231,7 @@ describe('SubmissionsListComponent program tabs', () => {
     expect(component.getExtraAnswers('paper-1')[0].code).toBe('pasted program two');
   });
 
-  it('blocks saving extra programs while the answers column is missing', async () => {
+  it('saves Program 1 and keeps extra programs as a preview while the answers column is missing', async () => {
     const { component, updateSubmissionText, supabase } = createComponent();
     supabase.answersColumnAvailable = false;
     select(component);
@@ -241,10 +241,56 @@ describe('SubmissionsListComponent program tabs', () => {
 
     await component.saveVerifiedText();
 
-    expect(updateSubmissionText).not.toHaveBeenCalled();
+    expect(updateSubmissionText).toHaveBeenCalledTimes(1);
+    expect(component.saveStatus['paper-1']).toBe('saved');
     expect(component.extraAnswersError['paper-1']).toBe(
-      "Programs 2 and up can't be saved yet: the database is missing the answers column. Ask Jayrald to apply the migration.",
+      "Program 1 was saved. Programs 2 and up can't be saved yet: the database is missing the answers column. Ask Jayrald to apply the migration.",
     );
+    expect(component.getExtraAnswers('paper-1')[0].code).toBe('int f(void) { return 1; }');
+    expect(component.selectedSubmission?.answers).toBeUndefined();
+  });
+
+  it('keeps the open review in sync with the saved programs', async () => {
+    const { component } = createComponent();
+    select(component);
+    component.addExtraAnswer();
+    component.updateExtraAnswerCode(0, 'int f(void) { return 1; }');
+    component.chooseExtraQuestion(0, 'q-2');
+
+    await component.saveVerifiedText();
+
+    expect(component.selectedSubmission?.answers).toEqual([
+      { code: 'int f(void) { return 1; }', question_id: 'q-2' },
+    ]);
+  });
+
+  it('does not overwrite unsaved Program 1 edits when the list reloads', async () => {
+    const getSubmissions = vi.fn().mockResolvedValue({
+      data: [{ id: 'paper-1', image_url: 'x', captured_at: 'y', verified_text: 'saved code' }],
+      error: null,
+    });
+    const { component } = createComponent({ getSubmissions });
+    select(component);
+    component.updateSubmissionCode('paper-1', 'edited but not saved');
+
+    await component.loadSubmissions();
+
+    expect(component.editableText['paper-1']).toBe('edited but not saved');
+  });
+
+  it('gives each tab editor its own identity so a removed tab takes its editor with it', () => {
+    const { component } = createComponent();
+    select(component);
+    component.addExtraAnswer();
+    component.addExtraAnswer();
+    const [second, third] = component.getExtraAnswers('paper-1');
+
+    component.requestRemoveExtraAnswer(0);
+    component.requestRemoveExtraAnswer(0);
+
+    const [remaining] = component.getExtraAnswers('paper-1');
+    expect(remaining).toBe(third);
+    expect(component.trackByAnswer(0, remaining)).not.toBe(component.trackByAnswer(0, second));
   });
 
   it('still saves Program 1 alone while the answers column is missing', async () => {

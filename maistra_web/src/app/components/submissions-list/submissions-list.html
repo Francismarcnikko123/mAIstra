@@ -358,7 +358,7 @@
                 ></app-code-editor>
 
                 <app-code-editor
-                  *ngFor="let answer of getExtraAnswers(selectedSubmission.id); let i = index; trackBy: trackByIndex"
+                  *ngFor="let answer of getExtraAnswers(selectedSubmission.id); let i = index; trackBy: trackByAnswer"
                   #extraEditor
                   class="text-editor"
                   [hidden]="activeTab !== i + 1"
