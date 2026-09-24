@@ -58,6 +58,7 @@ A short, shared record of **what each of us changed that affects the others**, *
   4. Who applies migrations to the cloud, and in what order?
   5. Should Nikko wait for your `assessments` tables?
   6. Which branch should `feature/program-tabs` target for its pull request?
+  7. Once assessments exist, how does a submission link to its assessment (e.g. an `assessment_id` on `submissions`)? The tab picker needs it to list only that paper's questions.
 
 ### Done
 - (2026-09-23) Browser now uses the publishable Supabase key (`a448198`). Note: RLS is enabled on `questions` but **not** on `submissions`.

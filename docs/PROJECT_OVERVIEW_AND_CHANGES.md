@@ -411,7 +411,7 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - The split is manual by design. OCR program-boundary detection exists, but its consistency is unmeasured.
 - Code: `submissions-list/extra-answers.ts` holds the pure parse, taken-question and save-rule helpers. `submissions-list/program-tabs.css` holds the tab styles, kept separate so the component stylesheet stays under its 12 kB build budget. `CodeEditorComponent.refresh()` re-measures a previously hidden tab.
 - **Migration:** apply `supabase/migrations/20260923000000_add_submission_answers.sql` to enable saving Programs 2..n. Until it runs, the app still works. `getSubmissions()` retries without `answers` when Postgres reports the column missing (42703), Program 1 saves as before, and Step 2 marks extra tabs as preview-only. Saving them is blocked with a message instead of being silently dropped.
-- Verification: 87/87 web tests (50 existing + 37 new); TypeScript check and `ng build` pass. Checked in the running app against the cloud database without the column: all 209 submissions load, the tabs and picker render, the Program 1 question is greyed as "In Program 1", and the preview-only note shows. Saving Programs 2..n end to end is untested until the migration is applied.
+- Verification: 89/89 web tests (50 existing + 39 new); TypeScript check and `ng build` pass. Checked in the running app against the cloud database without the column: all 209 submissions load, the tabs and picker render, the Program 1 question is greyed as "In Program 1", the preview-only note shows, and clicking elsewhere cancels an armed "Remove?". Saving Programs 2..n end to end is untested until the migration is applied.
 
 ## Code cleanup completed
 
