@@ -25,9 +25,11 @@ async def lifespan(app: FastAPI):
     # Pre-extraction on arrival: off unless AUTO_EXTRACT=true in .env
     # (see core/auto_extract.py). Uses the same extraction as the endpoint.
     worker = start_auto_extract(os.environ, extract_image_url)
+    app.state.auto_extract = worker
     yield
     if worker is not None:
         worker.stop()
+    app.state.auto_extract = None
 
 
 app = FastAPI(title="MaestrAI OCR Backend", lifespan=lifespan)
@@ -48,7 +50,15 @@ class ImageUrlRequest(BaseModel):
 
 @app.get("/")
 def health_check():
-    return {"status": "MaestrAI OCR Backend is running"}
+    worker = getattr(app.state, "auto_extract", None)
+    auto_extract = {"enabled": worker is not None, "since": None, "failed": []}
+    if worker is not None:
+        auto_extract["since"] = worker.config.since.isoformat() if worker.config.since else None
+        auto_extract["failed"] = [
+            submission_id for submission_id, count in worker.failures.copy().items()
+            if count >= worker.config.max_failures
+        ]
+    return {"status": "MaestrAI OCR Backend is running", "auto_extract": auto_extract}
 
 
 # Each request works in its own temporary folder, deleted afterwards: student
