@@ -218,17 +218,15 @@ describe('SubmissionsListComponent program tabs', () => {
     expect(updateSubmissionText.mock.calls[0][3]).toEqual([]);
   });
 
-  it('re-extract replaces Program 1 only', async () => {
+  it('re-extract on a paper without tabs still replaces Program 1', async () => {
     const { component } = createComponent();
     select(component);
     component.extractedText['paper-1'] = 'int main() { return 0; }';
-    component.addExtraAnswer();
-    component.updateExtraAnswerCode(0, 'pasted program two');
 
     await component.extractText();
 
     expect(component.editableText['paper-1']).toBe('fresh ocr');
-    expect(component.getExtraAnswers('paper-1')[0].code).toBe('pasted program two');
+    expect(component.ocrPanelOpen).toBe(false);
   });
 
   it('saves Program 1 and keeps extra programs as a preview while the answers column is missing', async () => {
@@ -315,5 +313,153 @@ describe('SubmissionsListComponent program tabs', () => {
 
     expect(component.removeConfirmIndex).toBeNull();
     expect(component.getExtraAnswers('paper-1')).toHaveLength(1);
+  });
+
+  it('marks only changed programs as unsaved, and clears the marks after a save', async () => {
+    const getSubmissions = vi.fn().mockResolvedValue({
+      data: [{ id: 'paper-1', image_url: 'x', captured_at: 'y', verified_text: 'saved code', answers: [] }],
+      error: null,
+    });
+    const { component } = createComponent({ getSubmissions });
+    await component.loadSubmissions();
+    component.selectedSubmission = { id: 'paper-1', image_url: 'x', captured_at: 'y' };
+    component.selectedQuestionId = 'q-1';
+    expect(component.hasUnsavedPrograms('paper-1')).toBe(false);
+
+    component.addExtraAnswer();
+    const blank = component.getExtraAnswers('paper-1')[0];
+    expect(component.isExtraAnswerUnsaved('paper-1', blank)).toBe(false);
+    expect(component.hasUnsavedPrograms('paper-1')).toBe(false);
+
+    component.updateSubmissionCode('paper-1', 'edited');
+    component.updateExtraAnswerCode(0, 'int f(void);');
+    component.chooseExtraQuestion(0, 'q-2');
+    expect(component.isProgram1Unsaved('paper-1')).toBe(true);
+    expect(component.isExtraAnswerUnsaved('paper-1', blank)).toBe(true);
+
+    await component.saveVerifiedText();
+
+    expect(component.isProgram1Unsaved('paper-1')).toBe(false);
+    expect(component.isExtraAnswerUnsaved('paper-1', blank)).toBe(false);
+    expect(component.hasUnsavedPrograms('paper-1')).toBe(false);
+  });
+
+  it('closes straight away when nothing is unsaved', async () => {
+    const getSubmissions = vi.fn().mockResolvedValue({
+      data: [{ id: 'paper-1', image_url: 'x', captured_at: 'y', verified_text: 'saved code' }],
+      error: null,
+    });
+    const { component } = createComponent({ getSubmissions });
+    await component.loadSubmissions();
+    component.selectedSubmission = { id: 'paper-1', image_url: 'x', captured_at: 'y' };
+
+    component.requestCloseModal();
+
+    expect(component.selectedSubmission).toBeNull();
+    expect(component.closeConfirmOpen).toBe(false);
+  });
+
+  it('asks before closing with unsaved programs, and Keep editing stays', () => {
+    const { component } = createComponent();
+    select(component);
+
+    component.requestCloseModal();
+    expect(component.closeConfirmOpen).toBe(true);
+    expect(component.selectedSubmission).not.toBeNull();
+
+    component.keepEditing();
+    expect(component.closeConfirmOpen).toBe(false);
+    expect(component.selectedSubmission).not.toBeNull();
+  });
+
+  it('Discard changes goes back to what was last saved, then closes', async () => {
+    const getSubmissions = vi.fn().mockResolvedValue({
+      data: [{
+        id: 'paper-1', image_url: 'x', captured_at: 'y', verified_text: 'saved code',
+        answers: [{ code: 'saved two', question_id: 'q-2' }],
+      }],
+      error: null,
+    });
+    const { component } = createComponent({ getSubmissions });
+    await component.loadSubmissions();
+    component.selectedSubmission = { id: 'paper-1', image_url: 'x', captured_at: 'y' };
+    component.updateSubmissionCode('paper-1', 'edited');
+    component.updateExtraAnswerCode(0, 'edited two');
+    component.addExtraAnswer();
+
+    component.discardChangesAndClose();
+
+    expect(component.editableText['paper-1']).toBe('saved code');
+    expect(component.getExtraAnswers('paper-1')).toEqual([{ code: 'saved two', question_id: 'q-2' }]);
+    expect(component.selectedSubmission).toBeNull();
+  });
+
+  it('Save and close closes after a save and stays open when a rule blocks it', async () => {
+    const { component, updateSubmissionText } = createComponent();
+    select(component);
+    component.addExtraAnswer();
+    component.updateExtraAnswerCode(0, 'int x;');
+
+    await component.saveAndClose();
+    expect(updateSubmissionText).not.toHaveBeenCalled();
+    expect(component.selectedSubmission).not.toBeNull();
+    expect(component.reviewStep).toBe(2);
+
+    component.chooseExtraQuestion(0, 'q-2');
+    await component.saveAndClose();
+    expect(updateSubmissionText).toHaveBeenCalledTimes(1);
+    expect(component.selectedSubmission).toBeNull();
+  });
+
+  it('re-extract on a split paper shows the OCR text and leaves every tab alone', async () => {
+    const { component, post } = createComponent();
+    select(component);
+    component.addExtraAnswer();
+    component.updateExtraAnswerCode(0, 'program two');
+
+    await component.extractText();
+
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(component.reextractConfirmId).toBeNull();
+    expect(component.editableText['paper-1']).toBe('int main() { return 0; }');
+    expect(component.getExtraAnswers('paper-1')[0].code).toBe('program two');
+    expect(component.ocrPanelOpen).toBe(true);
+    expect(component.getOcrText(component.selectedSubmission!)).toBe('fresh ocr');
+  });
+
+  it('shows the saved OCR reading when this session has not extracted', () => {
+    const { component } = createComponent();
+    const submission = { id: 'paper-9', image_url: 'x', captured_at: 'y', extracted_text: 'saved ocr' };
+
+    expect(component.getOcrText(submission)).toBe('saved ocr');
+  });
+
+  it('moves between tabs with the arrow keys, wrapping at both ends', () => {
+    const { component } = createComponent();
+    select(component);
+    component.addExtraAnswer();
+    component.selectTab(0);
+
+    component.moveTab(1);
+    expect(component.activeTab).toBe(1);
+    component.moveTab(1);
+    expect(component.activeTab).toBe(0);
+    component.moveTab(-1);
+    expect(component.activeTab).toBe(1);
+  });
+
+  it('finds the question for the open tab, for View question', () => {
+    const { component } = createComponent();
+    component.questions = [
+      { id: 'q-1', question_name: 'One', question_type: 'program', model_answer: 'm', test_cases: [] },
+      { id: 'q-2', question_name: 'Two', question_type: 'program', model_answer: 'm', test_cases: [] },
+    ];
+    select(component);
+    expect(component.getActiveTabQuestion()?.id).toBe('q-1');
+
+    component.addExtraAnswer();
+    expect(component.getActiveTabQuestion()).toBeNull();
+    component.chooseExtraQuestion(0, 'q-2');
+    expect(component.getActiveTabQuestion()?.id).toBe('q-2');
   });
 });

@@ -261,3 +261,133 @@
   font-size: 12px;
   font-weight: 600;
 }
+
+/* Unsaved-changes dot on a tab. */
+.program-tab-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4f46e5;
+}
+
+.program-tab:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: -2px;
+}
+
+/* "Change" (Program 1) and "View question" links in the question row. */
+.question-link {
+  flex: none;
+  padding: 0 2px;
+  border: 0;
+  color: #4f46e5;
+  background: transparent;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Read-only question details: prompt and test cases, never the model answer. */
+.question-peek {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid #c7d2fe;
+  border-radius: 10px;
+  color: #334155;
+  background: #f5f7ff;
+  font-size: 12px;
+}
+
+.question-peek p {
+  margin: 0;
+}
+
+.question-peek-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.question-peek-head span {
+  color: #64748b;
+}
+
+.question-peek-tests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.question-peek-tests li {
+  padding: 2px 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+}
+
+/* Layout B: photo and OCR text side by side, editor full width below. */
+.ocr-layout.with-ocr-text {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.ocr-layout.with-ocr-text .editor-panel {
+  grid-column: 1 / -1;
+}
+
+.ocr-text-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ocr-text-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ocr-text-header span {
+  flex: 1;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.ocr-text {
+  max-height: 420px;
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid #c7d2fe;
+  border-radius: 10px;
+  color: #1e293b;
+  background: #fff;
+  font: 12px/1.55 ui-monospace, Menlo, Consolas, monospace;
+  white-space: pre;
+}
+
+@media (max-width: 800px) {
+  .ocr-layout.with-ocr-text {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Three actions in the unsaved-programs prompt: keep labels on one line. */
+.confirm-card.close-confirm {
+  width: min(520px, 92vw);
+}
+
+.close-confirm .confirm-actions {
+  flex-wrap: wrap;
+}
+
+.close-confirm .confirm-actions button {
+  white-space: nowrap;
+}

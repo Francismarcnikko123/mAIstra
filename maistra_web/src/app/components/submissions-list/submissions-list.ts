@@ -3,6 +3,7 @@ import {
   OnInit,
   OnDestroy,
   ChangeDetectorRef,
+  ElementRef,
   QueryList,
   ViewChild,
   ViewChildren,
@@ -19,6 +20,7 @@ import {
   SubmissionAnswer,
   answerProblems,
   answersToSave,
+  isBlankAnswer,
   parseAnswers,
   takenQuestionIds,
 } from './extra-answers';
@@ -73,6 +75,7 @@ type SubmissionFilter = 'all' | 'new' | 'extracted' | 'verified' | 'graded';
 export class SubmissionsListComponent implements OnInit, OnDestroy {
   @ViewChild('codeEditor') codeEditor?: CodeEditorComponent;
   @ViewChildren('extraEditor') extraEditors?: QueryList<CodeEditorComponent>;
+  @ViewChild('tabList') tabList?: ElementRef<HTMLElement>;
   selectedQuestionId = '';
   questions: SubmissionQuestion[] = [];
   submissions: Submission[] = [];
@@ -106,6 +109,15 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   removeConfirmIndex: number | null = null;
   questionPickerOpen = false;
   extraAnswersError: Record<string, string> = {};
+  // Read-only question details (prompt + test cases) for the open tab.
+  questionPeekOpen = false;
+  // Read-only OCR reading shown beside the photo.
+  ocrPanelOpen = false;
+  // "Some programs aren't saved yet" prompt when leaving the review.
+  closeConfirmOpen = false;
+  // What was last loaded or saved, to mark unsaved tabs and back "Discard".
+  private savedProgram1: Record<string, string> = {};
+  private savedExtras: Record<string, SubmissionAnswer[]> = {};
 
   // code checking state
   isChecking = false;
@@ -183,10 +195,12 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       // Seed once. This also runs on every realtime INSERT, and must not
       // replace unsaved edits in a review that is open.
       if (saved && this.editableText[s.id] === undefined) this.editableText[s.id] = saved;
+      if (this.savedProgram1[s.id] === undefined) this.savedProgram1[s.id] = saved;
       // Seed saved program tabs once. Never replace a loaded list: the teacher
       // may have pasted programs that aren't saved yet.
       if (!this.extraAnswers[s.id]) {
         this.extraAnswers[s.id] = parseAnswers(s.answers);
+        this.savedExtras[s.id] = parseAnswers(s.answers);
       }
     }
     this.groupSubmissions();
@@ -249,6 +263,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.activeTab = 0;
     this.removeConfirmIndex = null;
     this.questionPickerOpen = false;
+    this.questionPeekOpen = false;
+    this.ocrPanelOpen = false;
+    this.closeConfirmOpen = false;
     this.extraAnswersError[submission.id] = '';
 
     this.checkError = '';
@@ -266,6 +283,45 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   closeModal() {
     this.selectedSubmission = null;
     this.reviewStep = 1;
+    this.closeConfirmOpen = false;
+  }
+
+  /** Close, or first ask when some program on this paper isn't saved. */
+  requestCloseModal() {
+    if (this.selectedSubmission && this.hasUnsavedPrograms(this.selectedSubmission.id)) {
+      this.closeConfirmOpen = true;
+      return;
+    }
+    this.closeModal();
+  }
+
+  keepEditing() {
+    this.closeConfirmOpen = false;
+  }
+
+  /** Back to what was last loaded or saved for this paper, then close. */
+  discardChangesAndClose() {
+    if (this.selectedSubmission) {
+      const id = this.selectedSubmission.id;
+      this.editableText[id] = this.savedProgram1[id] ?? '';
+      this.extraAnswers[id] = (this.savedExtras[id] ?? []).map((answer) => ({ ...answer }));
+      delete this.extractedText[id];
+      this.extraAnswersError[id] = '';
+    }
+    this.closeModal();
+  }
+
+  /** Save with the usual rules; close only if the save went through. */
+  async saveAndClose() {
+    this.closeConfirmOpen = false;
+    const id = this.selectedSubmission?.id;
+    await this.saveVerifiedText();
+    if (id && this.saveStatus[id] === 'saved') {
+      this.closeModal();
+    } else if (this.selectedSubmission) {
+      // Show the reason (a save rule or a failed save) where the tabs are.
+      this.reviewStep = 2;
+    }
   }
 
   setReviewStep(step: ReviewStep) {
@@ -329,6 +385,14 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     // confirmation via the in-app dialog first. A first extraction (no editor
     // content yet) or a re-extract with no edits since the last one runs
     // straight through without prompting.
+    // Once the paper is split into tabs, a whole-page reading can't go back
+    // into Program 1 without duplicating the other programs. Show it beside
+    // the photo instead; the teacher copies what they need into a tab.
+    if (this.getExtraAnswers(id).length) {
+      await this.performExtract(id, { replaceProgram1: false });
+      return;
+    }
+
     const current = this.editableText[id];
     const lastExtraction = this.extractedText[id];
     const hasEdits = !!current && current !== lastExtraction;
@@ -353,7 +417,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.reextractConfirmId = null;
   }
 
-  private async performExtract(id: string) {
+  private async performExtract(id: string, options = { replaceProgram1: true }) {
     if (!this.selectedSubmission) return;
     this.extractingId = id;
     this.extractionError[id] = '';
@@ -369,7 +433,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       );
       const text = res?.cleaned_text ?? '';
       this.extractedText[id] = text;
-      this.editableText[id] = text;
+      if (options.replaceProgram1) {
+        this.editableText[id] = text;
+      } else {
+        this.ocrPanelOpen = true;
+      }
       this.extractionError[id] = '';
     } catch (err) {
       console.error('OCR failed:', err);
@@ -430,6 +498,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         if (!extrasUnsaved) this.selectedSubmission.answers = extras;
       }
       if (extrasUnsaved) this.extraAnswersError[id] = EXTRA_PROGRAMS_UNSAVABLE;
+      this.savedProgram1[id] = text;
+      if (!extrasUnsaved) this.savedExtras[id] = extras.map((answer) => ({ ...answer }));
       this.saveStatus[id] = 'saved';
       // Auto-clear the confirmation after a few seconds.
       const timer = setTimeout(() => {
@@ -548,9 +618,59 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.activeTab = tab;
     this.removeConfirmIndex = null;
     this.questionPickerOpen = false;
+    this.questionPeekOpen = false;
     // Show the tab first, then let Ace re-measure the now-visible editor.
     this.cdr.detectChanges();
     this.getActiveEditor()?.refresh();
+  }
+
+  /** Left/right arrow on a tab: move to the previous/next tab, wrapping. */
+  moveTab(step: 1 | -1, event?: Event) {
+    if (!this.selectedSubmission) return;
+    event?.preventDefault();
+    const count = this.getExtraAnswers(this.selectedSubmission.id).length + 1;
+    this.selectTab((this.activeTab + step + count) % count);
+    const tabs = this.tabList?.nativeElement.querySelectorAll<HTMLElement>('[role="tab"]');
+    tabs?.[this.activeTab]?.focus();
+  }
+
+  /** Program 1 differs from what was last loaded or saved. */
+  isProgram1Unsaved(id: string): boolean {
+    return (this.editableText[id] ?? '') !== (this.savedProgram1[id] ?? '');
+  }
+
+  /** Tab has content that isn't in the saved programs. Blank tabs never count. */
+  isExtraAnswerUnsaved(id: string, answer: SubmissionAnswer): boolean {
+    if (isBlankAnswer(answer)) return false;
+    return !(this.savedExtras[id] ?? []).some(
+      (saved) => saved.code === answer.code && saved.question_id === answer.question_id,
+    );
+  }
+
+  /** Anything on this paper that a close would lose, including removed tabs. */
+  hasUnsavedPrograms(id: string): boolean {
+    return (
+      this.isProgram1Unsaved(id) ||
+      JSON.stringify(answersToSave(this.getExtraAnswers(id))) !==
+        JSON.stringify(this.savedExtras[id] ?? [])
+    );
+  }
+
+  /** The question linked to the open tab, for the read-only "View question". */
+  getActiveTabQuestion(): SubmissionQuestion | null {
+    if (!this.selectedSubmission) return null;
+    if (this.activeTab === 0) return this.getSubmissionQuestion(this.selectedSubmission);
+    const questionId = this.getActiveExtraAnswer()?.question_id;
+    return this.questions.find((question) => question.id === questionId) ?? null;
+  }
+
+  /** The OCR reading shown beside the photo: this session's, else the saved one. */
+  getOcrText(submission: Submission): string {
+    return this.extractedText[submission.id] ?? submission.extracted_text ?? '';
+  }
+
+  extraTabPlaceholder(index: number): string {
+    return `Paste Program ${index + 2}'s code here, then choose its question above.`;
   }
 
   updateExtraAnswerCode(index: number, code: string) {
