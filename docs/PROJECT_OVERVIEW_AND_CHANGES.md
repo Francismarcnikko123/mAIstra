@@ -409,6 +409,13 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - Programs 2..n are saved but not graded yet. Grading them is a follow-up for Jayrald.
 - **Grading hand-off (for Jayrald):** `programsForGrading(verified_text, question_id, answers)` in `submissions-list/extra-answers.ts` returns every gradable program on a paper as `{ program, code, question_id }`: Program 1 first, then each saved tab. Entries without code or without a question are skipped. Each `question_id` points at the `questions` row whose `model_answer` and `test_cases` that program should be graded against, so the grading step can loop over this list instead of reading `verified_text` alone. The review screen guarantees each question appears at most once per paper.
 - The split is manual by design. OCR program-boundary detection exists, but its consistency is unmeasured.
+- **Review aids (2026-09-24).** None of these read, move or check the student's code:
+  - **OCR text beside the photo.** "Show OCR text" opens the saved OCR reading, read-only, next to the photo; the editor moves to full width below. It makes reading-order and continuation results checkable against the paper.
+  - **Re-extract on a paper with tabs** only refreshes that panel and never overwrites a tab. The teacher copies what they need. Without tabs, Re-extract works as before.
+  - **"View question"** shows the linked question's prompt and test cases, read-only, without the model answer.
+  - **"Change"** on Program 1 goes back to Details.
+  - **Unsaved dots** mark tabs changed since the last save. Closing the review with unsaved changes (✕, the dark overlay, Cancel or Finish) asks: Keep editing / Discard changes / Save and close.
+  - Tooltips on the tab marks, guide text in an empty tab, and ←/→ keys between tabs.
 - Code: `submissions-list/extra-answers.ts` holds the pure parse, taken-question and save-rule helpers. `submissions-list/program-tabs.css` holds the tab styles, kept separate so the component stylesheet stays under its 12 kB build budget. `CodeEditorComponent.refresh()` re-measures a previously hidden tab.
 - **Migration:** apply `supabase/migrations/20260923000000_add_submission_answers.sql` to enable saving Programs 2..n. Until it runs, the app still works. `getSubmissions()` retries without `answers` when Postgres reports the column missing (42703), Program 1 saves as before, and Step 2 marks extra tabs as preview-only. On save, Program 1 is saved, the extra tabs stay on screen unsaved, and a message says so ("Program 1 was saved. Programs 2 and up can't be saved yet…").
 - **Code-review fixes (2026-09-24):**
