@@ -1,5 +1,6 @@
 import asyncio
 import httpx
+import pytest
 from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
@@ -189,6 +190,39 @@ def test_batch_run_executes_at_most_three_cases_concurrently(monkeypatch):
     assert response.status_code == 200
     assert len(response.json()) == 14
     assert highest_active_runs == 3
+
+
+def test_batch_run_stops_remaining_runs_after_a_failure(monkeypatch):
+    finished_runs = []
+
+    async def failing_or_slow_run(payload):
+        if payload.source_code == "fail":
+            raise main.HTTPException(status_code=504, detail="timed out")
+        await asyncio.sleep(0.05)
+        finished_runs.append(payload.source_code)
+        return {"status": {"id": 3, "description": "Accepted"}}
+
+    monkeypatch.setattr(main, "run_code", failing_or_slow_run)
+
+    async def scenario():
+        request = main.RunCodeBatchRequest(
+            runs=[
+                {"source_code": "slow 0"},
+                {"source_code": "fail"},
+                {"source_code": "slow 1"},
+                {"source_code": "slow 2"},
+            ]
+        )
+        with pytest.raises(main.HTTPException) as error:
+            await main.run_code_batch(request)
+        # Leave time for any orphaned run to keep polling and finish.
+        await asyncio.sleep(0.1)
+        return error.value
+
+    error = asyncio.run(scenario())
+
+    assert error.status_code == 504
+    assert finished_runs == []
 
 
 class StillProcessingJudge0Client:

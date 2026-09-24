@@ -201,7 +201,18 @@ async def run_code_batch(payload: RunCodeBatchRequest):
         async with semaphore:
             return await run_code(run)
 
-    return await asyncio.gather(*(run_bounded(run) for run in payload.runs))
+    tasks = [asyncio.create_task(run_bounded(run)) for run in payload.runs]
+    try:
+        return await asyncio.gather(*tasks)
+    except BaseException:
+        # A grade needs every test case, so the first failure fails the batch.
+        # gather() does not cancel the other runs on its own; stop them (and any
+        # still queued on the semaphore) instead of leaving them polling Judge0.
+        # BaseException also covers the request itself being cancelled.
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
 
 
 def encode_base64(value: str) -> str:
