@@ -71,7 +71,14 @@ def _fix_segment(segment: str) -> str:
     """Apply whole-token keyword fixes to a chunk that has no string literals."""
     for wrong, right in FIXES.items():
         # \b won't help around '#', so match the token bounded by non-word chars.
-        pattern = r"(?<![\w#])" + re.escape(wrong) + r"(?![\w])"
+        before = r"(?<![\w#])"
+        if wrong[0].isdigit():
+            # A misread starting with a digit ("1f", "1nt") must start a
+            # statement or declaration, so it is only fixed after whitespace,
+            # a brace, ';', '(' or ','. Otherwise the float suffix in
+            # "1.1f" or "b-1f" would be rewritten to "1.if" / "b-if".
+            before = r"(?<![^\s{};(,])"
+        pattern = before + re.escape(wrong) + r"(?![\w])"
         segment = re.sub(pattern, right, segment)
     return segment
 
