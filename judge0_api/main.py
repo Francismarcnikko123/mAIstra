@@ -49,17 +49,29 @@ JUDGE0_CPU_TIME_LIMIT_SECONDS = positive_integer_setting(
 JUDGE0_WALL_TIME_LIMIT_SECONDS = positive_integer_setting(
     "JUDGE0_WALL_TIME_LIMIT_SECONDS", 10
 )
+# How long a run may wait in Judge0's queue before it starts. Queue time depends
+# on how busy the Judge0 box is, not on the submitted code, so it gets its own
+# budget instead of eating into the run deadline below.
+JUDGE0_MAX_QUEUE_WAIT_SECONDS = positive_integer_setting(
+    "JUDGE0_MAX_QUEUE_WAIT_SECONDS", 60
+)
 MAX_BATCH_RUNS = 30
 BATCH_CONCURRENCY = 3
 
-# How long the wrapper waits for a result before giving up. Must comfortably
-# exceed the wall-time limit so a timed-out run reports its own TLE status
-# instead of tripping this poll budget.
+# How long the wrapper waits for a started run to finish before giving up. Must
+# comfortably exceed the wall-time limit so a timed-out run reports its own TLE
+# status instead of tripping this poll budget.
 _POLL_INTERVAL_SECONDS = 0.5
 _MAX_POLL_ATTEMPTS = max(
     1,
     math.ceil((JUDGE0_WALL_TIME_LIMIT_SECONDS + 5) / _POLL_INTERVAL_SECONDS),
 )
+_MAX_QUEUE_POLL_ATTEMPTS = max(
+    1,
+    math.ceil(JUDGE0_MAX_QUEUE_WAIT_SECONDS / _POLL_INTERVAL_SECONDS),
+)
+_JUDGE0_IN_QUEUE = 1
+_JUDGE0_PROCESSING = 2
 
 
 if not JUDGE0_BASE_URL:
@@ -123,7 +135,9 @@ async def run_code(payload: RunCodeRequest):
             if not token:
                 raise HTTPException(status_code=500, detail="Judge0 did not return a token")
 
-            for _ in range(_MAX_POLL_ATTEMPTS):
+            queued_polls = 0
+            processing_polls = 0
+            while True:
                 result_response = await client.get(
                     f"{JUDGE0_BASE_URL}/submissions/{token}",
                     params={
@@ -145,18 +159,30 @@ async def run_code(payload: RunCodeRequest):
                 for field in ["stdout", "stderr", "compile_output", "message"]:
                     result[field] = decode_base64(result.get(field))
 
-                if status_id not in [1, 2]:
+                if status_id not in [_JUDGE0_IN_QUEUE, _JUDGE0_PROCESSING]:
                     return result
 
-                await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+                # Waiting in the queue and running have separate budgets, so a
+                # busy Judge0 box cannot make correct code look like it hung.
+                if status_id == _JUDGE0_IN_QUEUE:
+                    queued_polls += 1
+                    if queued_polls >= _MAX_QUEUE_POLL_ATTEMPTS:
+                        raise HTTPException(
+                            status_code=504,
+                            detail=(
+                                "Judge0 is busy and did not start the run in "
+                                "time. Try again."
+                            ),
+                        )
+                else:
+                    processing_polls += 1
+                    if processing_polls >= _MAX_POLL_ATTEMPTS:
+                        raise HTTPException(
+                            status_code=504,
+                            detail="Judge0 did not return a result in time. Try again.",
+                        )
 
-            # Judge0 was still queued/processing when the poll budget ran out.
-            # Return an explicit timeout instead of falling through to None
-            # (which FastAPI would serialize as a 200 with a null body).
-            raise HTTPException(
-                status_code=504,
-                detail="Judge0 did not return a result in time. Try again.",
-            )
+                await asyncio.sleep(_POLL_INTERVAL_SECONDS)
     except httpx.RequestError as exc:
         raise HTTPException(
             status_code=502,
@@ -165,8 +191,6 @@ async def run_code(payload: RunCodeRequest):
                 "Start Judge0 or update JUDGE0_BASE_URL."
             ),
         ) from exc
-
-    raise HTTPException(status_code=504, detail="Judge0 execution timed out")
 
 
 @app.post("/api/judge0/run-batch")

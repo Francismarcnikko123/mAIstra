@@ -242,3 +242,74 @@ def test_run_code_returns_504_when_result_never_ready(monkeypatch):
     assert response.json()["detail"] == (
         "Judge0 did not return a result in time. Try again."
     )
+
+
+class ScriptedStatusJudge0Client:
+    """Reports the scripted status ids in order, repeating the last one."""
+
+    status_ids: list[int] = []
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return False
+
+    async def post(self, *args, **kwargs):
+        return SimpleNamespace(
+            status_code=201,
+            text="",
+            json=lambda: {"token": "submission-token"},
+        )
+
+    async def get(self, *args, **kwargs):
+        status_ids = type(self).status_ids
+        status_id = status_ids.pop(0) if len(status_ids) > 1 else status_ids[0]
+        return SimpleNamespace(
+            status_code=200,
+            text="",
+            json=lambda: {
+                "stdout": None,
+                "stderr": None,
+                "compile_output": None,
+                "message": None,
+                "status": {"id": status_id, "description": "scripted"},
+            },
+        )
+
+
+def run_with_scripted_statuses(monkeypatch, status_ids):
+    async def instant_sleep(_seconds):
+        return None
+
+    ScriptedStatusJudge0Client.status_ids = list(status_ids)
+    monkeypatch.setattr(main.httpx, "AsyncClient", ScriptedStatusJudge0Client)
+    monkeypatch.setattr(main.asyncio, "sleep", instant_sleep)
+    monkeypatch.setattr(main, "_MAX_POLL_ATTEMPTS", 3, raising=False)
+    monkeypatch.setattr(main, "_MAX_QUEUE_POLL_ATTEMPTS", 10, raising=False)
+
+    client = TestClient(main.app, raise_server_exceptions=False)
+    return client.post(
+        "/api/judge0/run",
+        json={"source_code": "int main(void) { return 0; }", "stdin": ""},
+    )
+
+
+def test_run_code_does_not_count_queue_time_against_the_run_deadline(monkeypatch):
+    # Six polls in the queue exceed the three-poll run deadline on their own.
+    response = run_with_scripted_statuses(monkeypatch, [1] * 6 + [2, 2, 3])
+
+    assert response.status_code == 200
+    assert response.json()["status"]["id"] == 3
+
+
+def test_run_code_reports_a_busy_judge0_when_the_queue_wait_runs_out(monkeypatch):
+    response = run_with_scripted_statuses(monkeypatch, [1])
+
+    assert response.status_code == 504
+    assert response.json()["detail"] == (
+        "Judge0 is busy and did not start the run in time. Try again."
+    )
