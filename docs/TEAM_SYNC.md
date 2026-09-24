@@ -103,7 +103,8 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 When you finish an item: tick it, add the date and commit, and note anything that affects others under **Changed (affects others)**.
 
 ### Status
-- (2026-09-24) **Question linking, mobile part** built on `feature/question-linking` (spec: `IMPLEMENTATION_SPEC_question_linking.md`). The phone now picks a validated, sectioned question before capture and sends `question_id` + `gate_result` with every page. Web bank/form/folders are next. Blocked on Jayrald's three items above for an end-to-end run.
+- (2026-09-24) **Question linking, mobile part** built on `feature/question-linking` **(mobile code local, pushed after an on-device test)** (spec: `IMPLEMENTATION_SPEC_question_linking.md`). The phone now picks a validated, sectioned question before capture and sends `question_id` + `gate_result` with every page. Web bank/form/folders are next. Blocked on Jayrald's three items above for an end-to-end run.
+- (2026-09-24) **Live DB check** (read-only, with the app's publishable key): `question_sections`, `questions.can_publish`, `submissions.gate_result` and `submissions.answers` are all **missing** in the cloud project. So Nombrado's `answers` migration is also still unapplied.
 
 ### Changed (affects others)
 - (2026-09-24) **New migration `supabase/migrations/20260924000000_add_question_sections.sql`** (not applied). Tables `question_sections(id, name, position)` and `question_section_items(section_id, question_id, number)`; a question belongs to at most one section, and numbers are unique within a section. RLS + column grants mirror `20260921000000_lock_down_public_api.sql`. A question with no section never appears on the phone.
