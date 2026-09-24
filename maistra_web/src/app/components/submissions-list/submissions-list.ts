@@ -278,6 +278,38 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (saved && !this.editableText[submission.id]) {
       this.editableText[submission.id] = saved;
     }
+    void this.refreshOpenSubmission(submission.id);
+  }
+
+  /**
+   * Re-read the opened paper: the auto-extract worker may have saved its OCR
+   * text after the list loaded. Only fills what is still empty; never
+   * replaces anything the teacher has on screen.
+   */
+  private async refreshOpenSubmission(id: string) {
+    try {
+      const { data, error } = await this.supabase.getSubmission(id);
+      if (error || !data) return;
+      const fresh = data as unknown as Submission;
+      if (!fresh.extracted_text) return;
+
+      for (const target of [
+        this.submissions.find((x) => x.id === id),
+        this.selectedSubmission?.id === id ? this.selectedSubmission : undefined,
+      ]) {
+        if (target && !target.extracted_text) target.extracted_text = fresh.extracted_text;
+      }
+      if (!this.editableText[id]) {
+        const text = fresh.verified_text || fresh.extracted_text;
+        this.editableText[id] = text;
+        // Arrived from the database, so it isn't an unsaved change.
+        if (!this.savedProgram1[id]) this.savedProgram1[id] = text;
+      }
+      this.groupSubmissions();
+      this.cdr.detectChanges();
+    } catch (err) {
+      console.error('Could not refresh the opened submission:', err);
+    }
   }
 
   closeModal() {
@@ -394,7 +426,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     }
 
     const current = this.editableText[id];
-    const lastExtraction = this.extractedText[id];
+    // A pre-extracted paper's saved reading counts as the last extraction,
+    // so re-extracting an untouched paper doesn't ask to discard edits.
+    const lastExtraction = this.extractedText[id] ?? this.selectedSubmission.extracted_text;
     const hasEdits = !!current && current !== lastExtraction;
     if (hasEdits) {
       this.reextractConfirmId = id;

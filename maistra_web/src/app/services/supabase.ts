@@ -69,6 +69,17 @@ async saveQuestion(question: any) {
     return this.querySubmissions(SUBMISSION_COLUMNS);
   }
 
+  /**
+   * One submission, fresh from the database. The review uses it when a paper
+   * is opened, to pick up OCR text the auto-extract worker saved after the
+   * list was loaded.
+   */
+  async getSubmission(id: string) {
+    const columns: string =
+      this.answersColumnAvailable !== false ? `answers, ${SUBMISSION_COLUMNS}` : SUBMISSION_COLUMNS;
+    return this.supabase.from('submissions').select(columns).eq('id', id).maybeSingle();
+  }
+
   private querySubmissions(columns: string) {
     return this.supabase
       .from('submissions')

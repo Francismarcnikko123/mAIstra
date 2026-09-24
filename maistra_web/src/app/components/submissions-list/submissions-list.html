@@ -201,7 +201,7 @@
             (click)="extractText()"
             [disabled]="isExtracting(selectedSubmission.id)"
           >
-            {{ isExtracting(selectedSubmission.id) ? 'Extracting…' : (hasExtractedText(selectedSubmission.id) ? 'Re-extract code' : 'Extract code') }}
+            {{ isExtracting(selectedSubmission.id) ? 'Extracting…' : (hasExtractedText(selectedSubmission.id) ? 'Re-extract code' : 'Extract now') }}
           </button>
         </div>
 
@@ -248,8 +248,8 @@
             </div>
 
             <div class="extract-placeholder" *ngIf="!hasExtractedText(selectedSubmission.id)">
-              <strong>No code extracted yet</strong>
-              <span>Choose “Extract code” to create an editable OCR result.</span>
+              <strong>Not extracted yet</strong>
+              <span>Papers are read automatically while the OCR server is running. Choose “Extract now” to read this one yourself.</span>
             </div>
 
             <ng-container *ngIf="hasExtractedText(selectedSubmission.id)">

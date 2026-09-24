@@ -9,6 +9,7 @@ import { SubmissionsListComponent } from './submissions-list';
 
 function createComponent(options?: {
   getSubmissions?: ReturnType<typeof vi.fn>;
+  getSubmission?: ReturnType<typeof vi.fn>;
   updateSubmissionText?: ReturnType<typeof vi.fn>;
   post?: ReturnType<typeof vi.fn>;
 }) {
@@ -18,6 +19,8 @@ function createComponent(options?: {
   const supabase = {
     getSubmissions:
       options?.getSubmissions ?? vi.fn().mockResolvedValue({ data: [], error: null }),
+    getSubmission:
+      options?.getSubmission ?? vi.fn().mockResolvedValue({ data: null, error: null }),
     updateSubmissionText,
     answersColumnAvailable: true,
   } as unknown as SupabaseService;
@@ -461,5 +464,67 @@ describe('SubmissionsListComponent program tabs', () => {
     expect(component.getActiveTabQuestion()).toBeNull();
     component.chooseExtraQuestion(0, 'q-2');
     expect(component.getActiveTabQuestion()?.id).toBe('q-2');
+  });
+
+  it('re-extracts an untouched pre-extracted paper without asking to discard edits', async () => {
+    const { component, post } = createComponent();
+    component.selectedSubmission = {
+      id: 'paper-1', image_url: 'x', captured_at: 'y', extracted_text: 'worker text',
+    };
+    component.editableText['paper-1'] = 'worker text';
+
+    await component.extractText();
+
+    expect(component.reextractConfirmId).toBeNull();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(component.editableText['paper-1']).toBe('fresh ocr');
+  });
+
+  it('still asks before re-extracting over the teacher\'s edits to a pre-extracted paper', async () => {
+    const { component, post } = createComponent();
+    component.selectedSubmission = {
+      id: 'paper-1', image_url: 'x', captured_at: 'y', extracted_text: 'worker text',
+    };
+    component.editableText['paper-1'] = 'worker text, corrected by the teacher';
+
+    await component.extractText();
+
+    expect(component.reextractConfirmId).toBe('paper-1');
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it('picks up OCR text the worker saved after the list loaded, without marking it unsaved', async () => {
+    const getSubmission = vi.fn().mockResolvedValue({
+      data: { id: 'paper-1', image_url: 'x', captured_at: 'y', extracted_text: 'worker text' },
+      error: null,
+    });
+    const getSubmissions = vi.fn().mockResolvedValue({
+      data: [{ id: 'paper-1', image_url: 'x', captured_at: 'y' }],
+      error: null,
+    });
+    const { component } = createComponent({ getSubmissions, getSubmission });
+    await component.loadSubmissions();
+
+    component.openModal({ id: 'paper-1', image_url: 'x', captured_at: 'y' });
+    await vi.waitFor(() => expect(component.editableText['paper-1']).toBe('worker text'));
+
+    expect(getSubmission).toHaveBeenCalledWith('paper-1');
+    expect(component.selectedSubmission?.extracted_text).toBe('worker text');
+    expect(component.hasUnsavedPrograms('paper-1')).toBe(false);
+  });
+
+  it('never replaces text the teacher already has when the paper is refreshed', async () => {
+    const getSubmission = vi.fn().mockResolvedValue({
+      data: { id: 'paper-1', image_url: 'x', captured_at: 'y', extracted_text: 'worker text' },
+      error: null,
+    });
+    const { component } = createComponent({ getSubmission });
+    component.editableText['paper-1'] = 'teacher typed this';
+
+    component.openModal({ id: 'paper-1', image_url: 'x', captured_at: 'y' });
+    await vi.waitFor(() => expect(getSubmission).toHaveBeenCalled());
+    await Promise.resolve();
+
+    expect(component.editableText['paper-1']).toBe('teacher typed this');
   });
 });

@@ -130,4 +130,22 @@ describe('SupabaseService', () => {
     expect(result.error).toBe(missingTopic.error);
     expect(service.answersColumnAvailable).toBe(true);
   });
+
+  it('reads one submission fresh, including answers while that column exists', async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: 'submission-1' }, error: null });
+    const eq = vi.fn().mockReturnValue({ maybeSingle });
+    const select = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ select });
+    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+    (service as unknown as { supabase: { from: typeof from } }).supabase = { from };
+
+    service.answersColumnAvailable = true;
+    await service.getSubmission('submission-1');
+    expect(select.mock.calls[0][0]).toMatch(/^answers, /);
+    expect(eq).toHaveBeenCalledWith('id', 'submission-1');
+
+    service.answersColumnAvailable = false;
+    await service.getSubmission('submission-1');
+    expect(select.mock.calls[1][0]).not.toMatch(/answers/);
+  });
 });
