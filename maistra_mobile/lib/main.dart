@@ -26,9 +26,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.red),
         useMaterial3: true,
       ),
-      home: const CaptureScreen(
-        questionId: '3f4b3b6e-1234-4567-8910-abcdef123456',
-      ),
+      home: const CaptureScreen(),
     );
   }
 }

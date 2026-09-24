@@ -101,16 +101,18 @@ double computeBlurScore(img.Image grayscale) {
 double computeDarkClipFraction(img.Image grayscale, {int threshold = 40}) {
   int clipped = 0;
   for (int y = 0; y < grayscale.height; y++)
-    for (int x = 0; x < grayscale.width; x++)
+    for (int x = 0; x < grayscale.width; x++) {
       if (grayscale.getPixel(x, y).r <= threshold) clipped++;
+    }
   return clipped / (grayscale.width * grayscale.height);
 }
 
 double computeBrightClipFraction(img.Image grayscale, {int threshold = 240}) {
   int clipped = 0;
   for (int y = 0; y < grayscale.height; y++)
-    for (int x = 0; x < grayscale.width; x++)
+    for (int x = 0; x < grayscale.width; x++) {
       if (grayscale.getPixel(x, y).r >= threshold) clipped++;
+    }
   return clipped / (grayscale.width * grayscale.height);
 }
 
@@ -216,37 +218,39 @@ QualityResult evaluateMetrics(QualityMetrics m, {bool autoFixed = false}) {
     }
   }
 
-  if (m.blurScore < kBlurRetake)
+  if (m.blurScore < kBlurRetake) {
     flag('Too blurry — hold the camera steady', QualityDecision.retake);
+  }
 
-  if (m.darkClipFraction > kDarkRetake)
+  if (m.darkClipFraction > kDarkRetake) {
     flag('Too dark — move to a brighter area', QualityDecision.retake);
-  else if (m.darkClipFraction > kDarkFixable)
+  } else if (m.darkClipFraction > kDarkFixable)
     flag('Slightly dark — brightness will be auto-adjusted', QualityDecision.fixable);
 
-  if (m.brightClipFraction > kBrightRetake)
+  if (m.brightClipFraction > kBrightRetake) {
     flag('Severely overexposed — reduce glare or move away from light',
         QualityDecision.retake);
-  else if (m.brightClipFraction > kBrightFixable)
+  } else if (m.brightClipFraction > kBrightFixable)
     flag('Overexposed — brightness will be auto-adjusted', QualityDecision.fixable);
 
-  if (m.contrastScore < kContrastFixable)
+  if (m.contrastScore < kContrastFixable) {
     flag('Low contrast / faded ink — contrast will be auto-enhanced',
         QualityDecision.fixable);
+  }
 
-  if (m.shadowScore > kShadowRetake)
+  if (m.shadowScore > kShadowRetake) {
     flag('Extreme shadow across page — reposition or use even lighting',
         QualityDecision.retake);
-  else if (m.shadowScore > kShadowFixable)
+  } else if (m.shadowScore > kShadowFixable)
     flag('Uneven lighting / shadow — will be auto-corrected',
         QualityDecision.fixable);
 
   final absSkew = m.skewAngleDeg.abs();
-  if (absSkew > kSkewRetake)
+  if (absSkew > kSkewRetake) {
     flag(
         'Page too tilted (${m.skewAngleDeg.toStringAsFixed(1)}°) — straighten and rescan',
         QualityDecision.retake);
-  else if (absSkew > kSkewPass)
+  } else if (absSkew > kSkewPass)
     flag(
         'Page tilted ${m.skewAngleDeg.toStringAsFixed(1)}° — will be auto de-skewed',
         QualityDecision.fixable);
