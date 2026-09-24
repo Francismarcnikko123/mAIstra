@@ -2,7 +2,7 @@
 
 ## Status
 
-Partial implementation for adviser review. This design covers automatic scoring and display only. Grade persistence, manual overrides, and integration into a larger course-grade formula are deferred until the adviser confirms the rubric.
+Automatic scoring, display, and submission-grade persistence are implemented. Manual overrides and integration into a larger course-grade formula remain deferred until the adviser confirms the rubric.
 
 ## Agreed scoring behavior
 
@@ -20,12 +20,11 @@ Logic analysis remains visible as feedback only. It does not affect the numeric 
 
 ## Data flow
 
-Student code is executed once per test case as before. Each `TestCaseResult.passed` value becomes a binary point. The Judge0 result component derives the earned count, total count, and percentage directly from the complete result collection, so no second scoring source can drift from the displayed pass/fail results.
+Student code is executed once per test case as before. Each `TestCaseResult.passed` value becomes a binary point. After every test case completes, the submissions workflow saves the result collection and its passed/total counts to Supabase. PostgreSQL generates the stored percentage from those counts, and reopening a submission restores the same per-test collection for display.
 
 ## Deferred decisions
 
 - Whether the test-case percentage is the entire question grade or one component of a broader rubric.
-- Whether the calculated score must be saved to Supabase.
 - Whether teachers need a manual override after reviewing handwritten/OCR code.
 - Whether logic feedback should remain visible to students or only to teachers.
 
