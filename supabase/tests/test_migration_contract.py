@@ -93,3 +93,27 @@ def test_grades_are_saved_only_for_the_stored_code():
         in MIGRATION_SQL
     )
     assert "public.save_submission_grade(" in DATABASE_CONTRACT_SQL
+
+
+def test_submissions_record_the_mobile_gate_verdict():
+    assert "add column if not exists gate_result text" in MIGRATION_SQL
+    assert "gate_result in ('pass', 'fixable', 'retake')" in MIGRATION_SQL
+    assert "alter policy submissions_public_insert" in MIGRATION_SQL
+    assert "gate_result is null or gate_result in ('pass', 'fixable')" in MIGRATION_SQL
+    assert "grant insert (gate_result) on table public.submissions" in MIGRATION_SQL
+
+
+def test_questions_have_a_validated_flag_for_the_mobile_picker():
+    assert (
+        "add column if not exists can_publish boolean not null default false"
+        in MIGRATION_SQL
+    )
+    assert "grant insert (can_publish) on table public.questions" in MIGRATION_SQL
+
+
+def test_questions_can_be_edited_without_leaving_stale_grades():
+    assert "create policy questions_public_update" in MIGRATION_SQL
+    assert "can_publish\n) on table public.questions to anon, authenticated" in MIGRATION_SQL
+    assert "create or replace function public.invalidate_grades_for_question" in MIGRATION_SQL
+    assert "after update of test_cases, question_type" in MIGRATION_SQL
+    assert "grading_revision = grading_revision + 1" in MIGRATION_SQL

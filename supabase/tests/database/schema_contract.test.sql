@@ -1,6 +1,6 @@
 begin;
 
-select plan(31);
+select plan(34);
 
 select ok(
   exists (
@@ -552,6 +552,74 @@ select is(
   ),
   null::bigint,
   'a grade computed against a stale revision is not saved'
+);
+
+insert into public.submissions (
+  id,
+  image_url,
+  verified_text,
+  question_id,
+  status
+)
+values (
+  '00000000-0000-0000-0000-000000000904',
+  'https://example.test/fourth-submission.png',
+  'ungraded code',
+  '00000000-0000-0000-0000-000000000a01',
+  'verified'
+);
+
+set local role anon;
+
+update public.questions
+set question_name = 'Renamed contract question',
+    question_text = 'Print a number, clearly.'
+where id = '00000000-0000-0000-0000-000000000a01';
+
+reset role;
+
+select ok(
+  (
+    select grading_revision = 1
+      and status = 'graded'
+      and passed_test_cases = 1
+      and total_test_cases = 2
+    from public.submissions
+    where id = '00000000-0000-0000-0000-000000000903'
+  ),
+  'renaming a question keeps the grades of its papers'
+);
+
+set local role anon;
+
+update public.questions
+set test_cases = '[{"test_input": "", "expected_output": "0"}]'::jsonb
+where id = '00000000-0000-0000-0000-000000000a01';
+
+reset role;
+
+select ok(
+  (
+    select grading_revision = 2
+      and status = 'verified'
+      and grading_results = '[]'::jsonb
+      and passed_test_cases is null
+      and total_test_cases is null
+      and graded_at is null
+    from public.submissions
+    where id = '00000000-0000-0000-0000-000000000903'
+  ),
+  'editing a question''s test cases clears the grades of its papers'
+);
+
+select ok(
+  (
+    select grading_revision = 1
+      and status = 'verified'
+    from public.submissions
+    where id = '00000000-0000-0000-0000-000000000904'
+  ),
+  'editing test cases refuses grades still being computed against the old ones'
 );
 
 select * from finish();
