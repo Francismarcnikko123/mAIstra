@@ -14,11 +14,14 @@ and `AGENTS.md` are identical to `feature/pre-extraction`.
 - **Web:** top bar with *Question bank* and *Submissions*; questions have a
   section and a number (`Basic · Q2 · Sum of two numbers`); the form saves only
   after validation passes; submission folders follow the question's section.
-- **Waiting on Jayrald's schema:** `question_sections` / `question_section_items`
-  (`supabase/migrations/20260926000100_add_question_sections.sql`),
-  `questions.can_publish`, `submissions.gate_result`, UPDATE on `questions`.
-  Until then the phone shows "Could not load questions" and folders stay
-  "Uncategorized".
+- **Live and tested (2026-09-26):** Jayrald's schema is in the cloud
+  (sections, `can_publish`, `gate_result`, `batch_id`, question UPDATE,
+  `submission_programs`). End-to-end test passed: question *Basic · Q1* created
+  on the web, picked on the phone, one page submitted, filed in the **Basic**
+  folder with `question_id`, `gate_result = PASS` and a `batch_id`
+  ([test note](changes/2026-09-26-end-to-end-test.md)).
+- **Next (Nikko):** the Edit screen, so older questions can get a section and
+  number and appear on the phone.
 - **Where to read:** one note per update in [`changes/`](changes/README.md),
   the dated sections in the [overview](PROJECT_OVERVIEW_AND_CHANGES.md), and
   Nikko's section of [TEAM_SYNC.md](TEAM_SYNC.md).

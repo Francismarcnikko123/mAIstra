@@ -27,4 +27,4 @@ Before, nothing tied the pages of one answer together, so the web couldn't show 
 
 - `flutter test`: 58/58 (5 new: UUID format, uniqueness over 500 ids, seeded repeatability, same `batch_id` on every page, exact insert row).
 - `flutter analyze`: 12 issues, unchanged; none in new code.
-- **Not yet on a device:** checked by the end-to-end test (capture two pages, submit, both rows share one `batch_id`).
+- **On a device (2026-09-26):** a one-page submit saved `batch_id = 3471ce96-…` ([test note](2026-09-26-end-to-end-test.md)). A two-page submit is still to be checked.

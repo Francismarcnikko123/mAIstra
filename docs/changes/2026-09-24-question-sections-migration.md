@@ -35,9 +35,8 @@ A question with no row in `question_section_items` is **unsectioned**: it shows 
 
 ## Verification
 
-Checked against the live database on 2026-09-24 and 2026-09-26: the tables do not exist there yet (`PGRST205`). Not applied anywhere yet.
+Applied to the cloud by Jayrald on 2026-09-26. Used end to end the same day: section *Basic* with question number 1 ([test note](2026-09-26-end-to-end-test.md)).
 
 ## Open
 
-- Jayrald applies it.
-- `questions.can_publish` (validated flag) and `submissions.gate_result` are separate asks to Jayrald.
+- *Done 2026-09-26:* applied by Jayrald, together with `can_publish`, `gate_result` and UPDATE on `questions`.

@@ -39,8 +39,8 @@ Papers used to arrive with no question, and the teacher had to link each one by 
 - `flutter test`: 53/53 (36 existing quality-gate tests + 17 new).
 - `flutter analyze`: 12 issues, down from 14 before the branch; none in new code.
 - Installed on a phone (M2101K6G, Android 13): launches to "Could not load questions", as expected while the tables are missing.
-- **Not yet tested end to end:** capture → submit against a database that has the tables.
+- **Tested end to end on 2026-09-26** against the live database: see [the test note](2026-09-26-end-to-end-test.md).
 
 ## Open
 
-- Pages of one answer are separate `submissions` rows with nothing grouping them (no page count on the web). Needs a decision with Jayrald and Nombrado.
+- *Resolved 2026-09-26:* pages of one answer share `submissions.batch_id` ([note](2026-09-26-mobile-batch-id.md)). Showing "2 pages" on the web is a later step.
