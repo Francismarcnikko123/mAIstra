@@ -442,7 +442,7 @@ logic specifically: the `extracted_text`-omitted-when-absent contract
 behavior in `saveVerifiedText()`. Run with `npx ng test --watch=false` from
 `maistra_web/` (Vitest via `@angular/build:unit-test`). The 89-test count was
 the first program-tabs checkpoint; after pre-extraction the recorded suite was
-114/114, and after the 2026-09-26 Save-next-to-the-tabs change it is 120/120.
+114/114, and after the 2026-09-26 Save-next-to-the-tabs change it is 121/121.
 The program-tab tests are listed at the end of this guide.
 
 ---
@@ -513,9 +513,9 @@ One paper can hold several programs. Step 2 shows browser-style tabs above the e
 - **Save next to the tabs (2026-09-26, branch `feature/program-tabs-save`):**
   - **Why:** Step 2 had no plain Save. Saving meant going to grading or closing the paper (✕ → "Save and close"), so a teacher who saved and closed had to reopen the paper to grade.
   - **Markup:** the tab row is wrapped in `.program-tabs-bar`. Inside it, `.program-tabs` (`role="tablist"`, `#tabList`) keeps the tabs and **+**, takes the free width (`flex: 1; min-width: 0`) and scrolls sideways; `.program-save` sits after it, *outside* the tablist so screen readers still see only tabs there, and stays pinned right (`flex: none`).
-  - **Save button:** `(click)="saveVerifiedText()"`, `[disabled]="isSaving(id)"` (no double saves), label "Saving…" while `savingId` is set. `.program-save-status` shows `saveStatus[id]`: "✓ All programs saved" or "Save failed, try again" (it replaced the old `.save-status` line under the editor; `saveVerifiedText()` still clears it after 3 s). Rule errors still show under the editor via `extraAnswersError`.
+  - **Save button:** `(click)="saveVerifiedText()"`, `[disabled]="isSaving(id)"` (no double saves), label "Saving…" while `savingId` is set. `.program-save-status` shows `saveStatusLabel(id)`: "Save failed, try again" on error, "✓ Program 1 saved" when `extraAnswersError[id]` is `EXTRA_PROGRAMS_UNSAVABLE` (no `answers` column), otherwise "✓ All programs saved" (it replaced the old `.save-status` line under the editor; `saveVerifiedText()` still clears it after 3 s). Rule errors still show under the editor via `extraAnswersError`.
   - **Shortcut:** `onSaveShortcut(event)` is a `@HostListener('document:keydown')`. It acts only on Cmd/Ctrl+S, only with a paper open on Step 2 and the close prompt shut; it then always calls `preventDefault()`, and saves only if `hasExtractedText(id)` (same condition as the button being shown) and no save is running.
   - **Footer:** the label is "Continue to grading"; `saveCodeAndContinue()` is unchanged apart from `cdr.detectChanges()` after `reviewStep = 3` (the app is zoneless; same fix as Jayrald's `8e20fd5`). `continueFromDetails()` got the same call after `reviewStep = 2`.
   - **Close prompt:** Discard changes (danger) + Keep editing (primary). `saveAndClose()` is gone.
   - **Save still runs when nothing looks changed**, on purpose: an untouched pre-extracted paper has `savedProgram1 = extracted_text`, so it has no dots, but it is still `pending` with no `verified_text`.
-  - **Tests** (`submissions-list.program-tabs.spec.ts`): Save keeps Step 2 open and clears the dots; a rule-blocked Save writes nothing; Save verifies an untouched pre-extracted paper; Cmd/Ctrl+S saves and blocks the browser dialog; the shortcut does nothing outside Step 2, in the prompt, without a modifier, while saving, or with no extracted code; the prompt has no save action. `submissions-list.spec.ts`: Continue to grading renders Step 3. Suite: 120/120.
+  - **Tests** (`submissions-list.program-tabs.spec.ts`): Save keeps Step 2 open and clears the dots; a rule-blocked Save writes nothing; Save verifies an untouched pre-extracted paper; Cmd/Ctrl+S saves and blocks the browser dialog; the shortcut does nothing outside Step 2, in the prompt, without a modifier, while saving, or with no extracted code; the prompt has no save action; the label says "Program 1 saved" when the column is missing and "Save failed" on error. `submissions-list.spec.ts`: Continue to grading renders Step 3. Suite: 121/121.
