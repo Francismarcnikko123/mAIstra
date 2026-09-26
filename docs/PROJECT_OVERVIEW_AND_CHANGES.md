@@ -750,6 +750,9 @@ handwriting.
   `20260926000800`–`001100` (an edited question is no longer marked validated;
   pages with programs keep no page-level grade; a question edit notifies
   every affected page; tab grades survive clearing or reordering tabs).
+  Follow-up `4060749` (`20260926001200`): the page revision moves from a trigger
+  instead of a browser-callable function (no security-advisor warning of ours
+  left), and a leftover page-level grade is cleared once a page has programs.
 
 ## Setup documentation
 

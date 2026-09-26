@@ -65,7 +65,7 @@ With no chip picked by the teacher, the selection is "first ungraded". Once a pr
 
 ### 4. Medium — the page row claims "graded" with no grade on it
 
-> **Fixed in `a8f6990`** (migration `20260926000900`): pages with program rows keep no page-level grade (cleared once), and `save_submission_grade()` refuses them. `save_program_grade()` deliberately doesn't write page columns, because that would advance the page revision and make the teacher's next save a conflict. Known gap: a page given code and a question directly in the database (never through the review) can carry an old page-level grade until its programs are saved.
+> **Fixed in `a8f6990`** (migration `20260926000900`): pages with program rows keep no page-level grade (cleared once), and `save_submission_grade()` refuses them. `save_program_grade()` deliberately doesn't write page columns, because that would advance the page revision and make the teacher's next save a conflict. Known gap: a page given code and a question directly in the database (never through the review) could carry an old page-level grade until its programs are saved. **Closed in `4060749`** (migration `20260926001200`): `save_submission_programs()` clears a leftover page-level grade once the page has programs.
 
 **Where:** `20260926000600_add_submission_programs.sql:324` (`save_program_grade`).
 
@@ -128,6 +128,10 @@ The `046b88c` merge restored Nombrado's `allow_origins=["*"]`, as they asked; th
 **Fix:** match programs by `question_id`, which is unique per paper, instead of by position when upserting. Or send blank entries through instead of dropping them. Either way, correct the SQL comment.
 
 ---
+
+## Follow-up: security-advisor warning
+
+The fix for #2 (`446b05c`) added `advance_page_revision()`, a SECURITY DEFINER function the browser could call, which Supabase's security advisor flagged. **Removed in `4060749`** (migration `20260926001200`): the page revision now moves from an AFTER trigger on `submission_programs`, which can't be called through the API. Changes made by other triggers are skipped, so the Details step still returns the page's final revision and grading never moves it. The advisor shows no warning of ours any more.
 
 ## Docs accuracy
 

@@ -29,3 +29,4 @@ One file per update, newest last. Each note says what changed, why, which files,
 | 2026-09-26 | [End-to-end tests for question linking on the web](2026-09-26-e2e-question-bank.md) | Nikko | `90c3141` |
 | 2026-09-27 | [Code review of question linking, and the fixes](2026-09-27-code-review-fixes.md) | Nikko | `df06e0e`, `47851dc` |
 | 2026-09-27 | [Onto `judge0-integration`; Edit-screen validation fix; dead scanner removed](2026-09-27-onto-judge0-integration.md) | Nikko | `fefbf9e`, `751bc7a`, this commit |
+| 2026-09-26 | [Page revision from a trigger; leftover page grades cleared](2026-09-26-revision-trigger-and-leftover-page-grade.md) | Jayrald | `4060749` |

@@ -171,9 +171,10 @@ A short, shared record of **what each of us changed that affects the others**, *
 When you finish an item: tick it, add the date and commit, and note anything that affects others under **Changed (affects others)**.
 
 ### Status
-- (2026-09-26, `judge0-integration`) **Working branch: `judge0-integration`** (pushed). Everything of mine lands here. It contains `feature/question-linking-v2` (Nikko, merged in `138ef02`) and `feature/pre-extraction` up to `0f87354` (Nombrado, merged in `046b88c`). `code-similarity/duplicate` is parked. Cloud Supabase is at `20260926001100` (all migrations up to the review fixes applied).
+- (2026-09-26, `judge0-integration`) **Working branch: `judge0-integration`** (pushed). Everything of mine lands here. It contains `feature/question-linking-v2` (Nikko, merged in `138ef02`) and `feature/pre-extraction` up to `0f87354` (Nombrado, merged in `046b88c`). `code-similarity/duplicate` is parked. Cloud Supabase is at `20260926001100` (all migrations up to the review fixes applied); `20260926001200` is committed, not applied yet.
 
 ### Changed (affects others)
+- (2026-09-26, `judge0-integration`) **Review follow-up** (`4060749`, migration `20260926001200`): the page's `grading_revision` now moves from a trigger on `submission_programs` instead of the browser-callable `advance_page_revision()` (dropped; it was our only Supabase security-advisor warning), and a leftover page-level grade is cleared once a page has programs. Nothing for others to change.
 - (2026-09-26, `judge0-integration`) **Review fixes #4, #5, #7 and #9** (`719dac1`, `a8f6990`, `24aafe8`, `0c1dc8c`; migrations `20260926000800`–`001100`).
   - **For Nikko (#7):** editing a question's model answer, test cases or type now sets `can_publish = false` on the server, even if the same update sends true. When you enable *Edit* / *Validate test cases*: save the content first, then mark it validated with a second update that sets only `can_publish = true`.
   - **For Nombrado (#9):** clearing or reordering program tabs keeps the other programs' grades now (programs are matched by question). Nothing to change in the review code.
