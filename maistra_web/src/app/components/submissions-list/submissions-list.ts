@@ -3,6 +3,7 @@ import {
   OnInit,
   OnDestroy,
   ChangeDetectorRef,
+  ElementRef,
   QueryList,
   ViewChild,
   ViewChildren,
@@ -14,11 +15,12 @@ import { SupabaseService } from '../../services/supabase';
 import { CodeEditorComponent } from '../code-editor/code-editor';
 import { Judge0, LogicAnalysisResult, TestCaseResult } from '../judge0/judge0';
 import { Judge0Service } from '../../services/judge0.service';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, timeout } from 'rxjs';
 import {
   SubmissionAnswer,
   answerProblems,
   answersToSave,
+  isBlankAnswer,
   parseAnswers,
   takenQuestionIds,
 } from './extra-answers';
@@ -57,10 +59,16 @@ interface TopicGroup {
   submissions: Submission[];
 }
 
+interface AutoExtractHealth {
+  enabled: boolean;
+  since: string | null;
+  failed: string[];
+}
+
 type ReviewStep = 1 | 2 | 3;
 
 const EXTRA_PROGRAMS_UNSAVABLE =
-  "Programs 2 and up can't be saved yet: the database is missing the answers column. Ask Jayrald to apply the migration.";
+  "Program 1 was saved. Programs 2 and up can't be saved yet: the database is missing the answers column. Ask Jayrald to apply the migration.";
 type SubmissionFilter = 'all' | 'new' | 'extracted' | 'verified' | 'graded';
 
 @Component({
@@ -73,6 +81,7 @@ type SubmissionFilter = 'all' | 'new' | 'extracted' | 'verified' | 'graded';
 export class SubmissionsListComponent implements OnInit, OnDestroy {
   @ViewChild('codeEditor') codeEditor?: CodeEditorComponent;
   @ViewChildren('extraEditor') extraEditors?: QueryList<CodeEditorComponent>;
+  @ViewChild('tabList') tabList?: ElementRef<HTMLElement>;
   selectedQuestionId = '';
   questions: SubmissionQuestion[] = [];
   submissions: Submission[] = [];
@@ -94,6 +103,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   editableText: Record<string, string> = {};
   extractionError: Record<string, string> = {};
   saveStatus: Record<string, string> = {}; // '' | 'saved' | 'error'
+  autoExtract: { enabled: boolean; since: string | null; failed: Set<string> } = {
+    enabled: false, since: null, failed: new Set<string>(),
+  };
   // Submission id whose re-extract confirmation dialog is open, or null.
   reextractConfirmId: string | null = null;
 
@@ -106,6 +118,15 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   removeConfirmIndex: number | null = null;
   questionPickerOpen = false;
   extraAnswersError: Record<string, string> = {};
+  // Read-only question details (prompt + test cases) for the open tab.
+  questionPeekOpen = false;
+  // Read-only OCR reading shown beside the photo.
+  ocrPanelOpen = false;
+  // "Some programs aren't saved yet" prompt when leaving the review.
+  closeConfirmOpen = false;
+  // What was last loaded or saved, to mark unsaved tabs and back "Discard".
+  private savedProgram1: Record<string, string> = {};
+  private savedExtras: Record<string, SubmissionAnswer[]> = {};
 
   // code checking state
   isChecking = false;
@@ -120,6 +141,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   >;
   private saveStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private saveGenerations = new Map<string, number>();
+  private ocrHealthInterval?: ReturnType<typeof setInterval>;
+  private ocrHealthGeneration = 0;
   private destroyed = false;
 
   constructor(
@@ -130,16 +153,22 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   ) {}
 
   async ngOnInit() {
+    void this.checkOcrServer();
+    this.ocrHealthInterval = setInterval(() => void this.checkOcrServer(), 30_000);
     await this.loadQuestions();
     await this.loadSubmissions();
+    if (this.destroyed) return;
 
-    this.subscription = this.supabase.subscribeToSubmissions(() => {
-      void this.loadSubmissions();
-    });
+    this.subscription = this.supabase.subscribeToSubmissions(
+      () => void this.loadSubmissions(),
+      (payload) => this.applyFreshSubmission(payload.new as Submission),
+    );
   }
 
   ngOnDestroy() {
     this.destroyed = true;
+    this.ocrHealthGeneration++;
+    if (this.ocrHealthInterval !== undefined) clearInterval(this.ocrHealthInterval);
 
     for (const timer of this.saveStatusTimers.values()) {
       clearTimeout(timer);
@@ -169,6 +198,25 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     return !this.destroyed && this.saveGenerations.get(id) === generation;
   }
 
+  async checkOcrServer() {
+    const generation = ++this.ocrHealthGeneration;
+    try {
+      const response = await firstValueFrom(
+        this.http.get<{ auto_extract?: AutoExtractHealth }>('http://localhost:8000/')
+          .pipe(timeout(2000)),
+      );
+      if (this.destroyed || generation !== this.ocrHealthGeneration) return;
+      const state = response?.auto_extract;
+      this.autoExtract = state?.enabled && !!state.since && Array.isArray(state.failed)
+        ? { enabled: true, since: state.since, failed: new Set(state.failed) }
+        : { enabled: false, since: null, failed: new Set<string>() };
+    } catch {
+      if (this.destroyed || generation !== this.ocrHealthGeneration) return;
+      this.autoExtract = { enabled: false, since: null, failed: new Set<string>() };
+    }
+    this.cdr.detectChanges();
+  }
+
   async loadSubmissions() {
     const { data, error } = await this.supabase.getSubmissions();
     if (error) {
@@ -180,15 +228,20 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     // reappears when the page reloads or a submission is reopened.
     for (const s of this.submissions) {
       const saved = s.verified_text || s.extracted_text || '';
-      if (saved) this.editableText[s.id] = saved;
+      // Seed once. This also runs on every realtime INSERT, and must not
+      // replace unsaved edits in a review that is open.
+      if (saved && this.editableText[s.id] === undefined) this.editableText[s.id] = saved;
+      if (this.savedProgram1[s.id] === undefined) this.savedProgram1[s.id] = saved;
       // Seed saved program tabs once. Never replace a loaded list: the teacher
       // may have pasted programs that aren't saved yet.
       if (!this.extraAnswers[s.id]) {
         this.extraAnswers[s.id] = parseAnswers(s.answers);
+        this.savedExtras[s.id] = parseAnswers(s.answers);
       }
     }
     this.groupSubmissions();
     this.cdr.detectChanges();
+    void this.checkOcrServer();
   }
 
   groupSubmissions() {
@@ -247,6 +300,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.activeTab = 0;
     this.removeConfirmIndex = null;
     this.questionPickerOpen = false;
+    this.questionPeekOpen = false;
+    this.ocrPanelOpen = false;
+    this.closeConfirmOpen = false;
     this.extraAnswersError[submission.id] = '';
 
     this.checkError = '';
@@ -259,11 +315,86 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (saved && !this.editableText[submission.id]) {
       this.editableText[submission.id] = saved;
     }
+    void this.refreshOpenSubmission(submission.id);
+  }
+
+  /**
+   * Re-read the opened paper: the auto-extract worker may have saved its OCR
+   * text after the list loaded. Only fills what is still empty; never
+   * replaces anything the teacher has on screen.
+   */
+  private async refreshOpenSubmission(id: string) {
+    try {
+      const { data, error } = await this.supabase.getSubmission(id);
+      if (error || !data) return;
+      this.applyFreshSubmission(data as unknown as Submission);
+    } catch (err) {
+      console.error('Could not refresh the opened submission:', err);
+    }
+  }
+
+  /** Merge worker/re-read data without replacing any teacher-owned review state. */
+  private applyFreshSubmission(fresh: Submission) {
+    if (this.destroyed || !fresh?.id) return;
+    const id = fresh.id;
+    for (const target of [
+      this.submissions.find((submission) => submission.id === id),
+      this.selectedSubmission?.id === id ? this.selectedSubmission : undefined,
+    ]) {
+      if (!target) continue;
+      if (!target.extracted_text && fresh.extracted_text) target.extracted_text = fresh.extracted_text;
+      if (fresh.status !== undefined) target.status = fresh.status;
+    }
+    if (!this.editableText[id] && !this.savedProgram1[id] && fresh.extracted_text) {
+      this.editableText[id] = fresh.extracted_text;
+      this.savedProgram1[id] = fresh.extracted_text;
+    }
+    this.groupSubmissions();
+    this.cdr.detectChanges();
   }
 
   closeModal() {
     this.selectedSubmission = null;
     this.reviewStep = 1;
+    this.closeConfirmOpen = false;
+  }
+
+  /** Close, or first ask when some program on this paper isn't saved. */
+  requestCloseModal() {
+    if (this.selectedSubmission && this.hasUnsavedPrograms(this.selectedSubmission.id)) {
+      this.closeConfirmOpen = true;
+      return;
+    }
+    this.closeModal();
+  }
+
+  keepEditing() {
+    this.closeConfirmOpen = false;
+  }
+
+  /** Back to what was last loaded or saved for this paper, then close. */
+  discardChangesAndClose() {
+    if (this.selectedSubmission) {
+      const id = this.selectedSubmission.id;
+      this.editableText[id] = this.savedProgram1[id] ?? '';
+      this.extraAnswers[id] = (this.savedExtras[id] ?? []).map((answer) => ({ ...answer }));
+      delete this.extractedText[id];
+      this.extraAnswersError[id] = '';
+    }
+    this.closeModal();
+  }
+
+  /** Save with the usual rules; close only if the save went through. */
+  async saveAndClose() {
+    this.closeConfirmOpen = false;
+    const id = this.selectedSubmission?.id;
+    await this.saveVerifiedText();
+    if (id && this.saveStatus[id] === 'saved') {
+      this.closeModal();
+    } else if (this.selectedSubmission) {
+      // Show the reason (a save rule or a failed save) where the tabs are.
+      this.reviewStep = 2;
+    }
   }
 
   setReviewStep(step: ReviewStep) {
@@ -327,8 +458,18 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     // confirmation via the in-app dialog first. A first extraction (no editor
     // content yet) or a re-extract with no edits since the last one runs
     // straight through without prompting.
+    // Once the paper is split into tabs, a whole-page reading can't go back
+    // into Program 1 without duplicating the other programs. Show it beside
+    // the photo instead; the teacher copies what they need into a tab.
+    if (this.getExtraAnswers(id).length) {
+      await this.performExtract(id, { replaceProgram1: false });
+      return;
+    }
+
     const current = this.editableText[id];
-    const lastExtraction = this.extractedText[id];
+    // A pre-extracted paper's saved reading counts as the last extraction,
+    // so re-extracting an untouched paper doesn't ask to discard edits.
+    const lastExtraction = this.extractedText[id] ?? this.selectedSubmission.extracted_text;
     const hasEdits = !!current && current !== lastExtraction;
     if (hasEdits) {
       this.reextractConfirmId = id;
@@ -351,7 +492,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.reextractConfirmId = null;
   }
 
-  private async performExtract(id: string) {
+  private async performExtract(id: string, options = { replaceProgram1: true }) {
     if (!this.selectedSubmission) return;
     this.extractingId = id;
     this.extractionError[id] = '';
@@ -367,7 +508,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       );
       const text = res?.cleaned_text ?? '';
       this.extractedText[id] = text;
-      this.editableText[id] = text;
+      if (options.replaceProgram1) {
+        this.editableText[id] = text;
+      } else {
+        this.ocrPanelOpen = true;
+      }
       this.extractionError[id] = '';
     } catch (err) {
       console.error('OCR failed:', err);
@@ -396,13 +541,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       return;
     }
     // Until the answers migration is applied, Programs 2..n have nowhere to
-    // go. Refuse rather than silently dropping them; Program 1 alone saves.
-    if (!this.extraProgramsSavable && answersToSave(this.getExtraAnswers(id)).length) {
-      this.extraAnswersError[id] = EXTRA_PROGRAMS_UNSAVABLE;
-      this.saveStatus[id] = '';
-      this.cdr.detectChanges();
-      return;
-    }
+    // go. Program 1 still saves; the extra tabs stay on screen as a preview
+    // and the teacher is told they weren't saved.
+    const extrasUnsaved =
+      !this.extraProgramsSavable && answersToSave(this.getExtraAnswers(id)).length > 0;
     this.extraAnswersError[id] = '';
 
     const generation = this.startSaveGeneration(id);
@@ -422,13 +564,17 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       if (s) {
         s.verified_text = text;
         if (ocrText !== undefined) s.extracted_text = ocrText;
-        s.answers = extras;
+        if (!extrasUnsaved) s.answers = extras;
       }
       if (this.selectedSubmission?.id === id) {
         this.selectedSubmission.verified_text = text;
         if (ocrText !== undefined)
           this.selectedSubmission.extracted_text = ocrText;
+        if (!extrasUnsaved) this.selectedSubmission.answers = extras;
       }
+      if (extrasUnsaved) this.extraAnswersError[id] = EXTRA_PROGRAMS_UNSAVABLE;
+      this.savedProgram1[id] = text;
+      if (!extrasUnsaved) this.savedExtras[id] = extras.map((answer) => ({ ...answer }));
       this.saveStatus[id] = 'saved';
       // Auto-clear the confirmation after a few seconds.
       const timer = setTimeout(() => {
@@ -492,7 +638,19 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       verified: 'Ready to grade',
       graded: 'Graded',
     };
-    return labels[this.getSubmissionStatus(submission)];
+    return this.isBeingExtracted(submission)
+      ? 'Extracting…'
+      : labels[this.getSubmissionStatus(submission)];
+  }
+
+  isBeingExtracted(submission: Submission): boolean {
+    if (this.getSubmissionStatus(submission) !== 'new' ||
+        submission.extracted_text || submission.verified_text ||
+        !this.autoExtract.enabled || !this.autoExtract.since ||
+        this.autoExtract.failed.has(submission.id)) return false;
+    const capturedAt = Date.parse(submission.captured_at);
+    const since = Date.parse(this.autoExtract.since);
+    return Number.isFinite(capturedAt) && Number.isFinite(since) && capturedAt >= since;
   }
 
   getQuestionName(submission: Submission): string {
@@ -547,9 +705,59 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.activeTab = tab;
     this.removeConfirmIndex = null;
     this.questionPickerOpen = false;
+    this.questionPeekOpen = false;
     // Show the tab first, then let Ace re-measure the now-visible editor.
     this.cdr.detectChanges();
     this.getActiveEditor()?.refresh();
+  }
+
+  /** Left/right arrow on a tab: move to the previous/next tab, wrapping. */
+  moveTab(step: 1 | -1, event?: Event) {
+    if (!this.selectedSubmission) return;
+    event?.preventDefault();
+    const count = this.getExtraAnswers(this.selectedSubmission.id).length + 1;
+    this.selectTab((this.activeTab + step + count) % count);
+    const tabs = this.tabList?.nativeElement.querySelectorAll<HTMLElement>('[role="tab"]');
+    tabs?.[this.activeTab]?.focus();
+  }
+
+  /** Program 1 differs from what was last loaded or saved. */
+  isProgram1Unsaved(id: string): boolean {
+    return (this.editableText[id] ?? '') !== (this.savedProgram1[id] ?? '');
+  }
+
+  /** Tab has content that isn't in the saved programs. Blank tabs never count. */
+  isExtraAnswerUnsaved(id: string, answer: SubmissionAnswer): boolean {
+    if (isBlankAnswer(answer)) return false;
+    return !(this.savedExtras[id] ?? []).some(
+      (saved) => saved.code === answer.code && saved.question_id === answer.question_id,
+    );
+  }
+
+  /** Anything on this paper that a close would lose, including removed tabs. */
+  hasUnsavedPrograms(id: string): boolean {
+    return (
+      this.isProgram1Unsaved(id) ||
+      JSON.stringify(answersToSave(this.getExtraAnswers(id))) !==
+        JSON.stringify(this.savedExtras[id] ?? [])
+    );
+  }
+
+  /** The question linked to the open tab, for the read-only "View question". */
+  getActiveTabQuestion(): SubmissionQuestion | null {
+    if (!this.selectedSubmission) return null;
+    if (this.activeTab === 0) return this.getSubmissionQuestion(this.selectedSubmission);
+    const questionId = this.getActiveExtraAnswer()?.question_id;
+    return this.questions.find((question) => question.id === questionId) ?? null;
+  }
+
+  /** The OCR reading shown beside the photo: this session's, else the saved one. */
+  getOcrText(submission: Submission): string {
+    return this.extractedText[submission.id] ?? submission.extracted_text ?? '';
+  }
+
+  extraTabPlaceholder(index: number): string {
+    return `Paste Program ${index + 2}'s code here, then choose its question above.`;
   }
 
   updateExtraAnswerCode(index: number, code: string) {
@@ -627,6 +835,15 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   trackByIndex(index: number): number {
     return index;
+  }
+
+  /**
+   * Editors track their own tab object, so removing a tab destroys its
+   * editor instead of handing that editor (and its undo history) to the
+   * next tab. Tab objects are mutated in place, so the identity is stable.
+   */
+  trackByAnswer(_index: number, answer: SubmissionAnswer): SubmissionAnswer {
+    return answer;
   }
 
   private getSelectedExtraAnswer(index: number): SubmissionAnswer | undefined {

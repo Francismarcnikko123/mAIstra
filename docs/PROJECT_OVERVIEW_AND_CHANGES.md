@@ -409,9 +409,47 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - Programs 2..n are saved but not graded yet. Grading them is a follow-up for Jayrald.
 - **Grading hand-off (for Jayrald):** `programsForGrading(verified_text, question_id, answers)` in `submissions-list/extra-answers.ts` returns every gradable program on a paper as `{ program, code, question_id }`: Program 1 first, then each saved tab. Entries without code or without a question are skipped. Each `question_id` points at the `questions` row whose `model_answer` and `test_cases` that program should be graded against, so the grading step can loop over this list instead of reading `verified_text` alone. The review screen guarantees each question appears at most once per paper.
 - The split is manual by design. OCR program-boundary detection exists, but its consistency is unmeasured.
+- **Review aids (2026-09-24).** None of these read, move or check the student's code:
+  - **OCR text beside the photo.** "Show OCR text" opens the saved OCR reading, read-only, next to the photo; the editor moves to full width below. It makes reading-order and continuation results checkable against the paper.
+  - **Re-extract on a paper with tabs** only refreshes that panel and never overwrites a tab. The teacher copies what they need. Without tabs, Re-extract works as before.
+  - **"View question"** shows the linked question's prompt and test cases, read-only, without the model answer.
+  - **"Change"** on Program 1 goes back to Details.
+  - **Unsaved dots** mark tabs changed since the last save. Closing the review with unsaved changes (✕, the dark overlay, Cancel or Finish) asks: Keep editing / Discard changes / Save and close.
+  - Tooltips on the tab marks, guide text in an empty tab, and ←/→ keys between tabs.
 - Code: `submissions-list/extra-answers.ts` holds the pure parse, taken-question and save-rule helpers. `submissions-list/program-tabs.css` holds the tab styles, kept separate so the component stylesheet stays under its 12 kB build budget. `CodeEditorComponent.refresh()` re-measures a previously hidden tab.
-- **Migration:** apply `supabase/migrations/20260923000000_add_submission_answers.sql` to enable saving Programs 2..n. Until it runs, the app still works. `getSubmissions()` retries without `answers` when Postgres reports the column missing (42703), Program 1 saves as before, and Step 2 marks extra tabs as preview-only. Saving them is blocked with a message instead of being silently dropped.
-- Verification: 87/87 web tests (50 existing + 37 new); TypeScript check and `ng build` pass. Checked in the running app against the cloud database without the column: all 209 submissions load, the tabs and picker render, the Program 1 question is greyed as "In Program 1", and the preview-only note shows. Saving Programs 2..n end to end is untested until the migration is applied.
+- **Migration:** apply `supabase/migrations/20260923000000_add_submission_answers.sql` to enable saving Programs 2..n. It adds a column-level `UPDATE (answers)` grant for `anon` and `authenticated` so the review editor works after the public API lockdown migration. Only Jayrald applies it to the cloud project. Until it runs, the app still works. `getSubmissions()` retries without `answers` when Postgres reports the column missing (42703), Program 1 saves as before, and Step 2 marks extra tabs as preview-only. On save, Program 1 is saved, the extra tabs stay on screen unsaved, and a message says so ("Program 1 was saved. Programs 2 and up can't be saved yet…").
+- **Code-review fixes (2026-09-24):**
+  - A realtime reload no longer replaces unsaved Program 1 edits.
+  - Removing a tab no longer hands its editor's undo history to the next tab.
+  - The open review's `answers` update after a save.
+  - OCR backend (`ocr_feature/`):
+    - The cleanup no longer rewrites float literals like `1.1f` into `1.if`.
+    - Each request works in a temporary folder that is deleted afterwards. Photos and debug dumps are no longer kept in `uploads/` / `outputs/`, and client file names never reach a path.
+    - Downloads are capped at 25 MB and must be http(s).
+    - Predictions are serialized with a lock.
+    - The upload endpoint no longer blocks the server.
+- Verification: 89/89 web tests (50 existing + 39 new); TypeScript check and `ng build` pass. Checked in the running app against the cloud database without the column: all 209 submissions load, the tabs and picker render, the Program 1 question is greyed as "In Program 1", the preview-only note shows, and clicking elsewhere cancels an armed "Remove?". Saving Programs 2..n end to end is untested until the migration is applied.
+
+## Pre-extraction on arrival (2026-09-24, branch `feature/pre-extraction`)
+
+> **Owner:** Nombrado (OCR server, review editor). The worker writes to the shared `submissions` table, so it's announced in `docs/TEAM_SYNC.md`.
+
+- **What it does:** when the OCR server runs with `AUTO_EXTRACT=true`, a background worker reads papers that arrived from the phone and saves `extracted_text`, so teachers open them already extracted. It's off by default.
+- **Same results:** it uses the same extraction function as the Extract button (`extract_image_url` in `ocr_feature/main.py`) under the same lock. The pipeline is unchanged, so the recorded accuracy numbers still apply.
+- **Never overwrites work:** the save only goes through if `extracted_text` and `verified_text` are still empty at that moment. It writes nothing else: not `verified_text`, `answers` or `status`.
+- **Only new papers:** papers captured before the server started, or before `AUTO_EXTRACT_SINCE`, are never read. The existing backlog of test papers stays as it is.
+- **Failures:** a paper that fails 3 times is left "Needs OCR" for the manual **Extract now**.
+- **Web review:**
+  - Opening a paper re-reads it (`getSubmission(id)` in `supabase.ts`), so text saved after the list loaded shows up.
+  - The OCR server's `GET /` reports whether the worker is running, its start date and papers it has given up on. The web checks this on load, every 30 seconds and after list reloads; an unreachable server counts as off.
+  - An unread paper captured after that start date shows **Extracting…** while the worker is running. It remains in the **Needs OCR** filter. Old papers, failed papers and papers seen while the server is off show **Needs OCR**.
+  - The Supabase realtime UPDATE listener fills empty OCR and editor fields and changes the badge to **Needs review** when the worker saves. It preserves teacher edits, verified text and program tabs. Opening a paper uses the same guarded merge.
+  - Re-extracting an untouched pre-extracted paper no longer asks to discard edits.
+  - The empty state and button now say **Extract now**.
+- **Key:** `ocr_feature/.env` holds `SUPABASE_URL` / `SUPABASE_KEY` (template: `.env.example`). The publishable key works while `submissions` has no RLS; switch to a secret key once RLS is on. Never put a secret key in the browser or mobile app.
+- **Live check:** one new phone paper changed from **Extracting…** to **Needs review** without a reload. A second paper showed **Needs OCR** while the server was off, then changed to **Needs review** on the same open page after the server restarted with a temporary start date covering the offline capture.
+- **Not yet:** provenance columns.
+- **Verification:** OCR 231/231 tests and web 114/114 tests pass; TypeScript checks and Angular build pass with the existing CSS budget warning. The unchanged 20-sample evaluator still reports clean_ws CER **0.099**, clean WER **0.328**, and clean token accuracy **0.716**.
 
 ## Code cleanup completed
 

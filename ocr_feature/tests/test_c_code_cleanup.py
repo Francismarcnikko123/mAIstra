@@ -26,6 +26,15 @@ class CCodeCleanupTests(unittest.TestCase):
         self.assertEqual(clean_c_code("1nt ma1n()"), "int main()")
         self.assertEqual(clean_c_code("my1nt ma1n_value"), "my1nt ma1n_value")
 
+    def test_preserves_float_suffixes_and_digit_tokens_inside_expressions(self):
+        text = "float x = 1.1f;\ny = b-1f + 0.1f;"
+
+        self.assertEqual(clean_c_code(text), text)
+
+    def test_still_fixes_digit_misreads_at_statement_start(self):
+        self.assertEqual(clean_c_code("{1f (x) return;"), "{if (x) return;")
+        self.assertEqual(clean_c_code("f(1nt a, 1nt b)"), "f(int a, int b)")
+
     def test_cleanup_is_idempotent(self):
         once = clean_c_code("#inc1ude <std1o.n>\n1nt ma1n()")
 

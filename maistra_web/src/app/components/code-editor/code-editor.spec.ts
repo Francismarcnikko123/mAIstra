@@ -204,3 +204,19 @@ describe('CodeEditorComponent.refresh', () => {
     expect(() => component.refresh()).not.toThrow();
   });
 });
+
+describe('CodeEditorComponent placeholder', () => {
+  it('passes a changed placeholder on to Ace', () => {
+    const component = Object.create(CodeEditorComponent.prototype) as CodeEditorComponent;
+    const setOption = vi.fn();
+    (component as unknown as { editor: { setOption: typeof setOption; getValue: () => string } }).editor =
+      { setOption, getValue: () => '' };
+    component.placeholder = 'Paste Program 2';
+
+    component.ngOnChanges({
+      placeholder: { currentValue: 'Paste Program 2', previousValue: '', firstChange: false, isFirstChange: () => false },
+    });
+
+    expect(setOption).toHaveBeenCalledWith('placeholder', 'Paste Program 2');
+  });
+});

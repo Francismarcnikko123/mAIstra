@@ -69,6 +69,17 @@ async saveQuestion(question: any) {
     return this.querySubmissions(SUBMISSION_COLUMNS);
   }
 
+  /**
+   * One submission, fresh from the database. The review uses it when a paper
+   * is opened, to pick up OCR text the auto-extract worker saved after the
+   * list was loaded.
+   */
+  async getSubmission(id: string) {
+    const columns: string =
+      this.answersColumnAvailable !== false ? `answers, ${SUBMISSION_COLUMNS}` : SUBMISSION_COLUMNS;
+    return this.supabase.from('submissions').select(columns).eq('id', id).maybeSingle();
+  }
+
   private querySubmissions(columns: string) {
     return this.supabase
       .from('submissions')
@@ -117,10 +128,14 @@ async saveQuestion(question: any) {
     if (error) throw error;
   }
 
-  subscribeToSubmissions(callback: (payload: any) => void) {
+  subscribeToSubmissions(
+    onInsert: (payload: any) => void,
+    onUpdate?: (payload: any) => void,
+  ) {
     return this.supabase
       .channel('submissions')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'submissions' }, callback)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'submissions' }, onInsert)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'submissions' }, onUpdate ?? (() => {}))
       .subscribe();
   }
   

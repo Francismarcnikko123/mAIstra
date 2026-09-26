@@ -41,6 +41,8 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
   @ViewChild('host', { static: true }) host!: ElementRef<HTMLElement>;
 
   @Input() value = '';
+  /** Guide text shown only while the editor is empty. */
+  @Input() placeholder = '';
   @Output() valueChange = new EventEmitter<string>();
 
   private editor?: ace.Ace.Editor;
@@ -58,6 +60,7 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
       tabSize: 2,
       useSoftTabs: true,
       highlightActiveLine: true,
+      placeholder: this.placeholder,
     });
     this.editor.setValue(this.value ?? '', -1);
 
@@ -250,6 +253,9 @@ export class CodeEditorComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (this.editor && changes['placeholder']) {
+      this.editor.setOption('placeholder', this.placeholder);
+    }
     // Reflect external updates (e.g. OCR result arriving) without clobbering
     // what the teacher is typing.
     if (

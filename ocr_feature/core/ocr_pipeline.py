@@ -1,5 +1,6 @@
 import math
 import os
+import threading
 from pathlib import Path
 
 import cv2
@@ -100,6 +101,11 @@ ocr = PaddleOCR(
     device="cpu"
 )
 
+# FastAPI runs requests in a threadpool, but the one PaddleOCR predictor isn't
+# documented as thread-safe. Serialize predictions: on CPU they can't usefully
+# overlap anyway.
+_ocr_lock = threading.Lock()
+
 
 def warmup() -> None:
     """Run one throwaway prediction so PaddleOCR loads its models now, at
@@ -111,7 +117,8 @@ def warmup() -> None:
         cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 2
     )
     try:
-        ocr.predict(dummy)
+        with _ocr_lock:
+            ocr.predict(dummy)
     except Exception:
         # Warm-up is best-effort; a failure here must never block startup.
         pass
@@ -170,7 +177,10 @@ def _recognize_preprocessed(preprocessed_path: str) -> dict:
         )
 
     try:
-        results = ocr.predict(preprocessed_path)
+        with _ocr_lock:
+            # PaddleOCR 3.x may yield results lazily; materialize them while
+            # the lock is still held.
+            results = list(ocr.predict(preprocessed_path))
     except Exception as exc:
         # A single bad image (corrupt/degenerate data, an internal model error,
         # or OOM) must fail with context rather than a bare PaddleOCR traceback

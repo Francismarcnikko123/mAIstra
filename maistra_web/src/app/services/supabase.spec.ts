@@ -2,6 +2,27 @@ import { describe, expect, it, vi } from 'vitest';
 import { SupabaseService } from './supabase';
 
 describe('SupabaseService', () => {
+  it('registers INSERT and UPDATE callbacks on the same submissions channel', () => {
+    const channel = { on: vi.fn(), subscribe: vi.fn() };
+    channel.on.mockReturnValue(channel);
+    const createChannel = vi.fn().mockReturnValue(channel);
+    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+    (service as unknown as { supabase: { channel: typeof createChannel } }).supabase = {
+      channel: createChannel,
+    };
+    const onInsert = vi.fn();
+    const onUpdate = vi.fn();
+
+    service.subscribeToSubmissions(onInsert, onUpdate);
+
+    expect(createChannel).toHaveBeenCalledWith('submissions');
+    expect(channel.on).toHaveBeenCalledWith('postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'submissions' }, onInsert);
+    expect(channel.on).toHaveBeenCalledWith('postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'submissions' }, onUpdate);
+    expect(channel.subscribe).toHaveBeenCalledOnce();
+  });
+
   it('rejects updateSubmissionText when Supabase returns an error', async () => {
     const error = new Error('permission denied');
     const eq = vi.fn().mockResolvedValue({ error });
@@ -129,5 +150,23 @@ describe('SupabaseService', () => {
     expect(select).toHaveBeenCalledTimes(1);
     expect(result.error).toBe(missingTopic.error);
     expect(service.answersColumnAvailable).toBe(true);
+  });
+
+  it('reads one submission fresh, including answers while that column exists', async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { id: 'submission-1' }, error: null });
+    const eq = vi.fn().mockReturnValue({ maybeSingle });
+    const select = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ select });
+    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+    (service as unknown as { supabase: { from: typeof from } }).supabase = { from };
+
+    service.answersColumnAvailable = true;
+    await service.getSubmission('submission-1');
+    expect(select.mock.calls[0][0]).toMatch(/^answers, /);
+    expect(eq).toHaveBeenCalledWith('id', 'submission-1');
+
+    service.answersColumnAvailable = false;
+    await service.getSubmission('submission-1');
+    expect(select.mock.calls[1][0]).not.toMatch(/answers/);
   });
 });
