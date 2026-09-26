@@ -33,7 +33,7 @@
   <!-- Kept alive so a half-filled form survives a look elsewhere. -->
   <div [style.display]="page === 'create' ? null : 'none'">
     <button type="button" class="back-link" (click)="page = 'bank'">← Question bank</button>
-    <!-- Refreshes the review's question picker after a save (Jayrald). -->
-    <app-question-form (questionSaved)="submissionsList.loadQuestions()"></app-question-form>
+    <!-- Refreshes the review's question picker, card labels and folders after a save (Jayrald). -->
+    <app-question-form (questionSaved)="submissionsList.refreshQuestions()"></app-question-form>
   </div>
 </main>

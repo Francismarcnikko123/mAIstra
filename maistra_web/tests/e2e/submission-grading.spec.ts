@@ -1,4 +1,5 @@
 import { test as base, expect, type Locator, type Page } from '@playwright/test';
+import { submissionCard } from './support/cards';
 import { FakeBackend } from './support/fake-backend';
 import {
   SUM_TEST_CASES,
@@ -13,6 +14,9 @@ import {
 
 const QUESTION_ID = '11111111-1111-4111-8111-111111111111';
 const SUBMISSION_ID = '22222222-2222-4222-8222-222222222222';
+const CAPTURED_AT = '2026-09-20T08:30:00Z';
+// How the list shows CAPTURED_AT (tests run in UTC).
+const CARD_TIME = 'Sep 20 · 08:30';
 
 const test = base.extend<{ backend: FakeBackend }>({
   backend: async ({ page }, use) => {
@@ -31,9 +35,11 @@ const test = base.extend<{ backend: FakeBackend }>({
   },
 });
 
+// Opens the submission captured at CAPTURED_AT; its dialog is titled with the
+// student's name.
 async function openSubmission(page: Page, studentName: string): Promise<Locator> {
   await page.goto('/');
-  await page.getByRole('button', { name: new RegExp(studentName) }).click();
+  await submissionCard(page, CARD_TIME).click();
   const dialog = page.getByRole('dialog', { name: studentName });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -46,6 +52,7 @@ test('teacher assigns a question, fixes the OCR code and grades it', async ({
   // OCR misread the student's `+` as `-`.
   backend.addSubmission({
     id: SUBMISSION_ID,
+    captured_at: CAPTURED_AT,
     student_name: 'Maria Santos',
     topic: 'Loops',
     status: 'extracted',
@@ -98,7 +105,7 @@ test('teacher assigns a question, fixes the OCR code and grades it', async ({
   // The list reflects the grade once the review is closed.
   await dialog.getByRole('button', { name: 'Finish review' }).click();
   await expect(dialog).toBeHidden();
-  const card = page.getByRole('button', { name: /Maria Santos/ });
+  const card = submissionCard(page, CARD_TIME);
   await expect(card).toContainText('Graded');
   await expect(card).toContainText('2/2 test cases passed — Score: 100%');
 });
@@ -110,6 +117,7 @@ test('code that passes only some test cases gets partial credit', async ({
   // Already verified and assigned, so the teacher goes straight to grading.
   backend.addSubmission({
     id: SUBMISSION_ID,
+    captured_at: CAPTURED_AT,
     student_name: 'Jose Reyes',
     status: 'verified',
     question_id: QUESTION_ID,
@@ -147,6 +155,7 @@ test('a grade is not saved when the submission changed during grading', async ({
 }) => {
   backend.addSubmission({
     id: SUBMISSION_ID,
+    captured_at: CAPTURED_AT,
     student_name: 'Ana Cruz',
     status: 'verified',
     question_id: QUESTION_ID,
@@ -179,6 +188,7 @@ test('grading reports a failure and saves nothing when Judge0 is down', async ({
 }) => {
   backend.addSubmission({
     id: SUBMISSION_ID,
+    captured_at: CAPTURED_AT,
     student_name: 'Luis Garcia',
     status: 'verified',
     question_id: QUESTION_ID,

@@ -36,6 +36,22 @@ export interface SubmissionRow {
   score_percent: number | null;
   graded_at: string | null;
   grading_revision: number;
+  // Programs 2..n of a paper (20260923000000_add_submission_answers.sql).
+  answers: unknown[];
+  // The phone's photo verdict (20260926000200_add_submission_gate_result.sql).
+  gate_result: string | null;
+}
+
+export interface SectionRow {
+  id: string;
+  name: string;
+  position: number;
+}
+
+export interface SectionItemRow {
+  section_id: string;
+  question_id: string;
+  number: number;
 }
 
 export interface Judge0Run {
@@ -78,7 +94,8 @@ export interface RecordedRequest {
 
 const SUPABASE_ORIGIN = 'https://cvtshfshqccuncamvnkl.supabase.co';
 const JUDGE0_API = 'http://127.0.0.1:8001/api/judge0';
-const OCR_API = 'http://localhost:8000/api/ocr';
+const OCR_SERVER = 'http://localhost:8000';
+const OCR_API = `${OCR_SERVER}/api/ocr`;
 
 // A 1x1 grey PNG, so submission cards render an image without any network.
 export const PLACEHOLDER_IMAGE =
@@ -97,6 +114,8 @@ export const compileError = (message: string): Judge0Result => ({
 export class FakeBackend {
   readonly questions: QuestionRow[] = [];
   readonly submissions = new Map<string, SubmissionRow>();
+  readonly sections: SectionRow[] = [];
+  readonly sectionItems: SectionItemRow[] = [];
   readonly requests: RecordedRequest[] = [];
   readonly unexpected: string[] = [];
 
@@ -114,6 +133,7 @@ export class FakeBackend {
   private socket?: WebSocketRoute;
   private realtimeBindings: RealtimeBinding[] = [];
   private nextQuestionNumber = 1;
+  private nextSectionNumber = 1;
 
   // True once the page's submissions channel has joined, so pushed changes
   // will reach it.
@@ -149,9 +169,21 @@ export class FakeBackend {
       score_percent: null,
       graded_at: null,
       grading_revision: 0,
+      answers: [],
+      gate_result: null,
       ...submission,
     };
     this.submissions.set(row.id, row);
+    return row;
+  }
+
+  addSection(name: string, position = this.sections.length) {
+    const row: SectionRow = {
+      id: `00000000-0000-4000-9000-${String(this.nextSectionNumber++).padStart(12, '0')}`,
+      name,
+      position,
+    };
+    this.sections.push(row);
     return row;
   }
 
@@ -172,6 +204,14 @@ export class FakeBackend {
     await page.route(`${SUPABASE_ORIGIN}/**`, (route) => this.handleSupabase(route));
     await page.route(`${JUDGE0_API}/**`, (route) => this.handleJudge0(route));
     await page.route(`${OCR_API}/**`, (route) => this.handleOcr(route));
+    // The list polls the OCR server's health for its automatic-extraction
+    // state; here it is always off.
+    await page.route(`${OCR_SERVER}/`, (route) =>
+      this.json(route, {
+        status: 'ok',
+        auto_extract: { enabled: false, since: null, failed: [] },
+      }),
+    );
   }
 
   // What the mobile app's upload looks like to the web page: a new row, then
@@ -291,9 +331,7 @@ export class FakeBackend {
         ...question,
         id: `00000000-0000-4000-8000-${String(this.nextQuestionNumber++).padStart(12, '0')}`,
       });
-      // .single() asks for one object rather than an array.
-      const wantsObject = (request.headers()['accept'] ?? '').includes('vnd.pgrst.object');
-      return this.json(route, wantsObject ? row : [row], 201);
+      return this.json(route, this.wantsObject(request) ? row : [row], 201);
     }
     if (method === 'GET' && path === '/rest/v1/submissions') {
       const rows = this.filterSubmissions(url)
@@ -307,20 +345,35 @@ export class FakeBackend {
     if (method === 'POST' && path === '/rest/v1/rpc/save_submission_grade') {
       return this.saveGrade(route, request.postDataJSON());
     }
+    if (method === 'GET' && path === '/rest/v1/question_sections') {
+      const rows = [...this.sections].sort(
+        (a, b) => a.position - b.position || a.name.localeCompare(b.name),
+      );
+      return this.json(route, rows);
+    }
+    if (method === 'POST' && path === '/rest/v1/question_sections') {
+      const [section] = request.postDataJSON() as Array<Pick<SectionRow, 'name'>>;
+      const row = this.addSection(section.name, 0);
+      return this.json(route, this.wantsObject(request) ? row : [row], 201);
+    }
+    if (method === 'GET' && path === '/rest/v1/question_section_items') {
+      return this.json(route, filterRows(this.sectionItems, url));
+    }
+    if (method === 'POST' && path === '/rest/v1/question_section_items') {
+      const rows = request.postDataJSON() as SectionItemRow[];
+      this.sectionItems.push(...rows);
+      return this.json(route, null, 201);
+    }
     return this.reject(route, `Unhandled Supabase request ${method} ${path}${url.search}`);
   }
 
-  // Applies the PostgREST `column=eq.value` filters the app uses.
   private filterSubmissions(url: URL): SubmissionRow[] {
-    const filters = [...url.searchParams.entries()].filter(([, value]) =>
-      value.startsWith('eq.'),
-    );
-    return [...this.submissions.values()].filter((row) =>
-      filters.every(
-        ([column, value]) =>
-          String(row[column as keyof SubmissionRow]) === value.slice(3),
-      ),
-    );
+    return filterRows([...this.submissions.values()], url);
+  }
+
+  // .single() asks for one object rather than an array.
+  private wantsObject(request: Request): boolean {
+    return (request.headers()['accept'] ?? '').includes('vnd.pgrst.object');
   }
 
   private withQuestion(row: SubmissionRow) {
@@ -438,6 +491,18 @@ export class FakeBackend {
       body: JSON.stringify({ message }),
     });
   }
+}
+
+// Applies the PostgREST `column=eq.value` filters the app uses.
+function filterRows<T extends object>(rows: T[], url: URL): T[] {
+  const filters = [...url.searchParams.entries()].filter(([, value]) =>
+    value.startsWith('eq.'),
+  );
+  return rows.filter((row) =>
+    filters.every(
+      ([column, value]) => String(row[column as keyof T]) === value.slice(3),
+    ),
+  );
 }
 
 function cors() {

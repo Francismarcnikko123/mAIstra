@@ -1584,6 +1584,19 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.questions = data ?? [];
   }
 
+  /**
+   * Called after the question form saves a question on this page. Reloads the
+   * questions and their sections, so the review's picker, the card labels
+   * and the folders include it without a page reload.
+   */
+  async refreshQuestions() {
+    await this.loadQuestions();
+    await this.loadSectionFolders();
+    if (this.destroyed) return;
+    this.groupSubmissions();
+    this.cdr.detectChanges();
+  }
+
   getSelectedQuestion() {
     return this.questions.find((q) => q.id === this.selectedQuestionId) || null;
   }
