@@ -145,7 +145,7 @@ A short, shared record of **what each of us changed that affects the others**, *
 When you finish an item: tick it, add the date and commit, and note anything that affects others under **Changed (affects others)**.
 
 ### Status
-- (2026-09-26, `judge0-integration`) **Working branch: `judge0-integration`** (pushed). Everything of mine lands here. It contains `feature/question-linking-v2` (Nikko, merged in `138ef02`) and `feature/pre-extraction` up to `0f87354` (Nombrado, merged in `046b88c`). `code-similarity/duplicate` is parked. Cloud Supabase is at `20260926000600`.
+- (2026-09-26, `judge0-integration`) **Working branch: `judge0-integration`** (pushed). Everything of mine lands here. It contains `feature/question-linking-v2` (Nikko, merged in `138ef02`) and `feature/pre-extraction` up to `0f87354` (Nombrado, merged in `046b88c`). `code-similarity/duplicate` is parked. Cloud Supabase is at `20260926001100` (all migrations up to the review fixes applied).
 
 ### Changed (affects others)
 - (2026-09-26, `judge0-integration`) **Review fixes #4, #5, #7 and #9** (`719dac1`, `a8f6990`, `24aafe8`, `0c1dc8c`; migrations `20260926000800`–`001100`).
@@ -182,7 +182,7 @@ When you finish an item: tick it, add the date and commit, and note anything tha
   1. **Current branch:** `judge0-integration`. It already contains `codex/supabase-security`.
   2. **`code-similarity/duplicate` is parked**, not merged. It is 25 commits behind, rewrites `submissions-list.*`, and its one-submission-per-(assessment, question, student) index assumes one program per row. Similarity comes back later, rebuilt on top of `submission_programs` (programs grouped by question).
   3. **Multi-program papers: your `submission_programs` table proposal is accepted.** Note: I applied `20260923000000_add_submission_answers.sql` to the cloud before I saw your "hold" request (it's on `feature/pre-extraction`, not on my branch). The column is empty (0 of 212 rows), so the `submission_programs` migration will simply drop it. Answers to its section 7 are in the next entry.
-  4. **Migrations:** I apply them to the cloud, in version order, with `supabase db push`. The cloud is at `20260926000400`; date new migrations after that and announce them here.
+  4. **Migrations:** I apply them to the cloud, in version order, with `supabase db push`. The cloud is at `20260926000400`; date new migrations after that and announce them here. *(Update: now at `20260926001100`; date new ones after that.)*
   5. **Nikko doesn't wait for `assessments`.** Nikko's question sections (live in the cloud) cover grouping and numbering.
   6. **Target branch:** merge `feature/pre-extraction` (which includes `feature/program-tabs`) into **`judge0-integration`**. Everything goes to `main` later in one merge.
   7. **Submission → assessment link:** none for now; assessments are parked with the similarity branch. The tab picker can list all validated questions (optionally Program 1's section first).

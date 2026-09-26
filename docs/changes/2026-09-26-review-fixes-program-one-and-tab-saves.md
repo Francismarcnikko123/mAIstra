@@ -1,6 +1,6 @@
 # Review fixes: Program 1 follows the page's question; tab-only saves are guarded (2026-09-26)
 
-> **Owner:** Jayrald. **Branch:** `judge0-integration`. **Commit:** `446b05c`. Migration `20260926000700`.
+> **Owner:** Jayrald. **Branch:** `judge0-integration`. **Commit:** `446b05c`. Migration `20260926000700`, applied to the cloud on 2026-09-26.
 
 ## What
 

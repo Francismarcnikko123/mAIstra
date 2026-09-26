@@ -687,7 +687,8 @@ handwriting.
   as its own row, Program 1 included, with its own question and grade, and
   drops the empty `answers` column. See "Grading every program on a paper"
   below. [Note](changes/2026-09-26-submission-programs-and-per-program-grading.md)
-- **Cloud project is at `20260926000600`.** Nombrado's `answers` migration and
+- **Cloud project is at `20260926001100`** (the review fixes `000700`–`001100`
+  included). Nombrado's `answers` migration and
   Nikko's sections migration were applied along with these.
 - **Branches (decided in `TEAM_SYNC.md`):** everyone builds on
   `judge0-integration`, which now contains `feature/question-linking-v2` and
