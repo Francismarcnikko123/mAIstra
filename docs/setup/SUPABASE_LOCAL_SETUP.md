@@ -141,7 +141,7 @@ Example:
 
 ```env
 SUPABASE_URL=http://127.0.0.1:54321
-SUPABASE_ANON_KEY=your-local-anon-key
+SUPABASE_KEY=your-local-publishable-or-anon-key
 ```
 
 For an Angular application, you may store the values in an environment configuration file:

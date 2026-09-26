@@ -641,8 +641,13 @@ Supabase REST into `datasets/verified/` (images named
   text on multiple submissions = re-captures of one page; they must
   end up on the same side of any train/test split or the evaluation
   leaks. The script detects and warns at export time.
-- Auth: same `SUPABASE_URL` / `SUPABASE_ANON_KEY` the backend uses,
-  from `.env`.
+- Auth: same `SUPABASE_URL` / `SUPABASE_KEY` the OCR server uses, from
+  `.env` (`SUPABASE_ANON_KEY` was the legacy name; Supabase disabled that key
+  on 2026-09-21).
+- **Update 2026-09-27:** pages with several programs come from the
+  `submission_programs` table; each program is kept as its own block and
+  matched to the photo's lines separately, and such pages are never used as
+  whole-page CER references or test pages.
 
 **Current state:** 7 pairs exported, but only 1 (`d8cb2ec1`) is a
 genuine human correction — 4 are the OCR's own output saved unedited, 1

@@ -80,8 +80,8 @@ the other docs and are equivalent).
 
 | Command | One-line explanation |
 |---|---|
-| `.venv/bin/python -m evaluators.export_dataset` | Pulls all `status='verified'` submissions from Supabase into `datasets/verified/` (images + `labels.csv`) for fine-tuning; merges into existing writer-batch rows rather than overwriting them, and prints a provenance/correction-distance summary. |
-| `.venv/bin/python -m evaluators.build_recognition_dataset` | Crops per-line training images from `datasets/verified/` pages, pairing each crop with its ground-truth text. |
+| `.venv/bin/python -m evaluators.export_dataset` | Pulls every `verified` or `graded` page from Supabase into `datasets/verified/` (images + `labels.csv`) for fine-tuning, reading each page's programs from `submission_programs` (split pages keep one block per program in `program_blocks`). Needs `SUPABASE_URL` and `SUPABASE_KEY` in `ocr_feature/.env`. Merges into existing writer-batch rows rather than overwriting them, and prints a provenance/correction-distance summary. **Writes to the training data; check the summary before retraining.** |
+| `.venv/bin/python -m evaluators.build_recognition_dataset` | Crops per-line training images from `datasets/verified/` pages, pairing each crop with its ground-truth text. A split page's programs are each matched to the page's lines on their own. |
 | `.venv/bin/python -m evaluators.build_crosswriter_dataset` | Builds the writer-disjoint measurement dataset (holds out specific greenbook writers entirely) for the cross-writer generalization experiment. |
 | `.venv/bin/python select_holdout.py` | Picks a stratified test-set holdout from `datasets/verified/labels.csv`, moves those images to `samples/`, and removes them from the training set. |
 | `.venv/bin/python import_verified_batch.py --verified-by "Name of verifier"` | One-off import of a teammate's physically-verified, writer-named photo batch into `datasets/verified/`; records `literal_verified`/`_by`/`_at` provenance and merges into existing Supabase-sourced rows rather than overwriting them. |
