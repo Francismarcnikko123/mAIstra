@@ -1,6 +1,6 @@
 begin;
 
-select plan(34);
+select plan(36);
 
 select ok(
   exists (
@@ -620,6 +620,32 @@ select ok(
     where id = '00000000-0000-0000-0000-000000000904'
   ),
   'editing test cases refuses grades still being computed against the old ones'
+);
+
+select ok(
+  exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'submissions'
+      and column_name = 'batch_id'
+      and data_type = 'uuid'
+      and is_nullable = 'YES'
+  ),
+  'submissions.batch_id groups the pages of one answer'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_index index_record
+    join pg_attribute column_record
+      on column_record.attrelid = index_record.indrelid
+      and column_record.attnum = any (index_record.indkey)
+    where index_record.indrelid = 'public.submissions'::regclass
+      and column_record.attname = 'batch_id'
+  ),
+  'submissions.batch_id is indexed'
 );
 
 select * from finish();

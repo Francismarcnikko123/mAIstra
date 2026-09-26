@@ -1,6 +1,6 @@
 begin;
 
-select plan(24);
+select plan(26);
 
 select ok(
   (
@@ -261,6 +261,16 @@ select is(
   (select outcome from anon_question_update_results where attempt = 'bad type'),
   'rejected',
   'question edits are validated like new questions'
+);
+
+select ok(
+  has_column_privilege('anon', 'public.submissions', 'batch_id', 'INSERT'),
+  'anon can group uploaded pages into one answer'
+);
+
+select ok(
+  not has_column_privilege('anon', 'public.submissions', 'batch_id', 'UPDATE'),
+  'anon cannot move a page to another answer after upload'
 );
 
 select * from finish();

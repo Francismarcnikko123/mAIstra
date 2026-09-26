@@ -117,3 +117,9 @@ def test_questions_can_be_edited_without_leaving_stale_grades():
     assert "create or replace function public.invalidate_grades_for_question" in MIGRATION_SQL
     assert "after update of test_cases, question_type" in MIGRATION_SQL
     assert "grading_revision = grading_revision + 1" in MIGRATION_SQL
+
+
+def test_pages_of_one_answer_share_a_batch_id():
+    assert "add column if not exists batch_id uuid" in MIGRATION_SQL
+    assert "on public.submissions (batch_id)" in MIGRATION_SQL
+    assert "grant insert (batch_id) on table public.submissions" in MIGRATION_SQL
