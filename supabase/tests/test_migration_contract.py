@@ -123,3 +123,13 @@ def test_pages_of_one_answer_share_a_batch_id():
     assert "add column if not exists batch_id uuid" in MIGRATION_SQL
     assert "on public.submissions (batch_id)" in MIGRATION_SQL
     assert "grant insert (batch_id) on table public.submissions" in MIGRATION_SQL
+
+
+def test_each_program_on_a_page_is_a_gradable_row():
+    assert "create table public.submission_programs" in MIGRATION_SQL
+    assert "references public.questions (id) on delete restrict" in MIGRATION_SQL
+    assert "unique (submission_id, question_id)\n    deferrable initially deferred" in MIGRATION_SQL
+    assert "create function public.save_submission_programs(" in MIGRATION_SQL
+    assert "create function public.save_program_grade(" in MIGRATION_SQL
+    assert "and grading_revision = p_grading_revision" in MIGRATION_SQL
+    assert "alter table public.submissions drop column if exists answers" in MIGRATION_SQL
