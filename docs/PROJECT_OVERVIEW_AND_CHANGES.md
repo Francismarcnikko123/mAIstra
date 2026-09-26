@@ -750,6 +750,10 @@ handwriting.
 - **Live refresh and program tabs** (2026-09-27, `bcb0fea`): when another
   teacher changes the tabs, an untouched screen refreshes them; a screen with
   unsaved tab changes gets a conflict on save instead of deleting their tab.
+- **Review of the pulled teammate changes** (2026-09-27): [`reviews/2026-09-27-teammates-changes-review.md`](reviews/2026-09-27-teammates-changes-review.md)
+  lists 10 findings. The urgent one (Nikko): renaming an older question
+  rewrites its test cases and clears its papers' grades without a warning.
+  The unsaved reminder beside Save now stays while any tab is unsaved (`8c11129`).
 - **Code review:** [`reviews/2026-09-26-judge0-integration-code-review.md`](reviews/2026-09-26-judge0-integration-code-review.md)
   lists nine findings; all but #8 (Nombrado's OCR CORS setting) are fixed:
   #3 and #6 in `f3c3a69` (Step 3 stays on the program just graded, grading
