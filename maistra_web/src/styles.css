@@ -1,1 +1,14 @@
 /* You can add global styles to this file, and also import other style files */
+
+/* Photo-quality verdict from the phone (question page and submission cards). */
+.gate-badge {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.gate-badge[data-tone='pass'] { color: #15803d; background: #f0fdf4; }
+.gate-badge[data-tone='fixable'] { color: #b45309; background: #fffbeb; }
+.gate-badge[data-tone='retake'] { color: #b91c1c; background: #fef2f2; }

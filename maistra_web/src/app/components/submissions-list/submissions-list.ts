@@ -22,6 +22,14 @@ import {
   parseAnswers,
   takenQuestionIds,
 } from './extra-answers';
+import {
+  QuestionPlace,
+  compareFolders,
+  gateBadge,
+  indexQuestionPlaces,
+  questionLabel,
+  submissionFolder,
+} from '../question-bank/question-labels';
 
 interface TestCase {
   test_code: string;
@@ -53,6 +61,8 @@ interface Submission {
 }
 
 interface TopicGroup {
+  /** Folder key (section id or legacy topic) and display name. */
+  key: string;
   topic: string;
   submissions: Submission[];
 }
@@ -78,6 +88,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   submissions: Submission[] = [];
   groupedSubmissions: TopicGroup[] = [];
   collapsedFolders: Record<string, boolean> = {};
+  // Folders come from each paper's question section (Nikko).
+  questionPlaces = new Map<string, QuestionPlace>();
+  gateResults = new Map<string, string>();
+  readonly gateBadge = gateBadge;
   searchQuery = '';
   statusFilter: SubmissionFilter = 'all';
 
@@ -176,6 +190,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       return;
     }
     this.submissions = (data ?? []) as unknown as Submission[];
+    await this.loadSectionFolders();
     // Seed the editor with previously saved text so verified/extracted work
     // reappears when the page reloads or a submission is reopened.
     for (const s of this.submissions) {
@@ -209,19 +224,65 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       return statusMatches && searchMatches;
     });
 
+    const folders = new Map<string, ReturnType<typeof submissionFolder>>();
     for (const s of filtered) {
-      const topic = s.topic?.trim() || 'Uncategorized';
-      if (!map.has(topic)) map.set(topic, []);
-      map.get(topic)!.push(s);
+      const folder = submissionFolder(s.question_id, s.topic, this.questionPlaces);
+      folders.set(folder.key, folder);
+      if (!map.has(folder.key)) map.set(folder.key, []);
+      map.get(folder.key)!.push(s);
     }
 
-    this.groupedSubmissions = Array.from(map.entries())
-      .sort(([a], [b]) => {
-        if (a === 'Uncategorized') return 1;
-        if (b === 'Uncategorized') return -1;
-        return a.localeCompare(b);
-      })
-      .map(([topic, submissions]) => ({ topic, submissions }));
+    this.groupedSubmissions = Array.from(folders.values())
+      .sort(compareFolders)
+      .map((folder) => ({
+        key: folder.key,
+        topic: folder.name,
+        submissions: map.get(folder.key)!,
+      }));
+  }
+
+  /**
+   * Section and number for every question, plus the phone's photo verdicts.
+   * Either may be missing before their migrations run; the list then falls
+   * back to typed topics and shows no photo badges.
+   */
+  async loadSectionFolders() {
+    try {
+      const [sections, items, gateResults] = await Promise.all([
+        this.supabase.getQuestionSections(),
+        this.supabase.getSectionItems(),
+        this.supabase.getGateResults(),
+      ]);
+      this.questionPlaces =
+        sections.error || items.error
+          ? new Map()
+          : indexQuestionPlaces(sections.data ?? [], items.data ?? []);
+      this.gateResults = gateResults;
+    } catch (err) {
+      // Never let folders or badges stop the submissions list loading.
+      console.error('Failed to load question sections:', err);
+      this.questionPlaces = new Map();
+      this.gateResults = new Map();
+    }
+  }
+
+  /** "Basic · Q2 · Sum of two numbers" for a paper's Program 1 question. */
+  getQuestionLabel(submission: Submission): string {
+    const id =
+      submission.id === this.selectedSubmission?.id
+        ? this.selectedQuestionId || submission.question_id
+        : submission.question_id;
+    return questionLabel(
+      this.getQuestionName(submission),
+      id ? this.questionPlaces.get(id) : null,
+    );
+  }
+
+  /** Read-only section for the Details step, from the chosen question. */
+  selectedSectionName(): string {
+    const place = this.questionPlaces.get(this.selectedQuestionId);
+    if (place) return place.sectionName;
+    return this.selectedQuestionId ? 'No section yet' : 'Choose a question first';
   }
 
   onFiltersChanged() {
@@ -234,8 +295,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.groupSubmissions();
   }
 
-  toggleFolder(topic: string) {
-    this.collapsedFolders[topic] = !this.collapsedFolders[topic];
+  toggleFolder(key: string) {
+    this.collapsedFolders[key] = !this.collapsedFolders[key];
   }
 
   openModal(submission: Submission) {
@@ -291,6 +352,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (!this.selectedSubmission) return false;
     this.savingTopic = true;
     try {
+      // The folder follows the question's section; the typed topic only
+      // remains for questions that have no section yet.
+      const place = this.questionPlaces.get(this.selectedQuestionId);
+      if (place) this.editableTopic = place.sectionName;
       await this.supabase.updateSubmissionDetails(
         this.selectedSubmission.id,
         this.editableTopic,

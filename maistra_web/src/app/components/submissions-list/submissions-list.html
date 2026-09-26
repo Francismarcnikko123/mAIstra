@@ -47,15 +47,15 @@
       <button
         type="button"
         class="folder-header"
-        (click)="toggleFolder(group.topic)"
-        [attr.aria-expanded]="!collapsedFolders[group.topic]"
+        (click)="toggleFolder(group.key)"
+        [attr.aria-expanded]="!collapsedFolders[group.key]"
       >
-        <span class="folder-arrow" [class.collapsed]="collapsedFolders[group.topic]">▾</span>
+        <span class="folder-arrow" [class.collapsed]="collapsedFolders[group.key]">▾</span>
         <span class="folder-name">{{ group.topic }}</span>
         <span class="folder-count">{{ group.submissions.length }}</span>
       </button>
 
-      <div class="folder-content" [class.hidden]="collapsedFolders[group.topic]">
+      <div class="folder-content" [class.hidden]="collapsedFolders[group.key]">
         <div class="submission-grid">
           <button
             type="button"
@@ -73,9 +73,13 @@
               </span>
             </div>
             <div class="card-content">
-              <strong>{{ submission.student_name || 'Unnamed student' }}</strong>
-              <span>{{ getQuestionName(submission) }}</span>
-              <time>{{ submission.captured_at | date:'mediumDate' }}</time>
+              <strong>{{ submission.captured_at | date:'MMM d · HH:mm' }}</strong>
+              <span>{{ getQuestionLabel(submission) }}</span>
+              <small
+                class="gate-badge"
+                *ngIf="gateBadge(gateResults.get(submission.id)) as badge"
+                [attr.data-tone]="badge.tone"
+              >{{ badge.icon }} {{ badge.label }}</small>
             </div>
           </button>
         </div>
@@ -155,8 +159,9 @@
             </div>
 
             <label class="field-group">
-              <span>Topic or folder</span>
-              <input [(ngModel)]="editableTopic" placeholder="For example: Loops or Chapter 3" />
+              <span>Section</span>
+              <input [value]="selectedSectionName()" readonly />
+              <small>Comes from the question. Change it in the question bank.</small>
             </label>
 
             <label class="field-group">
