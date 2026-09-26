@@ -46,7 +46,7 @@ So when a teacher only **renames** such a question:
 
 ### 2. High — question edits have no conflict check
 
-> **Fixed by Nikko (2026-09-27, `d139ef2`), without a revision column:** `updateQuestion` filters on all five content columns as loaded (PostgREST casts the `test_cases` filter to JSONB and compares by value; checked read-only on the cloud), and `markQuestionValidated` on the validated model answer, test cases and type. A save that matches no row changes nothing and the form reports the conflict. E2E test "a save made from an outdated copy is refused…" fails on the old code.
+> **Fixed by Nikko (2026-09-27, `d139ef2`), without a revision column:** `updateQuestion` filters on all five content columns as loaded (PostgREST casts the `test_cases` filter to JSONB and compares by value; checked read-only on the cloud), and `markQuestionValidated` on the validated model answer, test cases and type. A save that matches no row changes nothing and the form reports the conflict. E2E test "a save made from an outdated copy is refused…" fails on the old code. Confirmed live with two browser windows (`docs/changes/2026-09-27-live-rename-test.md`, second run).
 
 **Where:** `supabase.ts:178`.
 

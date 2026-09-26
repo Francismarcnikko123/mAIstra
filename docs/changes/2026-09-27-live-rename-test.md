@@ -1,4 +1,4 @@
-# Live test: renaming an older question keeps its grades (2026-09-27)
+# Live test: renaming keeps grades; a stale edit is refused (2026-09-27)
 
 > **Owner:** Nikko. **Branch:** `judge0-integration` with the fix `a7fcf76` (web via `npm start`, phone app, OCR server and Judge0 wrapper running locally, Judge0 on the VM). Cloud database at `20260926001300`.
 
@@ -31,11 +31,26 @@ Database read with the app's publishable key before and after each step.
 - **Rename:** saved at once with no warning; grades untouched. Before the fix this rename cleared the grade silently.
 - **Changed test case:** the warning appeared first; nothing was saved until **Save and clear grades**; then the grade was cleared and the question stayed validated.
 
+## Second run: the conflict check (#2), after `d139ef2`
+
+Same setup, same question. The web app reloaded with `d139ef2`.
+
+| # | Step | Result |
+|---|---|---|
+| 1 | Rename "E2E rename test 2" → "E2E rename test 3" | saved with no warning; still validated, 3 test cases unchanged, `grading_revision` still 2. The guarded update matches the real row. |
+| 2 | Two Chrome windows, A and B, both open **Edit** on the question | – |
+| 3 | B renames it "Saved by B" and saves | saved |
+| 4 | A, from its old copy, renames it "Saved by A" and saves | refused: "Someone else changed this question after you opened it, so nothing was saved. Cancel and open it again to see their version." |
+| 5 | Database | `question_name = "Saved by B"`, `can_publish = true`. A didn't overwrite B. |
+
+The `graded_at=not.is.null` filter that `countGradedPapers()` now uses (#9) was also run read-only against the cloud: it returns only graded programs.
+
 ## Not covered
 
 - **#5** (retry after a failed "mark validated") needs the network to drop between two updates; covered by a unit test only.
-- **#2** (two teachers editing the same question) is still open.
+- **#6** (photo badge during a folder reload) depends on timing that can't be reproduced by hand; covered by a unit test only.
+- **#2**, validation conflict: the window between the content save and "mark validated" is too short to hit by hand; covered by a unit test only.
 
 ## Data left in the cloud
 
-Section **E2E TEST**, question **E2E rename test 2** (3 test cases, validated) and one submission, now ungraded. Test data; delete when the team wants a clean start.
+Section **E2E TEST**, question **Saved by B** (3 test cases, validated) and one submission, now ungraded. Test data; delete when the team wants a clean start.
