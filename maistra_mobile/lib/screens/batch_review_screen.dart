@@ -1,151 +1,227 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:edge_detection/edge_detection.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
 import '../models/captured_page.dart';
-import '../utils/quality_check.dart';
+import '../models/question_choice.dart';
+import '../services/submission_uploader.dart';
+import '../theme/app_theme.dart';
+import '../utils/page_capture.dart';
+import '../utils/verdict.dart';
+import '../widgets/verdict_view.dart';
+import 'submitted_screen.dart';
 
+/// Screen 3: review every page of this answer before submitting. A RETAKE
+/// page carries its own error and actions, and blocks submit.
 class BatchReviewScreen extends StatefulWidget {
-  final List<CapturedPage> pages;
+  final QuestionChoice question;
 
-  const BatchReviewScreen({super.key, required this.pages});
+  /// Shared with the capture screen, so removals and retakes carry back.
+  final List<CapturedPage> pages;
+  final SubmissionUploader? uploader;
+
+  const BatchReviewScreen({
+    super.key,
+    required this.question,
+    required this.pages,
+    this.uploader,
+  });
 
   @override
   State<BatchReviewScreen> createState() => _BatchReviewScreenState();
 }
 
 class _BatchReviewScreenState extends State<BatchReviewScreen> {
+  late final SubmissionUploader _uploader =
+      widget.uploader ?? SubmissionUploader();
+  bool _busy = false;
+  String? _uploadError;
+
+  List<CapturedPage> get _pages => widget.pages;
+
+  int _count(Verdict v) => _pages.where((p) => p.verdict == v).length;
+
+  String? get _blockedReason {
+    if (_pages.isEmpty) return 'Add at least one page to submit.';
+    final retakes = _count(Verdict.retake);
+    if (retakes == 0) return null;
+    return retakes == 1
+        ? 'Retake or remove the page marked Retake to submit.'
+        : 'Retake or remove the $retakes pages marked Retake to submit.';
+  }
+
+  Future<void> _retake(CapturedPage page) async {
+    setState(() => _busy = true);
+    try {
+      final fresh = await scanPage();
+      if (fresh == null || !mounted) return;
+      setState(() => _replace(page, fresh));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _recrop(CapturedPage page) async {
+    setState(() => _busy = true);
+    try {
+      final fresh = await recropPage(page);
+      if (fresh == null || !mounted) return;
+      setState(() => _replace(page, fresh));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _replace(CapturedPage old, CapturedPage fresh) {
+    final i = _pages.indexOf(old);
+    if (i >= 0) _pages[i] = fresh;
+  }
+
+  void _remove(CapturedPage page) {
+    setState(() => _pages.remove(page));
+  }
+
+  Future<void> _submit() async {
+    if (_blockedReason != null) return;
+    setState(() {
+      _busy = true;
+      _uploadError = null;
+    });
+    try {
+      final count = _pages.length;
+      await _uploader.submit(widget.question, List.of(_pages));
+      if (!mounted) return;
+      _pages.clear();
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SubmittedScreen(
+            question: widget.question,
+            pageCount: count,
+            submittedAt: DateTime.now(),
+          ),
+        ),
+        (_) => false,
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => _uploadError =
+              'Upload failed. Check your connection and try again. ($e)',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final goodCount = widget.pages
-        .where((p) => p.quality.decision == QualityDecision.pass)
-        .length;
-    final fixedCount = widget.pages
-        .where((p) => p.quality.decision == QualityDecision.fixable)
-        .length;
-    final badCount = widget.pages
-        .where((p) => p.quality.decision == QualityDecision.retake)
-        .length;
-    final selectedCount = widget.pages.where((p) => p.accepted).length;
+    final theme = Theme.of(context);
+    final blocked = _blockedReason;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFB71C1C),
-        title: const Text(
-          'Batch Review',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Text(
+          widget.question.shortLabel,
+          overflow: TextOverflow.ellipsis,
         ),
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Column(
         children: [
-          // Summary bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: Colors.white,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
               children: [
-                _SummaryBadge(count: goodCount, label: 'Good', color: Colors.green),
-                const SizedBox(width: 8),
-                if (fixedCount > 0) ...[
-                  _SummaryBadge(count: fixedCount, label: 'Fixed', color: Colors.orange),
-                  const SizedBox(width: 8),
-                ],
-                _SummaryBadge(count: badCount, label: 'Bad', color: Colors.red),
-                const Spacer(),
                 Text(
-                  '$selectedCount / ${widget.pages.length} selected',
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  '${_pages.length} ${_pages.length == 1 ? 'page' : 'pages'}',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final v in Verdict.values)
+                      if (_count(v) > 0)
+                        VerdictChip(verdict: v, count: _count(v)),
+                  ],
                 ),
               ],
             ),
           ),
-          const Divider(height: 1),
-          // Page list
+          const Divider(),
           Expanded(
-            child: widget.pages.isEmpty
-                ? const Center(
+            child: _pages.isEmpty
+                ? Center(
                     child: Text(
-                      'No pages scanned yet.',
-                      style: TextStyle(color: Colors.grey),
+                      'No pages yet. Go back to scan one.',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: widget.pages.length,
-                    itemBuilder: (context, i) => _PageCard(
-                      page: widget.pages[i],
-                      index: i,
-                      onToggle: () => setState(
-                          () => widget.pages[i].accepted = !widget.pages[i].accepted),
-                      onPreview: () => _showPreview(context, widget.pages[i], i),
-                      onDelete: () => setState(() => widget.pages.removeAt(i)),
-                      onRecrop: () => _recrop(i),
-                    ),
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _pages.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 16),
+                    itemBuilder: (context, i) {
+                      final page = _pages[i];
+                      return _PageCard(
+                        key: ValueKey(page.file.path),
+                        page: page,
+                        index: i,
+                        enabled: !_busy,
+                        onPreview: () => _showPreview(page, i),
+                        onRetake: () => _retake(page),
+                        onRecrop: () => _recrop(page),
+                        onRemove: () => _remove(page),
+                      );
+                    },
                   ),
           ),
-          // Bottom bar
+          const Divider(),
           SafeArea(
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 8,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: Color(0xFFB71C1C)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+            top: false,
+            minimum: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_uploadError != null || blocked != null) ...[
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 20,
+                        color: _uploadError != null
+                            ? theme.colorScheme.error
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _uploadError ?? blocked!,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: _uploadError != null
+                                ? theme.colorScheme.error
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
-                      child: const Text(
-                        'Back',
-                        style: TextStyle(color: Color(0xFFB71C1C), fontSize: 16),
-                      ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton.icon(
-                      onPressed: selectedCount > 0
-                          ? () => Navigator.pop(context, true)
-                          : null,
-                      icon: const Icon(Icons.check, color: Colors.white),
-                      label: Text(
-                        selectedCount > 0
-                            ? 'Confirm $selectedCount Page(s)'
-                            : 'Select pages to confirm',
-                        style: const TextStyle(color: Colors.white, fontSize: 15),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFB71C1C),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        disabledBackgroundColor: Colors.grey.shade300,
-                      ),
-                    ),
-                  ),
+                  const SizedBox(height: 8),
                 ],
-              ),
+                FilledButton.icon(
+                  onPressed: _busy || blocked != null ? null : _submit,
+                  icon: _busy
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.cloud_upload_outlined),
+                  label: Text(_busy ? 'Submitting…' : 'Submit answer'),
+                ),
+              ],
             ),
           ),
         ],
@@ -153,105 +229,34 @@ class _BatchReviewScreenState extends State<BatchReviewScreen> {
     );
   }
 
-  Future<void> _recrop(int index) async {
-    final page = widget.pages[index];
-    final dir = await getTemporaryDirectory();
-    final saveTo = p.join(
-      dir.path,
-      'recrop_${DateTime.now().millisecondsSinceEpoch}.jpg',
-    );
-    final inputPath = page.originalPath ?? page.file.path;
-    final ok = await EdgeDetection.recropImage(
-      inputPath: inputPath,
-      saveTo: saveTo,
-    );
-    if (!ok) return;
-    final file = File(saveTo);
-    if (!await file.exists()) return;
-    final bytes = await file.readAsBytes();
-    final quality = await compute(checkQuality, bytes);
-    setState(() {
-      widget.pages[index] = CapturedPage(
-        file: file,
-        quality: quality,
-        accepted: quality.passed,
-        originalPath: page.originalPath,
-      );
-    });
-  }
-
-  void _showPreview(BuildContext context, CapturedPage page, int index) {
+  void _showPreview(CapturedPage page, int index) {
     showDialog(
       context: context,
-      builder: (_) => Dialog(
+      builder: (context) => Dialog(
         backgroundColor: Colors.black,
-        insetPadding: const EdgeInsets.all(12),
+        insetPadding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
                 Text(
                   'Page ${index + 1}',
                   style: const TextStyle(color: Colors.white, fontSize: 16),
                 ),
                 const Spacer(),
                 IconButton(
+                  tooltip: 'Close',
                   icon: const Icon(Icons.close, color: Colors.white),
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),
-            Image.file(page.file, fit: BoxFit.contain),
+            Flexible(child: Image.file(page.file, fit: BoxFit.contain)),
             const SizedBox(height: 8),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ─── Summary badge ───────────────────────────────────────────────────────────
-
-class _SummaryBadge extends StatelessWidget {
-  final int count;
-  final String label;
-  final Color color;
-
-  const _SummaryBadge({
-    required this.count,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            label == 'Good' ? Icons.check_circle : Icons.cancel,
-            size: 14,
-            color: color,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '$count $label',
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 13,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -262,232 +267,114 @@ class _SummaryBadge extends StatelessWidget {
 class _PageCard extends StatelessWidget {
   final CapturedPage page;
   final int index;
-  final VoidCallback onToggle;
+  final bool enabled;
   final VoidCallback onPreview;
-  final VoidCallback onDelete;
+  final VoidCallback onRetake;
   final VoidCallback onRecrop;
+  final VoidCallback onRemove;
 
   const _PageCard({
+    super.key,
     required this.page,
     required this.index,
-    required this.onToggle,
+    required this.enabled,
     required this.onPreview,
-    required this.onDelete,
+    required this.onRetake,
     required this.onRecrop,
+    required this.onRemove,
   });
 
   @override
   Widget build(BuildContext context) {
-    final decision = page.quality.decision;
-    final qualityColor = decision == QualityDecision.pass
-        ? Colors.green
-        : decision == QualityDecision.fixable
-            ? Colors.orange
-            : Colors.red;
-    final qualityLabel = decision == QualityDecision.pass
-        ? 'GOOD'
-        : decision == QualityDecision.fixable
-            ? 'FIXED'
-            : 'BAD';
-    final qualityIcon = decision == QualityDecision.pass
-        ? Icons.check_circle
-        : decision == QualityDecision.fixable
-            ? Icons.auto_fix_high
-            : Icons.cancel;
+    final theme = Theme.of(context);
+    final isRetake = page.verdict == Verdict.retake;
+    final retakeColor = VerdictColors.of(context).retake;
 
     return Card(
-      elevation: 2,
-      margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         side: BorderSide(
-          color: page.accepted ? Colors.green : Colors.grey.shade300,
-          width: page.accepted ? 2.0 : 1.0,
+          color: isRetake ? retakeColor : theme.colorScheme.outlineVariant,
+          width: isRetake ? 2 : 1,
         ),
       ),
-      child: InkWell(
-        onTap: onPreview,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Thumbnail with quality badge
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.file(
-                      page.file,
-                      width: 80,
-                      height: 110,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  Positioned(
-                    top: 4,
-                    left: 4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: qualityColor,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(qualityIcon, color: Colors.white, size: 10),
-                          const SizedBox(width: 2),
-                          Text(
-                            qualityLabel,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkWell(
+                  onTap: onPreview,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Semantics(
+                    button: true,
+                    label: 'Preview page ${index + 1}',
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(
+                        page.file,
+                        width: 72,
+                        height: 96,
+                        fit: BoxFit.cover,
                       ),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(width: 12),
-              // Info column
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          'Page ${index + 1}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
-                        ),
-                        if (page.accepted) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade50,
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: Colors.green),
-                            ),
-                            child: const Text(
-                              'Selected',
-                              style: TextStyle(
-                                color: Colors.green,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                        const Spacer(),
-                        GestureDetector(
-                          onTap: onDelete,
-                          child: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.red,
-                            size: 20,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    if (page.quality.issues.isEmpty)
-                      const Text(
-                        '✓ All quality checks passed',
-                        style: TextStyle(color: Colors.green, fontSize: 12),
-                      )
-                    else
-                      ...page.quality.issues.map(
-                        (issue) => Padding(
-                          padding: const EdgeInsets.only(bottom: 3),
-                          child: Text(
-                            '• $issue',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: onToggle,
-                            icon: Icon(
-                              page.accepted
-                                  ? Icons.remove_circle_outline
-                                  : Icons.add_circle_outline,
-                              size: 14,
-                            ),
-                            label: Text(
-                              page.accepted ? 'Remove' : 'Include',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor:
-                                  page.accepted ? Colors.red : Colors.green,
-                              side: BorderSide(
-                                color: page.accepted ? Colors.red : Colors.green,
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 6,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: onRecrop,
-                            icon: const Icon(Icons.crop, size: 14),
-                            label: const Text(
-                              'Recrop',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFFB71C1C),
-                              side: const BorderSide(color: Color(0xFFB71C1C)),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 6,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Page ${index + 1}',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      VerdictBanner(result: page.quality, dense: true),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                if (isRetake) ...[
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: enabled ? onRetake : null,
+                      icon: const Icon(Icons.camera_alt_outlined),
+                      label: const Text('Retake'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                if (page.originalPath != null) ...[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: enabled ? onRecrop : null,
+                      icon: const Icon(Icons.crop),
+                      label: const Text('Recrop'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: enabled ? onRemove : null,
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Remove'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
