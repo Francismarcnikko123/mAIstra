@@ -670,11 +670,21 @@ export class QuestionFormComponent implements OnInit {
         ...testCase,
         test_input: this.stdinFor(this.questionType, testCase.test_input),
       })),
-      // Only reachable after every test case passed.
-      can_publish: true,
     });
     if (error) {
       this.errorMessage = 'Error: ' + error.message;
+      return;
+    }
+    // Second update: the database resets can_publish when the content
+    // changes, so validation (which passed before Save was allowed) is
+    // recorded on its own.
+    const validated = await this.supabase.markQuestionValidated(id);
+    if (validated.error) {
+      this.errorMessage =
+        'The changes were saved, but the question could not be marked validated: ' +
+        validated.error.message +
+        '. Save again to retry.';
+      this.questionSaved.emit();
       return;
     }
     this.questionSaved.emit();

@@ -190,7 +190,9 @@ test('editing a validated question: renaming saves at once, changing a test case
   await again.getByLabel('Question Name').fill('Hello, your name');
   await again.getByRole('button', { name: 'Save changes' }).click();
   await expect(row(page, 'Hello, your name')).toBeVisible();
-  expect(backend.requestsTo('PATCH', '/rest/v1/questions')).toHaveLength(1);
+  // Content, then can_publish on its own (Jayrald's reset trigger).
+  expect(backend.requestsTo('PATCH', '/rest/v1/questions')).toHaveLength(2);
+  await expect(row(page, 'Hello, your name')).toContainText('✓ Validated');
   expect(backend.requestsTo('PATCH', '/rest/v1/question_section_items')).toHaveLength(0);
 });
 
@@ -220,4 +222,6 @@ test('changing test cases on a question with graded papers warns before saving',
   await form.getByRole('button', { name: 'Save and clear grades' }).click();
   await expect(page.getByRole('heading', { name: 'Question bank' })).toBeVisible();
   expect(backend.questions.find((q) => q.id === SUM_ID)?.test_cases).toHaveLength(3);
+  // Test cases changed, and the question is still validated afterwards.
+  expect(backend.questions.find((q) => q.id === SUM_ID)?.can_publish).toBe(true);
 });

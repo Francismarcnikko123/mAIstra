@@ -146,9 +146,11 @@ async saveQuestion(question: any) {
   }
 
   /**
-   * Saves an edited question. Jayrald's 20260926000400 migration allows these
-   * columns; changing test_cases or question_type clears the grades of papers
-   * linked to the question (his trigger).
+   * Saves an edited question's content. Jayrald's 20260926000400 migration
+   * allows these columns; changing test_cases or question_type clears the
+   * grades of papers linked to the question, and since 20260926000800 a
+   * change to model_answer, test_cases or question_type also resets
+   * can_publish to false (see markQuestionValidated).
    */
   async updateQuestion(
     id: string,
@@ -158,12 +160,25 @@ async saveQuestion(question: any) {
       question_type: string;
       model_answer: string;
       test_cases: unknown[];
-      can_publish: boolean;
     },
   ) {
     return await this.supabase
       .from('questions')
       .update(fields)
+      .eq('id', id)
+      .select('id')
+      .single();
+  }
+
+  /**
+   * Marks a question validated. Must be its own update, after the content is
+   * saved: Jayrald's reset trigger (20260926000800) clears can_publish on
+   * any update that also changes the model answer, test cases or type.
+   */
+  async markQuestionValidated(id: string) {
+    return await this.supabase
+      .from('questions')
+      .update({ can_publish: true })
       .eq('id', id)
       .select('id')
       .single();

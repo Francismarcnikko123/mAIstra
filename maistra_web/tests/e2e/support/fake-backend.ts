@@ -422,7 +422,15 @@ export class FakeBackend {
     if (method === 'PATCH' && path === '/rest/v1/questions') {
       const changes = request.postDataJSON() as Partial<QuestionRow>;
       const matched = filterRows(this.questions, url);
-      for (const row of matched) Object.assign(row, changes);
+      for (const row of matched) {
+        // Mirrors 20260926000800: changing what runs clears can_publish,
+        // even when the same update sends true.
+        const contentChanged = (['model_answer', 'test_cases', 'question_type'] as const).some(
+          (key) => key in changes && JSON.stringify(changes[key]) !== JSON.stringify(row[key]),
+        );
+        Object.assign(row, changes);
+        if (contentChanged) row.can_publish = false;
+      }
       const body = this.wantsObject(request) ? (matched[0] ?? null) : matched;
       return this.json(route, body);
     }

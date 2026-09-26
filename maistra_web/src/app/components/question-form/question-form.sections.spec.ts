@@ -25,6 +25,7 @@ describe('QuestionFormComponent sections', () => {
       getSectionNumbers: vi.fn().mockResolvedValue({ data: [], error: null }),
       addQuestionToSection: vi.fn().mockResolvedValue({ error: null }),
       updateQuestion: vi.fn().mockResolvedValue({ data: { id: 'q-sum' }, error: null }),
+      markQuestionValidated: vi.fn().mockResolvedValue({ data: { id: 'q-sum' }, error: null }),
       moveQuestionToSection: vi.fn().mockResolvedValue({ error: null }),
       countGradedPapers: vi.fn().mockResolvedValue(0),
       ...overrides,
@@ -235,10 +236,16 @@ describe('QuestionFormComponent sections', () => {
 
       await component.save();
 
+      // Content first, then validated as its own update (Jayrald's reset trigger).
       expect(supabase.updateQuestion).toHaveBeenCalledWith(
         'q-sum',
-        expect.objectContaining({ question_name: 'Sum of two integers', can_publish: true }),
+        expect.not.objectContaining({ can_publish: expect.anything() }),
       );
+      expect(supabase.updateQuestion).toHaveBeenCalledWith(
+        'q-sum',
+        expect.objectContaining({ question_name: 'Sum of two integers' }),
+      );
+      expect(supabase.markQuestionValidated).toHaveBeenCalledWith('q-sum');
       expect(supabase.saveQuestion).not.toHaveBeenCalled();
       expect(supabase.moveQuestionToSection).not.toHaveBeenCalled();
       expect(supabase.addQuestionToSection).not.toHaveBeenCalled();
