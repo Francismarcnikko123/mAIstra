@@ -1,5 +1,15 @@
 # mAIstra — Project docs
 
+## Current state — 2026-09-27
+
+Work on **`judge0-integration`** only; every older branch is kept for diffs
+and must not be run against the cloud (its Save bypasses
+`submission_programs`). Nombrado's review and OCR-export work is merged; next
+is Nikko (`batch_id`), then Jayrald (the Program 1 mirror gap), and
+Nombrado's bond / yellow dataset. Checks: web 309/309, OCR 250/250,
+Playwright 9/9, OCR accuracy unchanged. Details: [CODEX_HANDOFF.md](CODEX_HANDOFF.md),
+[TEAM_SYNC.md](TEAM_SYNC.md), [NEXT_STEPS.md](NEXT_STEPS.md).
+
 ## Current integration state — 2026-09-26, evening
 
 Everyone now works on **`judge0-integration`**. It holds the program tabs,

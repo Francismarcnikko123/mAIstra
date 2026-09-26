@@ -1,5 +1,36 @@
 # OCR — Current State and Next Steps
 
+## Current plan — 2026-09-27 (read first)
+
+Nombrado's web and export work is merged (`judge0-integration`). **The next OCR
+step is the new bond / yellow pad (and greenbook B4) dataset.** Use the
+"When the datasets arrive" checklist in the 2026-09-23 block below; this block
+only says what can happen when.
+
+- **Now, no papers needed (prep):**
+  - `select_holdout.py`: group bond / yellow pages **by writer** (as greenbook
+    already groups by `green_writerN_Bk`), so the test set holds out whole new
+    writers. Why it was per page: with only 4 writers per type, holding out a
+    whole writer would have removed a quarter of that type's training writers
+    (see the script's docstring). With new writers that trade-off goes away.
+    This is about *which pages count as unseen*, not about two-page photos
+    (those are rejected at the quality gate).
+  - `writer_id` column in both `labels.csv` files (unbatched files = B0; no
+    renaming).
+  - Confirm `import_verified_batch.py --verified-by "<name>"` records who
+    physically verified each page.
+- **Collecting:** new writers only (`bond_writer5+`, `yellow_writer5+`, greenbook
+  `B4`), enough per type to hold some out as whole test writers; varied content
+  (structs, pointers, switch, arrays; hard small symbols); one page per photo;
+  pseudonyms only.
+- **When the papers arrive:** physical verification (plus the dual-verification
+  diff), import, `select_holdout.py` dry-run then `--apply`, rebuild crops,
+  retrain, compare on the **same** test set with `evaluate_cer`.
+- **`labels.csv` note (2026-09-27):** the Supabase export can now add a
+  `program_blocks` column for pages split into several programs; batch imports
+  leave it empty, and split pages are never used as test pages or CER
+  references. The batch import does not depend on the export.
+
 ## Web update — 2026-09-26 (no OCR change)
 
 A Save button next to the program tabs now saves every tab without leaving

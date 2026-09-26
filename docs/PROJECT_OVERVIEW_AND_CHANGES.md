@@ -756,6 +756,7 @@ handwriting.
 
 > **Owner:** Shared
 
+- **2026-09-27 `judge0-integration` checkpoint (after the Save-label follow-ups and the OCR export):** web 309/309, OCR 250/250, `evaluate_cer` unchanged (clean_ws CER 0.099, WER 0.328, token accuracy 0.716), Playwright e2e 9/9 on the local machine (fake backend), `ng build` passes with the existing `submissions-list.list.css` budget warning. Only `judge0-integration` should be run against the cloud; older branches are kept for diffs.
 - **2026-09-26 program-tabs Save checkpoint:** web 121/121; Angular application and spec TypeScript checks and `ng build` pass with the existing CSS budget warning. No OCR code changed, so the OCR suite was not re-run (last run 231/231 on 2026-09-24).
 - **2026-09-24 pre-extraction checkpoint:** OCR 231/231, web 114/114; Angular application and spec TypeScript checks pass, and Angular build passes with the existing CSS budget warning. The live phone-photo, server-off and restart catch-up badge checks passed. See the pre-extraction section above for scope.
 - **Earlier environment limitation (historical):** Vitest was blocked in WSL when `node_modules` held Windows-native Rollup/esbuild packages; this did not apply to the later macOS verification above.
