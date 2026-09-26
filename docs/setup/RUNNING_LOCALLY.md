@@ -193,7 +193,8 @@ npm start
 
 Opens on `http://localhost:4200` once it finishes compiling.
 
-**Program tabs (branch `feature/program-tabs`, 2026-09-24):** if the connected
+**Program tabs (branch `feature/program-tabs`, also included in
+`feature/pre-extraction`, 2026-09-24):** If the connected
 database doesn't have the `submissions.answers` column yet, the list still loads
 and Program 1 still saves. Step 2 shows "Preview only: Programs 2 and up can't be
 saved…" for extra tabs. The note disappears on the next page load after

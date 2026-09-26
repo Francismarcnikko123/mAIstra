@@ -252,6 +252,21 @@ describe('SubmissionsListComponent program tabs', () => {
     );
     expect(component.getExtraAnswers('paper-1')[0].code).toBe('int f(void) { return 1; }');
     expect(component.selectedSubmission?.answers).toBeUndefined();
+    // The label beside Save must not claim the extra tabs were stored.
+    expect(component.saveStatusLabel('paper-1')).toBe('✓ Program 1 saved');
+    expect(component.hasUnsavedPrograms('paper-1')).toBe(true);
+  });
+
+  it('the Save label reports a failed save', async () => {
+    const updateSubmissionText = vi.fn().mockRejectedValue(new Error('offline'));
+    const { component } = createComponent({ updateSubmissionText });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    select(component);
+
+    await component.saveVerifiedText();
+
+    expect(component.saveStatus['paper-1']).toBe('error');
+    expect(component.saveStatusLabel('paper-1')).toBe('Save failed, try again');
   });
 
   it('keeps the open review in sync with the saved programs', async () => {
@@ -400,21 +415,139 @@ describe('SubmissionsListComponent program tabs', () => {
     expect(component.selectedSubmission).toBeNull();
   });
 
-  it('Save and close closes after a save and stays open when a rule blocks it', async () => {
+  it('Save keeps the review open on the Code step and clears the unsaved marks', async () => {
     const { component, updateSubmissionText } = createComponent();
     select(component);
+    component.reviewStep = 2;
     component.addExtraAnswer();
     component.updateExtraAnswerCode(0, 'int x;');
+    component.chooseExtraQuestion(0, 'q-2');
+    expect(component.hasUnsavedPrograms('paper-1')).toBe(true);
 
-    await component.saveAndClose();
-    expect(updateSubmissionText).not.toHaveBeenCalled();
+    await component.saveVerifiedText();
+
+    expect(updateSubmissionText).toHaveBeenCalledTimes(1);
+    expect(updateSubmissionText).toHaveBeenCalledWith(
+      'paper-1',
+      'int main() { return 0; }',
+      undefined,
+      0,
+      [{ code: 'int x;', question_id: 'q-2' }],
+    );
     expect(component.selectedSubmission).not.toBeNull();
     expect(component.reviewStep).toBe(2);
+    expect(component.hasUnsavedPrograms('paper-1')).toBe(false);
+    expect(component.saveStatus['paper-1']).toBe('saved');
+    expect(component.saveStatusLabel('paper-1')).toBe('✓ All programs saved');
+  });
 
-    component.chooseExtraQuestion(0, 'q-2');
-    await component.saveAndClose();
+  it('Save blocked by a rule shows the reason, writes nothing and stays open', async () => {
+    const { component, updateSubmissionText } = createComponent();
+    select(component);
+    component.reviewStep = 2;
+    component.addExtraAnswer();
+    component.updateExtraAnswerCode(0, 'int x;'); // no question linked yet
+
+    await component.saveVerifiedText();
+
+    expect(updateSubmissionText).not.toHaveBeenCalled();
+    expect(component.extraAnswersError['paper-1']).toBeTruthy();
+    expect(component.selectedSubmission).not.toBeNull();
+    expect(component.reviewStep).toBe(2);
+  });
+
+  it('Save on an untouched pre-extracted paper still writes it as verified', async () => {
+    // The auto-extract worker saved OCR text; nobody has verified the paper yet.
+    const getSubmissions = vi.fn().mockResolvedValue({
+      data: [{
+        id: 'paper-1',
+        image_url: 'https://example.test/paper.png',
+        captured_at: '2026-09-24T00:00:00.000Z',
+        status: 'pending',
+        extracted_text: 'int main() { return 0; }',
+        verified_text: null,
+      }],
+      error: null,
+    });
+    const { component, updateSubmissionText } = createComponent({ getSubmissions });
+    await component.loadSubmissions();
+    select(component);
+    component.reviewStep = 2;
+    // It looks saved (the editor matches what was loaded) but was never verified.
+    expect(component.hasUnsavedPrograms('paper-1')).toBe(false);
+
+    await component.saveVerifiedText();
+
     expect(updateSubmissionText).toHaveBeenCalledTimes(1);
-    expect(component.selectedSubmission).toBeNull();
+  });
+
+  it('Cmd/Ctrl+S saves on the Code step and blocks the browser save dialog', async () => {
+    const { component, updateSubmissionText } = createComponent();
+    select(component);
+    component.reviewStep = 2;
+    const event = new KeyboardEvent('keydown', { key: 's', metaKey: true });
+    const preventDefault = vi.spyOn(event, 'preventDefault');
+
+    component.onSaveShortcut(event);
+    await vi.waitFor(() => expect(updateSubmissionText).toHaveBeenCalledTimes(1));
+
+    expect(preventDefault).toHaveBeenCalled();
+  });
+
+  it('Cmd/Ctrl+S does nothing outside the Code step, in the close pop-up, or while saving', () => {
+    const { component, updateSubmissionText } = createComponent();
+    select(component);
+    const press = () => {
+      const event = new KeyboardEvent('keydown', { key: 's', ctrlKey: true });
+      const preventDefault = vi.spyOn(event, 'preventDefault');
+      component.onSaveShortcut(event);
+      return preventDefault;
+    };
+
+    component.reviewStep = 3;
+    expect(press()).not.toHaveBeenCalled();
+
+    component.reviewStep = 2;
+    component.closeConfirmOpen = true;
+    expect(press()).not.toHaveBeenCalled();
+
+    component.closeConfirmOpen = false;
+    vi.spyOn(component, 'isSaving').mockReturnValue(true); // a save is already running
+    expect(press()).toHaveBeenCalled(); // still blocks the browser dialog…
+    expect(updateSubmissionText).not.toHaveBeenCalled(); // …but does not start a second save
+
+    component.onSaveShortcut(new KeyboardEvent('keydown', { key: 's' })); // no modifier
+    expect(updateSubmissionText).not.toHaveBeenCalled();
+  });
+
+  it('Cmd/Ctrl+S never saves a paper that has no extracted code yet', () => {
+    const { component, updateSubmissionText } = createComponent();
+    select(component);
+    component.reviewStep = 2;
+    component.editableText['paper-1'] = ''; // not extracted: the Save button is hidden
+    const event = new KeyboardEvent('keydown', { key: 's', metaKey: true });
+    const preventDefault = vi.spyOn(event, 'preventDefault');
+
+    component.onSaveShortcut(event);
+
+    expect(preventDefault).toHaveBeenCalled();
+    expect(updateSubmissionText).not.toHaveBeenCalled();
+  });
+
+  it('the close pop-up offers Keep editing and Discard only', () => {
+    const { component } = createComponent();
+    select(component);
+    component.reviewStep = 2;
+    component.editableText['paper-1'] = 'edited';
+
+    component.requestCloseModal();
+    expect(component.closeConfirmOpen).toBe(true);
+    expect('saveAndClose' in component).toBe(false);
+
+    component.keepEditing();
+    expect(component.closeConfirmOpen).toBe(false);
+    expect(component.selectedSubmission).not.toBeNull();
+    expect(component.reviewStep).toBe(2);
   });
 
   it('re-extract on a split paper shows the OCR text and leaves every tab alone', async () => {

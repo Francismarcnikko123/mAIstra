@@ -125,7 +125,7 @@ test('teacher creates a question, then extracts, verifies and grades a new uploa
     backend.ocr = () => program('a - b');
     await expect(dialog.getByText('No code extracted yet')).toBeVisible();
     const saveAndContinue = dialog.getByRole('button', {
-      name: 'Save and continue to grading',
+      name: 'Continue to grading',
     });
     await expect(saveAndContinue).toBeDisabled();
 
@@ -227,7 +227,7 @@ test('a failed OCR extraction tells the teacher and keeps grading locked', async
   // The teacher can retry, but cannot move on to grading without code.
   await expect(dialog.getByRole('button', { name: 'Extract code' })).toBeEnabled();
   await expect(
-    dialog.getByRole('button', { name: 'Save and continue to grading' }),
+    dialog.getByRole('button', { name: 'Continue to grading' }),
   ).toBeDisabled();
   expect(backend.requestsTo('PATCH', '/rest/v1/submissions')).toHaveLength(0);
 });

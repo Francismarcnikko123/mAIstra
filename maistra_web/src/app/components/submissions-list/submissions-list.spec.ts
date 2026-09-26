@@ -2590,7 +2590,7 @@ describe('SubmissionsListComponent save feedback', () => {
 
   it('advances to grading only after verified code saves successfully', async () => {
     const updateSubmissionText = vi.fn().mockResolvedValue(5);
-    const { component } = createWorkflowComponent({ updateSubmissionText });
+    const { component, cdr } = createWorkflowComponent({ updateSubmissionText });
     component.questions = [
       {
         id: 'question-1',
@@ -2612,12 +2612,18 @@ describe('SubmissionsListComponent save feedback', () => {
     ];
     component.openModal(component.submissions[0]);
     component.setReviewStep(2);
+    // The app is zoneless: the step change must be rendered explicitly.
+    let stepWhenRendered: number | undefined;
+    (cdr.detectChanges as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      stepWhenRendered = component.reviewStep;
+    });
 
     await component.saveCodeAndContinue();
 
     expect(updateSubmissionText).toHaveBeenCalled();
     expect(component.reviewStep).toBe(3);
     expect(component.selectedSubmission?.grading_revision).toBe(5);
+    expect(stepWhenRendered).toBe(3);
   });
 
   it('does not advance to grading when verified code fails to save', async () => {

@@ -63,7 +63,7 @@ test('teacher assigns a question, fixes the OCR code and grades it', async ({
   // Step 2: the OCR result is editable; fix the misread operator and save.
   await expect(dialog.getByRole('heading', { name: 'Review extracted code' })).toBeVisible();
   await replaceEditorCode(dialog.locator('app-code-editor'), program('a + b'));
-  await dialog.getByRole('button', { name: 'Save and continue to grading' }).click();
+  await dialog.getByRole('button', { name: 'Continue to grading' }).click();
 
   // Step 3: a sample run checks only the first test case.
   await expect(dialog.getByRole('heading', { name: 'Run and grade' })).toBeVisible();
@@ -119,7 +119,7 @@ test('code that passes only some test cases gets partial credit', async ({
 
   const dialog = await openSubmission(page, 'Jose Reyes');
   await dialog.getByRole('button', { name: 'Save and review code' }).click();
-  await dialog.getByRole('button', { name: 'Save and continue to grading' }).click();
+  await dialog.getByRole('button', { name: 'Continue to grading' }).click();
   await dialog.getByRole('button', { name: 'Submit Code' }).click();
 
   // 2*2 happens to equal 2+2, but 2*3 does not.
@@ -160,7 +160,7 @@ test('a grade is not saved when the submission changed during grading', async ({
 
   const dialog = await openSubmission(page, 'Ana Cruz');
   await dialog.getByRole('button', { name: 'Save and review code' }).click();
-  await dialog.getByRole('button', { name: 'Save and continue to grading' }).click();
+  await dialog.getByRole('button', { name: 'Continue to grading' }).click();
   await dialog.getByRole('button', { name: 'Submit Code' }).click();
 
   await expect(
@@ -188,7 +188,7 @@ test('grading reports a failure and saves nothing when Judge0 is down', async ({
 
   const dialog = await openSubmission(page, 'Luis Garcia');
   await dialog.getByRole('button', { name: 'Save and review code' }).click();
-  await dialog.getByRole('button', { name: 'Save and continue to grading' }).click();
+  await dialog.getByRole('button', { name: 'Continue to grading' }).click();
   await dialog.getByRole('button', { name: 'Submit Code' }).click();
 
   await expect(dialog.getByText('Failed to execute test cases.')).toBeVisible();
