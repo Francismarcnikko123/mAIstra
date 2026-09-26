@@ -42,7 +42,6 @@
               <th *ngIf="question.question_type === 'function'">Test code</th>
               <th>Input</th>
               <th>Expected</th>
-              <th>Mark</th>
             </tr>
           </thead>
           <tbody>
@@ -51,7 +50,6 @@
               <td *ngIf="question.question_type === 'function'"><code>{{ tc['test_code'] }}</code></td>
               <td><code *ngIf="tc['test_input']">{{ tc['test_input'] }}</code></td>
               <td><code>{{ tc['expected_output'] }}</code></td>
-              <td>{{ tc['mark'] }}</td>
             </tr>
           </tbody>
         </table>

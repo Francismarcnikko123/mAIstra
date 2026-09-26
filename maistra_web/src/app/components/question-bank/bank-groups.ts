@@ -103,15 +103,6 @@ export function linkedPapers(questionId: string, links: PaperLink[]): LinkedPape
   return result;
 }
 
-/** Sum of the test cases' marks. */
-export function totalMarks(question: BankQuestion): number {
-  if (!Array.isArray(question.test_cases)) return 0;
-  return question.test_cases.reduce<number>((sum, tc) => {
-    const mark = Number((tc as { mark?: unknown })?.mark);
-    return sum + (Number.isFinite(mark) ? mark : 0);
-  }, 0);
-}
-
 function matches(question: BankQuestion, search: string): boolean {
   if (!search) return true;
   const haystack = `${question.question_name} ${question.question_text}`.toLowerCase();

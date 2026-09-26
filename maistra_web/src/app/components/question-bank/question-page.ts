@@ -6,7 +6,6 @@ import {
   PaperLink,
   linkedPapers,
   plural,
-  totalMarks,
   typeLabel,
 } from './bank-groups';
 import { QuestionPlace, gateBadge, questionLabel } from './question-labels';
@@ -44,12 +43,11 @@ export class QuestionPageComponent {
     return linkedPapers(this.question.id, this.papers);
   }
 
-  /** "Program · 3 test cases · 5 marks · used by 2 papers" */
+  /** "Program · 3 test cases · used by 2 papers". Test cases carry no marks. */
   get summary(): string {
     return [
       typeLabel(this.question.question_type),
       plural(this.testCases.length, 'test case'),
-      plural(totalMarks(this.question), 'mark'),
       `used by ${plural(this.linked.length, 'paper')}`,
     ].join(' · ');
   }

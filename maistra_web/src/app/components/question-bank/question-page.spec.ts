@@ -1,6 +1,6 @@
 import '@angular/compiler';
 import { describe, expect, it } from 'vitest';
-import { BankQuestion, linkedPapers, totalMarks } from './bank-groups';
+import { BankQuestion, linkedPapers } from './bank-groups';
 import { QuestionPageComponent } from './question-page';
 
 const sum: BankQuestion = {
@@ -9,7 +9,7 @@ const sum: BankQuestion = {
   question_text: 'Add two numbers.',
   question_type: 'program',
   model_answer: 'int main(void) { return 0; }',
-  test_cases: [{ mark: 2 }, { mark: 3 }, { mark: '1' }],
+  test_cases: [{}, {}, {}],
 };
 
 const papers = [
@@ -29,14 +29,6 @@ describe('linkedPapers', () => {
   });
 });
 
-describe('totalMarks', () => {
-  it('adds the test-case marks, ignoring missing ones', () => {
-    expect(totalMarks(sum)).toBe(6);
-    expect(totalMarks({ ...sum, test_cases: [{}, { mark: 4 }] })).toBe(4);
-    expect(totalMarks({ ...sum, test_cases: null })).toBe(0);
-  });
-});
-
 describe('QuestionPageComponent', () => {
   function page(question: BankQuestion) {
     const component = new QuestionPageComponent();
@@ -52,11 +44,11 @@ describe('QuestionPageComponent', () => {
     expect(component.label).toBe('Basic · Q2 · Sum of two numbers');
   });
 
-  it('summarises type, tests, marks and papers with correct plurals', () => {
-    expect(page(sum).summary).toBe('Program · 3 test cases · 6 marks · used by 3 papers');
+  it('summarises type, tests and papers with correct plurals', () => {
+    expect(page(sum).summary).toBe('Program · 3 test cases · used by 3 papers');
     expect(
-      page({ ...sum, id: 'lonely', test_cases: [{ mark: 1 }] }).summary,
-    ).toBe('Program · 1 test case · 1 mark · used by 0 papers');
+      page({ ...sum, id: 'lonely', test_cases: [{}] }).summary,
+    ).toBe('Program · 1 test case · used by 0 papers');
   });
 
   it('flags a question that has not passed validation', () => {
