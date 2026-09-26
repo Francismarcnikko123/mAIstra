@@ -208,7 +208,7 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 ## Nikko (mobile capture, question bank)
 
 ### To do (requested by teammates; please update this section when done)
-- [ ] (2026-09-26, from Jayrald) **Set `submissions.batch_id` on upload** (column live in the cloud since `20260926000500`, on `judge0-integration`). In `SubmissionUploader.submit()`, make one uuid per submit and send it as `batch_id` with every page's insert. Insert only; pages keep one row each.
+- [x] (2026-09-26, from Jayrald) *Done 2026-09-26: one version-4 UUID per submit, sent on every page (`lib/utils/batch_id.dart`, `SubmissionUploader.submissionRow()`); see `docs/changes/2026-09-26-mobile-batch-id.md`.* **Set `submissions.batch_id` on upload** (column live in the cloud since `20260926000500`, on `judge0-integration`). In `SubmissionUploader.submit()`, make one uuid per submit and send it as `batch_id` with every page's insert. Insert only; pages keep one row each.
 - [ ] (2026-09-26, from Jayrald) **`docs/` in `.gitignore`**: intended for everyone? It came in with `feature/question-linking-v2`. Tracked docs are unaffected, but new notes need `git add -f`. If it was meant for personal notes only, a narrower pattern would avoid that.
   - **Nikko's reply (2026-09-26):** not added by me. The `docs/` rule was restored by Nombrado on 2026-09-02 (`6379851`, "Restore docs/ gitignore rule dropped by judge0-integration merge") and reached v2 through the merges. Nombrado should say whether it's meant for everyone; until then I add my notes with `git add -f`.
 - [x] (2026-09-26, from Nombrado) **FYI, no change for the phone:** I proposed to Jayrald a `submission_programs` table for multi-program papers (`docs/superpowers/specs/2026-09-26-submission-programs-table-proposal.md`). Your phone keeps inserting one `submissions` row per page with `status = 'pending'`; its `question_id` still pre-fills Program 1. If it's approved, point 4 below changes: the grant to keep becomes the new table's, not `UPDATE (answers)`.
@@ -241,6 +241,7 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 - (2026-09-24) **Live DB check** (read-only, with the app's publishable key): `question_sections`, `questions.can_publish`, `submissions.gate_result` and `submissions.answers` are all **missing** in the cloud project. So Nombrado's `answers` migration is also still unapplied.
 
 ### Changed (affects others)
+- (2026-09-26) **Phone inserts now also set `batch_id`**: every page of one submit shares one UUID. Old rows and web-made rows stay NULL. Nothing reads it yet.
 - (2026-09-26) **`feature/question-linking-v2` merges `judge0-integration` (Jayrald) with `feature/pre-extraction` (Nombrado).** Every conflict keeps both sides' features; decisions are in `docs/changes/2026-09-26-merge-pre-extraction-and-judge0.md` and `docs/changes/2026-09-26-merge-latest-pre-extraction.md`. Nobody's branch was changed; this only affects whoever merges v2.
 - (2026-09-26) **`ocr_feature/` in v2 is identical to `feature/pre-extraction`.** Jayrald's CORS change (`876880c`) and his `ocr_feature/tests/test_api.py` are not in v2. **`AGENTS.md` is restored** (Nombrado's version); `judge0-integration` had deleted it.
 - (2026-09-26) **Two small changes in Nombrado's code, pending his OK** (see Needs from others):

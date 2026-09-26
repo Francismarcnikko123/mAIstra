@@ -19,4 +19,5 @@ One file per update, newest last. Each note says what changed, why, which files,
 | 2026-09-26 | [Nikko's and Nombrado's branches merged into `judge0-integration`](2026-09-26-merges-into-judge0-integration.md) | Jayrald | `138ef02`, `046b88c`, `c893b85` |
 | 2026-09-26 | [Pages of one answer share `submissions.batch_id`](2026-09-26-batch-id.md) | Jayrald | `ec5c910` |
 | 2026-09-26 | [Every program on a paper is its own row, graded on its own](2026-09-26-submission-programs-and-per-program-grading.md) | Jayrald | `f85d99e`, `f3138c6`, `96eda09` |
-| 2026-09-26 | [Merge Jayrald's schema work (`268eb54`) into v2](2026-09-26-merge-judge0-schema.md) | Nikko (merge) | this merge commit |
+| 2026-09-26 | [Merge Jayrald's schema work (`268eb54`) into v2](2026-09-26-merge-judge0-schema.md) | Nikko (merge) | `ce02c06` |
+| 2026-09-26 | [Mobile: pages of one answer share a `batch_id`](2026-09-26-mobile-batch-id.md) | Nikko | this commit |

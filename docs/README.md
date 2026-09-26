@@ -9,7 +9,8 @@ and `AGENTS.md` are identical to `feature/pre-extraction`.
 
 - **Phone:** the student picks a validated, sectioned question before capture;
   every page is uploaded with `question_id` (Program 1's question) and the
-  quality gate's `gate_result`, with `status: 'pending'` and the OCR fields empty.
+  quality gate's `gate_result`, with `status: 'pending'` and the OCR fields empty;
+  all pages of one submit share a `batch_id`.
 - **Web:** top bar with *Question bank* and *Submissions*; questions have a
   section and a number (`Basic · Q2 · Sum of two numbers`); the form saves only
   after validation passes; submission folders follow the question's section.
