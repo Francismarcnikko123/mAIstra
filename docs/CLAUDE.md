@@ -6,6 +6,12 @@
 
 ## Current integration state — 2026-09-24
 
+**Update 2026-09-27:** Nombrado's web + OCR-export work is merged into
+`judge0-integration` (`4bf44f6`, `b62bb0a`). Old branches are kept for diffs
+only and must never be run against the cloud. Next Nombrado step: the
+bond / yellow dataset (`NEXT_STEPS.md`, 2026-09-27). Read the top block of
+`CODEX_HANDOFF.md` first.
+
 **Update 2026-09-26, evening:** the working branch is `judge0-integration`
 (contains `feature/pre-extraction`, now retired). Multi-program papers live in
 `submission_programs`; `answers` is dropped. Read the top block of

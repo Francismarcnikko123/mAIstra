@@ -360,7 +360,36 @@ firewall/port-forward settings:
    `JUDGE0_BASE_URL` in `.env` needs updating because the IP changed,
    update it before starting `uvicorn`.
 
+### End-to-end browser tests (Playwright, added by Jayrald; installed locally 2026-09-27)
+
+Playwright drives the real Angular app in a browser (open a paper, edit, save,
+grade) against a **fake backend**: every Supabase, Judge0 and OCR request is
+intercepted (`maistra_web/tests/e2e/support/fake-backend.ts`), so a run never
+writes to the cloud. It starts its own dev server on port 4300.
+
+```bash
+cd maistra_web
+npm ci                              # once, or after package.json changes
+npx playwright install chromium     # once per machine (about 95 MB browser)
+npm run e2e
+```
+
+9/9 passed on `judge0-integration` on 2026-09-27.
+
 ## Common local mistakes (not VM-related)
+
+- **Running an old branch against the cloud (2026-09-27).** Only run the web
+  app from `judge0-integration` (or a branch made from it). Older branches are
+  kept for diffs only; their Save writes `submissions.verified_text` directly
+  and leaves Program 1 in `submission_programs` stale.
+- **Committing local lockfile changes.** `npm install` or Flutter commands can
+  rewrite `maistra_web/package-lock.json` or `maistra_mobile/pubspec.lock` for
+  your local tool versions. Don't commit those; restore with
+  `git checkout -- <file>`. Prefer `npm ci`, which never edits the lockfile.
+- **Mobile analyzer errors in `maistra_mobile/packages/`.** The bundled scanner
+  plugins (`cunning_document_scanner`, `edge_detection`) show
+  `permission_handler` errors until `flutter pub get` is run inside them. They
+  are unused (Nikko is removing them); the app in `lib/` is unaffected.
 
 - **Wrong working directory.** `pip install -r judge0_api/requirements.txt`
   fails silently-ish ("No such file or directory") if you're not in the

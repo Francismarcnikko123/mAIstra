@@ -100,7 +100,9 @@ the other docs and are equivalent).
 | `npm ci` | Clean-installs dependencies exactly as locked (use this, not `npm install`, when switching machines/OS). |
 | `npm start` | Starts the dev server (alias for `ng serve --configuration development`). |
 | `ng serve --configuration production` | Starts the dev server built against the production environment config. |
-| `npx ng test --watch=false` | Runs the unit tests once (Vitest via `@angular/build:unit-test`, not Karma). 89 tests as of 2026-09-24. |
+| `npx ng test --watch=false` | Runs the unit tests once (Vitest via `@angular/build:unit-test`, not Karma). 309 tests on `judge0-integration` as of 2026-09-27. |
+| `npm run e2e` | Runs the Playwright end-to-end tests (fake backend, no cloud writes; own dev server on port 4300). 9 tests as of 2026-09-27. |
+| `npx playwright install chromium` | One-time download of Playwright's test browser (after `npm ci`). |
 | `npx ng test --watch=false --include=src/app/components/submissions-list/extra-answers.spec.ts` | Runs only the named spec file(s). |
 | `npx tsc -p tsconfig.app.json --noEmit` | Type-checks the app without building (`tsconfig.spec.json` for the tests). |
 | `ng build` | Builds the app (development config by default). |
