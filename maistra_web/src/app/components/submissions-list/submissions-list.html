@@ -321,7 +321,7 @@
                     [class.error]="saveStatus[selectedSubmission.id] === 'error'"
                     role="status"
                   >
-                    {{ saveStatus[selectedSubmission.id] === 'saved' ? '✓ All programs saved' : 'Save failed, try again' }}
+                    {{ saveStatusLabel(selectedSubmission.id) }}
                   </span>
                   <button
                     type="button"
