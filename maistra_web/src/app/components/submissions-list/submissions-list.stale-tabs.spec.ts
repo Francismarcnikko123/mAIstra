@@ -185,3 +185,49 @@ describe('SubmissionsListComponent program tabs changed by another teacher', () 
     expect(component.activeTab).toBe(1);
   });
 });
+
+describe('SubmissionsListComponent save label with unsaved program tabs', () => {
+  it('keeps "New changes need to be saved" while a tab edited during the save is unsaved (review 2026-09-27, #3)', async () => {
+    vi.useFakeTimers();
+    try {
+      const ctx = setup();
+      const { component, updateSubmissionText } = ctx;
+      await open(ctx, [program2]);
+
+      // The save is still running when the teacher types into Program 2.
+      let finishSave!: (revision: number) => void;
+      updateSubmissionText.mockImplementationOnce(
+        () => new Promise<number>((resolve) => { finishSave = resolve; }),
+      );
+      component.updateSubmissionCode('paper-1', 'program 1 code, edited');
+      const saving = component.saveVerifiedText();
+      component.updateExtraAnswerCode(0, 'program 2 code, typed during the save');
+      finishSave(5);
+      await saving;
+
+      expect(component.saveStatusLabel('paper-1')).toBe('New changes need to be saved.');
+      await vi.advanceTimersByTimeAsync(3500);
+      expect(component.saveStatusLabel('paper-1')).toBe('New changes need to be saved.');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still clears the confirmation after a save with nothing left unsaved', async () => {
+    vi.useFakeTimers();
+    try {
+      const ctx = setup();
+      const { component } = ctx;
+      await open(ctx, [program2]);
+
+      component.updateSubmissionCode('paper-1', 'program 1 code, edited');
+      await component.saveVerifiedText();
+      expect(component.saveStatusLabel('paper-1')).not.toBe('');
+      await vi.advanceTimersByTimeAsync(3500);
+      expect(component.saveStatusLabel('paper-1')).toBe('');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+

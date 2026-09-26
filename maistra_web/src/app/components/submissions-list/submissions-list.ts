@@ -1082,10 +1082,16 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       // The save may have added, changed or removed program rows.
       this.staleProgramIds.add(id);
       this.saveStatus[id] = 'saved';
-      // If newer edits are still open, keep the reminder until they are saved.
-      // A save that finishes after this submission was closed gets the normal
-      // confirmation timer so the message is not stale when it is reopened.
-      if (!savedLatest && this.selectedSubmission?.id === id) return;
+      // If newer edits are still open (Program 1 or any tab), keep the
+      // reminder until they are saved. A save that finishes after this
+      // submission was closed gets the normal confirmation timer so the
+      // message is not stale when it is reopened.
+      if (
+        (!savedLatest || this.hasUnsavedPrograms(id)) &&
+        this.selectedSubmission?.id === id
+      ) {
+        return;
+      }
       // Auto-clear the confirmation after a few seconds.
       const timer = setTimeout(() => {
         if (!this.isCurrentSave(id, generation)) return;
