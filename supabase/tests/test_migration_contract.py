@@ -136,8 +136,11 @@ def test_each_program_on_a_page_is_a_gradable_row():
 
 
 def test_program_one_follows_the_page_and_tab_saves_move_the_revision():
-    assert "create function public.advance_page_revision(" in MIGRATION_SQL
-    assert "v_revision := public.advance_page_revision(p_submission_id)" in MIGRATION_SQL
+    # Since 20260926001200 the page revision moves from a trigger, and the
+    # browser-callable advance_page_revision() is dropped.
+    assert "create trigger advance_page_revision_on_program_change" in MIGRATION_SQL
+    assert "if pg_trigger_depth() > 1 then" in MIGRATION_SQL
+    assert "drop function public.advance_page_revision(uuid)" in MIGRATION_SQL
     assert "create trigger sync_program_one_on_question_change" in MIGRATION_SQL
     assert "after update of question_id" in MIGRATION_SQL
 
