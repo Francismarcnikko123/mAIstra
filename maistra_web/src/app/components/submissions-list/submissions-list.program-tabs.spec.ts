@@ -249,6 +249,21 @@ describe('SubmissionsListComponent program tabs', () => {
     );
     expect(component.getExtraAnswers('paper-1')[0].code).toBe('int f(void) { return 1; }');
     expect(component.selectedSubmission?.answers).toBeUndefined();
+    // The label beside Save must not claim the extra tabs were stored.
+    expect(component.saveStatusLabel('paper-1')).toBe('✓ Program 1 saved');
+    expect(component.hasUnsavedPrograms('paper-1')).toBe(true);
+  });
+
+  it('the Save label reports a failed save', async () => {
+    const updateSubmissionText = vi.fn().mockRejectedValue(new Error('offline'));
+    const { component } = createComponent({ updateSubmissionText });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    select(component);
+
+    await component.saveVerifiedText();
+
+    expect(component.saveStatus['paper-1']).toBe('error');
+    expect(component.saveStatusLabel('paper-1')).toBe('Save failed, try again');
   });
 
   it('keeps the open review in sync with the saved programs', async () => {
@@ -419,6 +434,7 @@ describe('SubmissionsListComponent program tabs', () => {
     expect(component.reviewStep).toBe(2);
     expect(component.hasUnsavedPrograms('paper-1')).toBe(false);
     expect(component.saveStatus['paper-1']).toBe('saved');
+    expect(component.saveStatusLabel('paper-1')).toBe('✓ All programs saved');
   });
 
   it('Save blocked by a rule shows the reason, writes nothing and stays open', async () => {

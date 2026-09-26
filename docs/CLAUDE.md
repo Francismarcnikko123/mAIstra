@@ -10,7 +10,7 @@
 tabs (every tab, stays on Step 2, Cmd/Ctrl+S); the unsaved prompt is Keep
 editing / Discard changes; the footer reads "Continue to grading". Branch
 `feature/program-tabs-save`, merged into `feature/pre-extraction`; web tests
-120/120. See TEAM_SYNC for the handoff.
+121/121. See TEAM_SYNC for the handoff.
 
 The pushed `feature/pre-extraction` branch includes the pushed
 `feature/program-tabs` work. Auto-extraction is off by default. When enabled,

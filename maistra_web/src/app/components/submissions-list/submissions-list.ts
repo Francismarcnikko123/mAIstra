@@ -681,6 +681,17 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     return this.extractingId === id;
   }
 
+  /**
+   * Text beside the Save button. While the database has no `answers` column
+   * only Program 1 is stored, so it must not claim every program was saved.
+   */
+  saveStatusLabel(id: string): string {
+    if (this.saveStatus[id] === 'error') return 'Save failed, try again';
+    return this.extraAnswersError[id] === EXTRA_PROGRAMS_UNSAVABLE
+      ? '✓ Program 1 saved'
+      : '✓ All programs saved';
+  }
+
   isSaving(id: string): boolean {
     return this.savingId === id;
   }

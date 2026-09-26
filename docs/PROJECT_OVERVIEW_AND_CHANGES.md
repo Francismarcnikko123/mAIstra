@@ -460,7 +460,7 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 **Why:** Step 2 had no plain Save. A teacher could only save by going to grading ("Save and continue to grading") or by leaving (✕ → "Save and close", which closed the paper, so reaching grading meant reopening it). Nikko's first review screen (`da00269`) had a plain Save; the 3-step redesign (`aca278e`) replaced it.
 
 **What changed (teacher's view):**
-- A **Save** button at the right end of the program tab bar saves **every tab of the paper** in one update and keeps the teacher on Step 2. The unsaved dots clear and "✓ All programs saved" shows next to it. **Cmd/Ctrl+S** does the same on Step 2 (and no longer opens the browser's "save page" dialog there).
+- A **Save** button at the right end of the program tab bar saves **every tab of the paper** in one update and keeps the teacher on Step 2. The unsaved dots clear and "✓ All programs saved" shows next to it. While the cloud database has no `answers` column, only Program 1 is stored: the label then says "✓ Program 1 saved", the extra tabs keep their dots, and the existing message explains why (fixed the same day; the first version claimed "All programs saved"). **Cmd/Ctrl+S** does the same on Step 2 (and no longer opens the browser's "save page" dialog there).
 - The footer button is now **"Continue to grading"**. Its logic is unchanged: it still saves first, and moves to Step 3 only when the save succeeds, so grading always runs on code that is in the database.
 - The **✕ / overlay / Cancel / Finish** prompt for unsaved changes now offers **Keep editing** (primary) and **Discard changes**. "Save and close" is removed; saving lives next to the tabs.
 
@@ -473,7 +473,7 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 
 **Code:** `submissions-list.html` (tab bar wrapper `program-tabs-bar` with the Save area outside `role="tablist"`; footer label; two-button prompt), `submissions-list.ts` (`onSaveShortcut()` `@HostListener`; `saveAndClose()` removed; the two `detectChanges()` calls), `program-tabs.css` (bar and Save styles), `submissions-list.css` (unused `.save-status` removed).
 
-**Verification:** web 120/120 tests (7 new program-tab tests replace the one Save-and-close test; the continue-to-grading test now checks the step is rendered); application and spec TypeScript checks and `ng build` pass with the existing CSS budget warning. Viewed in the running app without saving: the Save button in the tab bar (pinned right while many tabs scroll), the "Continue to grading" label, and the two-button prompt.
+**Verification:** web 121/121 tests (7 new program-tab tests replace the one Save-and-close test; the continue-to-grading test now checks the step is rendered); application and spec TypeScript checks and `ng build` pass with the existing CSS budget warning. Viewed in the running app without saving: the Save button in the tab bar (pinned right while many tabs scroll), the "Continue to grading" label, and the two-button prompt.
 
 ## Code cleanup completed
 
@@ -522,7 +522,7 @@ Focused tests now cover:
 
 > **Owner:** Shared
 
-- **2026-09-26 program-tabs Save checkpoint:** web 120/120; Angular application and spec TypeScript checks and `ng build` pass with the existing CSS budget warning. No OCR code changed, so the OCR suite was not re-run (last run 231/231 on 2026-09-24).
+- **2026-09-26 program-tabs Save checkpoint:** web 121/121; Angular application and spec TypeScript checks and `ng build` pass with the existing CSS budget warning. No OCR code changed, so the OCR suite was not re-run (last run 231/231 on 2026-09-24).
 - **2026-09-24 pre-extraction checkpoint:** OCR 231/231, web 114/114; Angular application and spec TypeScript checks pass, and Angular build passes with the existing CSS budget warning. The live phone-photo, server-off and restart catch-up badge checks passed. See the pre-extraction section above for scope.
 - **Earlier environment limitation (historical):** Vitest was blocked in WSL when `node_modules` held Windows-native Rollup/esbuild packages; this did not apply to the later macOS verification above.
 
