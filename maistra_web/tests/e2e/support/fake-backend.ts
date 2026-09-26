@@ -281,7 +281,8 @@ export class FakeBackend {
 
   async install(page: Page) {
     // Realtime is served by the fake too; the socket never reaches the real
-    // project. Changes reach the page only when a test calls pushInsert().
+    // project. Changes reach the page only when a test calls pushInsert() or
+    // pushUpdate().
     await page.routeWebSocket(/\/realtime\/v1\/websocket/, (socket) =>
       this.handleRealtime(socket),
     );
@@ -303,9 +304,21 @@ export class FakeBackend {
   // a realtime INSERT event for it.
   pushInsert(submission: Partial<SubmissionRow> & Pick<SubmissionRow, 'id'>) {
     const row = this.addSubmission(submission);
+    this.pushChange('INSERT', row);
+    return row;
+  }
+
+  // Another teacher's change to a row already here: a realtime UPDATE event.
+  pushUpdate(submissionId: string) {
+    const row = this.submissions.get(submissionId);
+    if (!row) throw new Error(`No submission ${submissionId}`);
+    this.pushChange('UPDATE', row);
+  }
+
+  private pushChange(type: 'INSERT' | 'UPDATE', row: SubmissionRow) {
     if (!this.socket) throw new Error('The page has not opened a realtime socket');
     const matching = this.realtimeBindings.filter(
-      (binding) => binding.table === 'submissions' && binding.event === 'INSERT',
+      (binding) => binding.table === 'submissions' && binding.event === type,
     );
     for (const topic of new Set(matching.map((binding) => binding.topic))) {
       const ids = matching
@@ -317,14 +330,14 @@ export class FakeBackend {
           schema: 'public',
           table: 'submissions',
           commit_timestamp: new Date().toISOString(),
-          type: 'INSERT',
+          type,
           record: row,
+          ...(type === 'UPDATE' ? { old_record: { id: row.id } } : {}),
           columns: Object.keys(row).map((name) => ({ name, type: 'text' })),
           errors: null,
         },
       });
     }
-    return row;
   }
 
   // ── Realtime (Phoenix protocol, vsn 2.0.0 array frames) ──

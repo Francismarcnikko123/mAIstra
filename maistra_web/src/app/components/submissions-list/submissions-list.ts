@@ -404,15 +404,33 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     for (const s of incoming) {
       // Seed saved program tabs once. Never replace a loaded list: the teacher
       // may have pasted programs that aren't saved yet.
+      let keepCodeBase = false;
       if (!this.extraAnswers[s.id]) {
         this.extraAnswers[s.id] = parseAnswers(s.answers);
         this.savedExtras[s.id] = parseAnswers(s.answers);
+      } else if (
+        JSON.stringify(answersToSave(parseAnswers(s.answers))) !==
+        JSON.stringify(answersToSave(this.savedExtras[s.id] ?? []))
+      ) {
+        // Someone else changed Programs 2..n. A save sends the whole tab list
+        // and deletes programs missing from it, so a stale list must never
+        // pass the revision check: refresh the tabs when nothing is unsaved,
+        // else keep the draft on its old base revision so the save conflicts.
+        if (this.dirtyCodeIds.has(s.id) || this.hasUnsavedPrograms(s.id)) {
+          keepCodeBase = true;
+        } else {
+          this.extraAnswers[s.id] = parseAnswers(s.answers);
+          this.savedExtras[s.id] = parseAnswers(s.answers);
+          if (this.selectedSubmission?.id === s.id) {
+            this.activeTab = Math.min(this.activeTab, this.extraAnswers[s.id].length);
+          }
+        }
       }
       if (this.dirtyCodeIds.has(s.id)) continue;
       const saved = s.verified_text ?? s.extracted_text ?? '';
       this.editableText[s.id] = saved;
       this.savedProgram1[s.id] = saved;
-      this.codeBaseRevisions.set(s.id, s.grading_revision ?? 0);
+      if (!keepCodeBase) this.codeBaseRevisions.set(s.id, s.grading_revision ?? 0);
     }
 
     if (selectedId && refreshed) {

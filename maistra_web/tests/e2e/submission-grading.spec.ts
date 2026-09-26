@@ -343,3 +343,43 @@ test('a question changed on Details is the one Program 1 is graded against', asy
     expect.objectContaining({ question_id: PRODUCT_ID, passed_test_cases: 2, total_test_cases: 2 }),
   ]);
 });
+
+test("another teacher's new program survives this teacher's next save", async ({
+  page,
+  backend,
+}) => {
+  const PRODUCT_ID = '55555555-5555-4555-8555-555555555555';
+  const MAX_ID = '66666666-6666-4666-8666-666666666666';
+  for (const [id, name] of [[PRODUCT_ID, 'Product of two numbers'], [MAX_ID, 'Larger of two numbers']]) {
+    backend.addQuestion({ id, question_name: name, question_type: 'program', model_answer: program('a * b') });
+  }
+  backend.addSubmission({
+    id: SUBMISSION_ID,
+    captured_at: CAPTURED_AT,
+    student_name: 'Rosa Lim',
+    status: 'verified',
+    question_id: QUESTION_ID,
+    verified_text: program('a + b'),
+  });
+  backend.addExtraProgram(SUBMISSION_ID, 2, PRODUCT_ID, program('a * b'));
+
+  const dialog = await openSubmission(page, 'Rosa Lim');
+  await dialog.getByRole('button', { name: 'Save and review code' }).click();
+  const tabs = dialog.getByRole('tablist', { name: 'Programs on this paper' });
+  await expect(tabs.getByRole('tab', { name: /Program 2/ })).toBeVisible();
+
+  // Another teacher adds Program 3 to the same paper and saves.
+  backend.addExtraProgram(SUBMISSION_ID, 3, MAX_ID, program('a > b ? a : b'));
+  backend.submissions.get(SUBMISSION_ID)!.grading_revision += 1;
+  backend.pushUpdate(SUBMISSION_ID);
+
+  // This screen picks it up, so its next save keeps it.
+  await expect(tabs.getByRole('tab', { name: /Program 3/ })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(dialog.getByRole('status')).toContainText(/saved/i);
+  expect(backend.programsOf(SUBMISSION_ID).map((row) => row.question_id)).toEqual([
+    QUESTION_ID,
+    PRODUCT_ID,
+    MAX_ID,
+  ]);
+});
