@@ -42,6 +42,15 @@ class _CaptureScreenState extends State<CaptureScreen> {
         _pending = page;
         if (page == null) _pendingFile = null;
       });
+    } catch (e) {
+      // e.g. the quality check failed on a corrupt photo: don't leave the
+      // "Checking photo quality…" view with both buttons disabled.
+      if (!mounted) return;
+      setState(() {
+        _pending = null;
+        _pendingFile = null;
+      });
+      _showError("Couldn't check that photo. Please scan the page again.");
     } finally {
       if (mounted) setState(() => _busy = false);
     }

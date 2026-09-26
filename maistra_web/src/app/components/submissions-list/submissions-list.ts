@@ -212,6 +212,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       // Refetch only the row that changed. A full reload per event re-downloads
       // every submission, including on the echo of this page's own saves.
       const id = payload?.new?.id;
+      // A live upload from the phone carries its photo verdict; show the
+      // badge now instead of after the next full reload.
+      const gate = payload?.new?.gate_result;
+      if (typeof id === 'string' && typeof gate === 'string') this.gateResults.set(id, gate);
       if (typeof id === 'string') void this.refreshSubmission(id);
       else void this.loadSubmissions();
     };
@@ -521,6 +525,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     );
   }
 
+  private isSectionName(topic: string): boolean {
+    const name = topic?.trim();
+    return !!name && [...this.questionPlaces.values()].some((p) => p.sectionName === name);
+  }
+
   /** Read-only section for the Details step, from the chosen question. */
   selectedSectionName(): string {
     const place = this.questionPlaces.get(this.selectedQuestionId);
@@ -804,6 +813,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     // remains for questions that have no section yet.
     const place = this.questionPlaces.get(this.selectedQuestionId);
     if (place) this.editableTopic = place.sectionName;
+    // An unsectioned question: drop a section name left from the previous
+    // question, so the paper doesn't form a second folder with that name.
+    else if (this.isSectionName(this.editableTopic)) this.editableTopic = 'Uncategorized';
     const topic = this.editableTopic;
     const questionId = this.selectedQuestionId || null;
     const expectedRevision = this.baseRevision(
@@ -1438,6 +1450,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.selectedSubmission.question_id = questionId || undefined;
     const place = this.questionPlaces.get(questionId);
     if (place) this.editableTopic = place.sectionName;
+    // An unsectioned question: drop a section name left from the previous
+    // question, so the paper doesn't form a second folder with that name.
+    else if (this.isSectionName(this.editableTopic)) this.editableTopic = 'Uncategorized';
 
     this.clearCompletedGrade(this.selectedSubmission.id);
     this.cdr.detectChanges();

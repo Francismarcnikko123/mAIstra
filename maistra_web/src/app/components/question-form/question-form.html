@@ -1,5 +1,8 @@
 <div class="form-container">
-  <h2>Create Question</h2>
+  <h2>{{ isEditing ? 'Edit question' : 'Create Question' }}</h2>
+  <p class="edit-note" *ngIf="isEditing">
+    Changing the model answer or a test case needs <strong>Validate Test Cases</strong> again before saving.
+  </p>
 
   <!-- Section and number -->
   <div class="form-row">
@@ -300,9 +303,18 @@
     (click)="save()"
     [disabled]="isSaving || !!saveBlockedReason()"
   >
-    {{ isSaving ? 'Saving...' : 'Save Question' }}
+    {{ isSaving ? 'Saving...' : isEditing ? 'Save changes' : 'Save Question' }}
   </button>
   <div class="save-hint" *ngIf="!isSaving && saveBlockedReason()">
     {{ saveBlockedReason() }}
   </div>
+  <div class="grade-warning" *ngIf="gradeWarning" role="alert">
+    <p>{{ gradeWarning }}</p>
+    <button type="button" class="btn-warning" (click)="confirmGradeReset()" [disabled]="isSaving">
+      Save and clear grades
+    </button>
+  </div>
+  <button type="button" class="btn-cancel" *ngIf="isEditing" (click)="cancelEdit()" [disabled]="isSaving">
+    Cancel
+  </button>
 </div>

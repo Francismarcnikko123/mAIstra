@@ -14,10 +14,13 @@ export interface TestCaseRow {
 export interface QuestionRow {
   id: string;
   question_name: string;
+  question_text?: string;
   question_type: 'function' | 'program';
   model_answer: string;
   test_cases: TestCaseRow[];
   created_at: string;
+  // Validated flag (20260926000300_restore_question_can_publish.sql).
+  can_publish?: boolean;
 }
 
 export interface SubmissionRow {
@@ -262,6 +265,13 @@ export class FakeBackend {
     return row;
   }
 
+  // Puts a question in a section with a number (Nikko's section tables).
+  addSectionItem(sectionId: string, questionId: string, number: number) {
+    const row: SectionItemRow = { section_id: sectionId, question_id: questionId, number };
+    this.sectionItems.push(row);
+    return row;
+  }
+
   requestsTo(method: string, pathPart: string): RecordedRequest[] {
     return this.requests.filter(
       (request) =>
@@ -408,6 +418,18 @@ export class FakeBackend {
       });
       return this.json(route, this.wantsObject(request) ? row : [row], 201);
     }
+    // Editing a question (Nikko, 20260926000400_allow_question_updates.sql).
+    if (method === 'PATCH' && path === '/rest/v1/questions') {
+      const changes = request.postDataJSON() as Partial<QuestionRow>;
+      const matched = filterRows(this.questions, url);
+      for (const row of matched) Object.assign(row, changes);
+      const body = this.wantsObject(request) ? (matched[0] ?? null) : matched;
+      return this.json(route, body);
+    }
+    // countGradedPapers() reads the programs graded against a question.
+    if (method === 'GET' && path === '/rest/v1/submission_programs') {
+      return this.json(route, filterRows(this.programs, url));
+    }
     if (method === 'GET' && path === '/rest/v1/submissions') {
       const rows = this.filterSubmissions(url)
         .sort((a, b) => Date.parse(b.captured_at) - Date.parse(a.captured_at))
@@ -439,6 +461,12 @@ export class FakeBackend {
     }
     if (method === 'GET' && path === '/rest/v1/question_section_items') {
       return this.json(route, filterRows(this.sectionItems, url));
+    }
+    // Moving a question to another section or number (edit form).
+    if (method === 'PATCH' && path === '/rest/v1/question_section_items') {
+      const changes = request.postDataJSON() as Partial<SectionItemRow>;
+      for (const row of filterRows(this.sectionItems, url)) Object.assign(row, changes);
+      return this.json(route, null);
     }
     if (method === 'POST' && path === '/rest/v1/question_section_items') {
       const rows = request.postDataJSON() as SectionItemRow[];

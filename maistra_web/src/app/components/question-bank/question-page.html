@@ -8,21 +8,16 @@
       <p class="summary">{{ summary }}</p>
     </div>
     <div class="page-actions">
-      <!-- Both need UPDATE access to questions, not granted yet. -->
-      <button type="button" class="btn-secondary" disabled>Edit</button>
-      <button type="button" class="btn-secondary" disabled>Validate test cases</button>
+      <!-- The form has Validate Test Cases, so there is no separate button here. -->
+      <button type="button" class="btn-secondary" (click)="edit.emit()">Edit</button>
     </div>
   </header>
-  <p class="actions-note">
-    Editing and re-validating a saved question aren't available yet: the database doesn't
-    allow updating questions.
-  </p>
 
   <div class="warning-strip" *ngIf="!validated" role="alert">
     <span class="warning-icon" aria-hidden="true">!</span>
     <span>
       Model answer has not passed validation. This question will not appear on the
-      phone and cannot be graded.
+      phone and cannot be graded. Use <strong>Edit</strong> to validate it.
     </span>
   </div>
 

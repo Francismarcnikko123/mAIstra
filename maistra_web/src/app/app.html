@@ -27,13 +27,18 @@
   <!-- Recreated each time so it reloads and shows newly saved questions. -->
   <app-question-bank
     *ngIf="page === 'bank'"
-    (createQuestion)="page = 'create'"
+    (createQuestion)="editRequest = null; page = 'create'"
+    (editQuestion)="editRequest = $event; page = 'create'"
   ></app-question-bank>
 
   <!-- Kept alive so a half-filled form survives a look elsewhere. -->
   <div [style.display]="page === 'create' ? null : 'none'">
     <button type="button" class="back-link" (click)="page = 'bank'">← Question bank</button>
     <!-- Refreshes the review's question picker, card labels and folders after a save (Jayrald). -->
-    <app-question-form (questionSaved)="submissionsList.refreshQuestions()"></app-question-form>
+    <app-question-form
+      [editRequest]="editRequest"
+      (questionSaved)="submissionsList.refreshQuestions()"
+      (editDone)="editRequest = null; page = 'bank'"
+    ></app-question-form>
   </div>
 </main>

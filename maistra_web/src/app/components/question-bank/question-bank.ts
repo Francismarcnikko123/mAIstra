@@ -14,6 +14,7 @@ import {
 } from './bank-groups';
 import { QuestionPlace, indexQuestionPlaces } from './question-labels';
 import { QuestionPageComponent } from './question-page';
+import { EditQuestionRequest } from '../question-form/question-form';
 
 /**
  * Question bank: every question, grouped by section and sorted by number,
@@ -29,6 +30,8 @@ import { QuestionPageComponent } from './question-page';
 export class QuestionBankComponent implements OnInit {
   /** "+ Create question": the app shell opens the form. */
   @Output() createQuestion = new EventEmitter<void>();
+  /** Edit on a question page: the app opens the form pre-filled. */
+  @Output() editQuestion = new EventEmitter<EditQuestionRequest>();
 
   isLoading = true;
   errorMessage = '';
@@ -124,6 +127,14 @@ export class QuestionBankComponent implements OnInit {
   isCollapsed(group: BankGroup): boolean {
     // While searching, show every match.
     return !this.search.trim() && !!this.collapsed[this.groupKey(group)];
+  }
+
+  requestEdit(question: BankQuestion) {
+    const place = indexQuestionPlaces(this.sections, this.items).get(question.id);
+    this.editQuestion.emit({
+      question,
+      place: place ? { sectionId: place.sectionId, number: place.number } : null,
+    });
   }
 
   openQuestion(id: string) {

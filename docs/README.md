@@ -9,6 +9,32 @@ per-program grading. Papers with several programs are stored in the new
 **`submission_programs`** table (one row per program; `answers` is dropped).
 See [CODEX_HANDOFF.md](CODEX_HANDOFF.md) and [TEAM_SYNC.md](TEAM_SYNC.md).
 
+## Question linking — Nikko (2026-09-26/27; on `judge0-integration`)
+
+Nikko's phone and question-bank work, first built on `feature/question-linking-v2`
+(now retired), is merged into `judge0-integration`.
+
+- **Phone:** the student picks a validated, sectioned question before capture;
+  every page is uploaded with `question_id` (Program 1's question) and the
+  quality gate's `gate_result`, with `status: 'pending'` and the OCR fields empty;
+  all pages of one submit share a `batch_id`.
+- **Web:** top bar with *Question bank* and *Submissions*; questions have a
+  section and a number (`Basic · Q2 · Sum of two numbers`); the form saves only
+  after validation passes; submission folders follow the question's section.
+- **Live and tested (2026-09-26):** Jayrald's schema is in the cloud
+  (sections, `can_publish`, `gate_result`, `batch_id`, question UPDATE,
+  `submission_programs`). End-to-end test passed: question *Basic · Q1* created
+  on the web, picked on the phone, one page submitted, filed in the **Basic**
+  folder with `question_id`, `gate_result = PASS` and a `batch_id`
+  ([test note](changes/2026-09-26-end-to-end-test.md)).
+- **Editing (2026-09-26):** *Edit* on a question opens it in the form; Save is locked until validation passes. Older questions get a
+  section and number here to appear on the phone ([note](changes/2026-09-26-edit-questions.md)).
+- **Tested (2026-09-27):** 6 end-to-end browser tests for the question bank and
+  editing; a code review's 8 fixes are in ([review note](changes/2026-09-27-code-review-fixes.md)).
+- **Where to read:** one note per update in [`changes/`](changes/README.md),
+  the dated sections in the [overview](PROJECT_OVERVIEW_AND_CHANGES.md), and
+  Nikko's section of [TEAM_SYNC.md](TEAM_SYNC.md).
+
 ## Web update — 2026-09-26 (read with the block below)
 
 Review Code (Step 2) has a **Save** button next to the program tabs (and

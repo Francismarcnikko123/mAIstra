@@ -12,6 +12,8 @@ One file per update, newest last. Each note says what changed, why, which files,
 | 2026-09-26 | [Merge pre-extraction and judge0-integration into `feature/question-linking-v2`](2026-09-26-merge-pre-extraction-and-judge0.md) | Nikko (merge), Nombrado + Jayrald (reviewers) | `0e21d5c`, `a727934`, `ffcf908` |
 | 2026-09-26 | [Rename the question sections migration](2026-09-26-migration-rename.md) | Nikko | `246cb7e` |
 | 2026-09-26 | [Question page: drop marks](2026-09-26-question-page-drop-marks.md) | Nikko | `c6178c6` |
+| 2026-09-26 | [Merge Nombrado's latest pre-extraction; restore `AGENTS.md` and `ocr_feature/`](2026-09-26-merge-latest-pre-extraction.md) | Nikko (merge), Nombrado (review) | `60db6ed` |
+| 2026-09-26 | Shared docs: `docs/README.md` gets a question-linking block; TEAM_SYNC asks Nombrado about his web guide (docs only, no code) | Nikko | `5d17dff` |
 | 2026-09-26 | [Gate verdicts, the validated flag, and catching the cloud up](2026-09-26-gate-result-can-publish-and-cloud-migrations.md) | Jayrald | `018fe7d` |
 | 2026-09-26 | [Questions can be edited; edited test cases clear stale grades](2026-09-26-question-updates.md) | Jayrald | `018fe7d` |
 | 2026-09-26 | [Nikko's and Nombrado's branches merged into `judge0-integration`](2026-09-26-merges-into-judge0-integration.md) | Jayrald | `138ef02`, `046b88c`, `c893b85` |
@@ -20,3 +22,9 @@ One file per update, newest last. Each note says what changed, why, which files,
 | 2026-09-26 | [Review fixes: Program 1 follows the page's question; tab-only saves are guarded](2026-09-26-review-fixes-program-one-and-tab-saves.md) | Jayrald | `446b05c` |
 | 2026-09-26 | [Review fixes: Step 3 stays on the graded program; grading waits for re-reads](2026-09-26-review-fixes-step-3.md) | Jayrald | `f3c3a69` |
 | 2026-09-26 | [Review fixes #4, #5, #7 and #9](2026-09-26-review-fixes-4-5-7-9.md) | Jayrald | `719dac1`, `a8f6990`, `24aafe8`, `0c1dc8c`, `2cd57a7` |
+| 2026-09-26 | [Merge Jayrald's schema work (`268eb54`) into v2](2026-09-26-merge-judge0-schema.md) | Nikko (merge) | `ce02c06` |
+| 2026-09-26 | [Mobile: pages of one answer share a `batch_id`](2026-09-26-mobile-batch-id.md) | Nikko | `49038c1` |
+| 2026-09-26 | [End-to-end test against the live database](2026-09-26-end-to-end-test.md) | Nikko | `b1e7728` |
+| 2026-09-26 | [Web: edit and re-validate saved questions](2026-09-26-edit-questions.md) | Nikko | `906ad09`, `6156bae` |
+| 2026-09-26 | [End-to-end tests for question linking on the web](2026-09-26-e2e-question-bank.md) | Nikko | `90c3141` |
+| 2026-09-27 | [Code review of question linking, and the fixes](2026-09-27-code-review-fixes.md) | Nikko | `df06e0e`, `47851dc` |

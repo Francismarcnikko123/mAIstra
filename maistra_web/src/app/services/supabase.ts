@@ -145,6 +145,69 @@ async saveQuestion(question: any) {
       .insert([{ section_id: sectionId, question_id: questionId, number }]);
   }
 
+  /**
+   * Saves an edited question. Jayrald's 20260926000400 migration allows these
+   * columns; changing test_cases or question_type clears the grades of papers
+   * linked to the question (his trigger).
+   */
+  async updateQuestion(
+    id: string,
+    fields: {
+      question_name: string;
+      question_text: string;
+      question_type: string;
+      model_answer: string;
+      test_cases: unknown[];
+      can_publish: boolean;
+    },
+  ) {
+    return await this.supabase
+      .from('questions')
+      .update(fields)
+      .eq('id', id)
+      .select('id')
+      .single();
+  }
+
+  /** Moves an already-sectioned question to another section and/or number. */
+  async moveQuestionToSection(questionId: string, sectionId: string, number: number) {
+    return await this.supabase
+      .from('question_section_items')
+      .update({ section_id: sectionId, number })
+      .eq('question_id', questionId);
+  }
+
+  /**
+   * Papers with a grade that editing this question's test cases or type
+   * would clear (Jayrald's triggers): graded pages linked as Program 1, plus
+   * any program on a page (submission_programs) graded against it. Null when
+   * the count can't be read, so the caller warns instead of assuming none.
+   */
+  async countGradedPapers(questionId: string): Promise<number | null> {
+    const papers = new Set<string>();
+    const pages = await this.supabase
+      .from('submissions')
+      .select('id')
+      .eq('question_id', questionId)
+      .eq('status', 'graded');
+    if (pages.error) return null;
+    for (const row of (pages.data ?? []) as { id: string }[]) papers.add(row.id);
+
+    const programs = await this.supabase
+      .from('submission_programs')
+      .select('submission_id, graded_at')
+      .eq('question_id', questionId);
+    if (programs.error) {
+      // PGRST205: the table doesn't exist yet (older database).
+      if (programs.error.code !== 'PGRST205') return null;
+    } else {
+      for (const row of (programs.data ?? []) as { submission_id: string; graded_at: string | null }[]) {
+        if (row.graded_at) papers.add(row.submission_id);
+      }
+    }
+    return papers.size;
+  }
+
   /** Every question's section and number, for the question bank. */
   async getSectionItems() {
     return await this.supabase

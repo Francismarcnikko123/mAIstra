@@ -530,6 +530,8 @@ describe('SubmissionsListComponent program tabs', () => {
     await component.saveVerifiedText();
 
     expect(updateSubmissionText).toHaveBeenCalledTimes(1);
+    // 4th argument: the grading_revision the draft started from (Jayrald's
+    // compare-and-set save); the programs follow it.
     expect(updateSubmissionText).toHaveBeenCalledWith(
       'paper-1',
       'int main() { return 0; }',
