@@ -6,6 +6,11 @@
 
 ## Current integration state — 2026-09-24
 
+**Update 2026-09-26, evening:** the working branch is `judge0-integration`
+(contains `feature/pre-extraction`, now retired). Multi-program papers live in
+`submission_programs`; `answers` is dropped. Read the top block of
+`CODEX_HANDOFF.md` before any web or database change.
+
 **Update 2026-09-26:** Review Code now has a Save button next to the program
 tabs (every tab, stays on Step 2, Cmd/Ctrl+S); the unsaved prompt is Keep
 editing / Discard changes; the footer reads "Continue to grading". Branch

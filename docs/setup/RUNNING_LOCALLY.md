@@ -193,13 +193,19 @@ npm start
 
 Opens on `http://localhost:4200` once it finishes compiling.
 
-**Program tabs (branch `feature/program-tabs`, also included in
-`feature/pre-extraction`, 2026-09-24):** If the connected
-database doesn't have the `submissions.answers` column yet, the list still loads
-and Program 1 still saves. Step 2 shows "Preview only: Programs 2 and up can't be
-saved…" for extra tabs. The note disappears on the next page load after
-`supabase/migrations/20260923000000_add_submission_answers.sql` is applied: by
-Jayrald on the cloud project, or by you locally with `supabase migration up`.
+**Program tabs (2026-09-26):** Multi-program papers now use
+`submission_programs`; the old `submissions.answers` column is gone. The table
+migration is `supabase/migrations/20260926000600_add_submission_programs.sql`
+(applied to the cloud by Jayrald). On a database still missing this table,
+Program 1 can save, but extra tabs remain preview-only. The message under the
+editor names the missing table and asks Jayrald to apply the migrations.
+
+**Save feedback (`feature/review-save-followups`, 2026-09-26):** the label beside
+Save is the only save-status message. Red means a failure or revision conflict;
+amber means program edits remain unsaved; green confirms saved programs.
+Pending extra tabs take priority over the Program 1-only confirmation. The
+older duplicate paragraph is removed; extraction and program-rule errors stay
+below the editor. The save operation and conflict protections are unchanged.
 
 ## Connecting to a teammate's Judge0 VM
 

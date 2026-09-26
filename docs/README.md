@@ -1,5 +1,14 @@
 # mAIstra — Project docs
 
+## Current integration state — 2026-09-26, evening
+
+Everyone now works on **`judge0-integration`**. It holds the program tabs,
+pre-extraction and the Save button (from `feature/pre-extraction`), Nikko's
+question sections, question bank and phone question picker, and Jayrald's
+per-program grading. Papers with several programs are stored in the new
+**`submission_programs`** table (one row per program; `answers` is dropped).
+See [CODEX_HANDOFF.md](CODEX_HANDOFF.md) and [TEAM_SYNC.md](TEAM_SYNC.md).
+
 ## Web update — 2026-09-26 (read with the block below)
 
 Review Code (Step 2) has a **Save** button next to the program tabs (and
