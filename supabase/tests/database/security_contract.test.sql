@@ -1,6 +1,6 @@
 begin;
 
-select plan(13);
+select plan(15);
 
 select ok(
   (
@@ -111,6 +111,28 @@ select ok(
       and allowed_mime_types @> ARRAY['image/jpeg', 'image/png']::text[]
   ),
   'handwritten uploads are limited by size and MIME type'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'submissions'
+  ),
+  'submission changes are published to Supabase Realtime'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'questions'
+  ),
+  'question changes are published to Supabase Realtime'
 );
 
 select * from finish();

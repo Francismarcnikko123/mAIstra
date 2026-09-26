@@ -21,7 +21,7 @@
        Hidden with an inline style because the component's :host sets display,
        which would override the [hidden] attribute. -->
   <div [style.display]="page === 'submissions' ? null : 'none'">
-    <app-submissions-list></app-submissions-list>
+    <app-submissions-list #submissionsList></app-submissions-list>
   </div>
 
   <!-- Recreated each time so it reloads and shows newly saved questions. -->
@@ -33,6 +33,7 @@
   <!-- Kept alive so a half-filled form survives a look elsewhere. -->
   <div [style.display]="page === 'create' ? null : 'none'">
     <button type="button" class="back-link" (click)="page = 'bank'">← Question bank</button>
-    <app-question-form></app-question-form>
+    <!-- Refreshes the review's question picker after a save (Jayrald). -->
+    <app-question-form (questionSaved)="submissionsList.loadQuestions()"></app-question-form>
   </div>
 </main>

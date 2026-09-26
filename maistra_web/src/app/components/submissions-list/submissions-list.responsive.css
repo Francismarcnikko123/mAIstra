@@ -1,0 +1,219 @@
+@media (max-width: 1050px) {
+  .review-overlay {
+    padding: 12px;
+  }
+
+  .review-workspace {
+    width: min(980px, 98vw);
+    height: 96vh;
+  }
+
+  .details-layout,
+  .ocr-layout {
+    grid-template-columns: minmax(240px, 0.75fr) minmax(350px, 1.25fr);
+    gap: 20px;
+  }
+}
+
+@media (max-width: 800px) {
+  .submissions-panel {
+    padding: 14px;
+  }
+
+  .submission-toolbar,
+  .stage-heading-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .filter-field {
+    width: 100%;
+  }
+
+  .submission-grid {
+    grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  }
+
+  .review-overlay {
+    padding: 0;
+  }
+
+  .review-workspace {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .review-header,
+  .review-content,
+  .review-footer {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .review-steps {
+    padding: 0 8px;
+  }
+
+  .review-steps button {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+  }
+
+  .review-steps button > span {
+    grid-row: auto;
+  }
+
+  .review-steps button small {
+    display: none;
+  }
+
+  .details-layout,
+  .ocr-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .submission-preview {
+    max-width: 560px;
+    justify-self: center;
+  }
+
+  .text-editor,
+  .extract-placeholder {
+    height: 380px;
+    min-height: 380px;
+  }
+
+  .footer-guidance {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .panel-header h2 {
+    font-size: 21px;
+  }
+
+  .submission-toolbar {
+    gap: 9px;
+    padding: 10px;
+  }
+
+  .submission-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card-image-wrap {
+    height: 190px;
+  }
+
+  .review-header {
+    gap: 10px;
+    padding-top: 14px;
+    padding-bottom: 12px;
+  }
+
+  .review-header h2 {
+    font-size: 18px;
+  }
+
+  .review-meta {
+    flex-wrap: wrap;
+  }
+
+  .review-steps button {
+    min-width: 0;
+    padding: 10px 3px;
+  }
+
+  .review-steps button > span {
+    width: 24px;
+    height: 24px;
+  }
+
+  .review-steps button strong {
+    font-size: 11px;
+  }
+
+  .review-content {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .details-layout,
+  .ocr-layout {
+    gap: 18px;
+  }
+
+  .submission-preview {
+    width: 100%;
+  }
+
+  .text-editor,
+  .extract-placeholder {
+    height: 330px;
+    min-height: 330px;
+  }
+
+  .editor-panel-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .review-footer {
+    min-height: auto;
+    flex-wrap: wrap;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .review-footer .btn-secondary,
+  .review-footer .btn-primary {
+    flex: 1;
+    margin-left: 0;
+    white-space: nowrap;
+  }
+}
+
+@media (max-height: 700px) and (min-width: 801px) {
+  .review-overlay {
+    padding: 8px;
+  }
+
+  .review-workspace {
+    height: calc(100vh - 16px);
+  }
+
+  .review-header {
+    padding-top: 12px;
+    padding-bottom: 10px;
+  }
+
+  .review-steps button {
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+
+  .review-content {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+}
+
+@container submissions (max-width: 700px) {
+  .submission-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .filter-field {
+    width: 100%;
+  }
+
+  .submission-grid {
+    grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+  }
+}

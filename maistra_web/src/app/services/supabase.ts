@@ -13,6 +13,12 @@ const SUBMISSION_COLUMNS = `
   extracted_text,
   verified_text,
   question_id,
+  grading_results,
+  passed_test_cases,
+  total_test_cases,
+  score_percent,
+  graded_at,
+  grading_revision,
   questions (
     id,
     question_name,
@@ -146,9 +152,10 @@ async saveQuestion(question: any) {
   }
 
   /**
-   * One submission, fresh from the database. The review uses it when a paper
-   * is opened, to pick up OCR text the auto-extract worker saved after the
-   * list was loaded.
+   * One row with the same shape as getSubmissions(), fresh from the database.
+   * A realtime event refreshes just the submission that changed, and opening
+   * a paper picks up OCR text the auto-extract worker saved after the list
+   * was loaded.
    */
   async getSubmission(id: string) {
     const columns: string =
@@ -163,24 +170,34 @@ async saveQuestion(question: any) {
       .order('captured_at', { ascending: false });
   }
 
+  // Both edit saves are compare-and-set on grading_revision, which advances
+  // whenever the code, the question or the grade changes. They write only while
+  // the row is still at expectedRevision (the version the edit started from) and
+  // return the new revision, or null when someone else changed it meanwhile.
   async updateSubmissionDetails(
     id: string,
     topic: string,
     questionId: string | null,
-  ): Promise<void> {
-    const { error } = await this.supabase
+    expectedRevision: number,
+  ): Promise<number | null> {
+    const { data, error } = await this.supabase
       .from('submissions')
       .update({ topic, question_id: questionId })
-      .eq('id', id);
+      .eq('id', id)
+      .eq('grading_revision', expectedRevision)
+      .select('grading_revision')
+      .maybeSingle();
     if (error) throw error;
+    return data?.grading_revision ?? null;
   }
 
   async updateSubmissionText(
     submissionId: string,
     verifiedText: string,
-    extractedText?: string,
+    extractedText: string | undefined,
+    expectedRevision: number,
     answers?: SubmissionAnswer[],
-  ): Promise<void> {
+  ): Promise<number | null> {
     // extracted_text must keep the OCR's own output (it is the baseline the
     // verified text is compared against), so it is only written when a fresh
     // extraction produced it — never overwritten with the teacher's edits.
@@ -193,26 +210,51 @@ async saveQuestion(question: any) {
       update['extracted_text'] = extractedText;
     }
     // Programs 2..n from the review tabs, saved in the same update so they
-    // share Program 1's save guards.
+    // share Program 1's save guards, including the revision check.
     if (answers !== undefined && this.answersColumnAvailable !== false) {
       update['answers'] = answers;
     }
-    const { error } = await this.supabase
+    const { data, error } = await this.supabase
       .from('submissions')
       .update(update)
-      .eq('id', submissionId);
+      .eq('id', submissionId)
+      .eq('grading_revision', expectedRevision)
+      .select('grading_revision')
+      .maybeSingle();
     if (error) throw error;
+    return data?.grading_revision ?? null;
   }
 
+  async updateSubmissionGrade(
+    submissionId: string,
+    results: ReadonlyArray<{ passed: boolean }>,
+    gradingRevision: number,
+    questionId: string,
+    gradedCode: string,
+  ): Promise<number | null> {
+    // The database saves the grade only while gradedCode is exactly the stored
+    // verified_text and the question and revision are unchanged; it derives
+    // the pass counts from the results. Returns null when anything differs.
+    const { data, error } = await this.supabase.rpc('save_submission_grade', {
+      p_submission_id: submissionId,
+      p_grading_revision: gradingRevision,
+      p_question_id: questionId,
+      p_graded_code: gradedCode,
+      p_grading_results: results,
+    });
+    if (error) throw error;
+    return data === null || data === undefined ? null : Number(data);
+  }
+
+  /** New rows go to onInsert; changed rows go to onUpdate, or to onInsert when only one handler is given. */
   subscribeToSubmissions(
     onInsert: (payload: any) => void,
-    onUpdate?: (payload: any) => void,
+    onUpdate: (payload: any) => void = onInsert,
   ) {
     return this.supabase
       .channel('submissions')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'submissions' }, onInsert)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'submissions' }, onUpdate ?? (() => {}))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'submissions' }, onUpdate)
       .subscribe();
   }
-  
 }

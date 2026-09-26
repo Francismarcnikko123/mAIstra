@@ -8,8 +8,9 @@ import {
   ChangeDetectorRef,
 } from '@angular/core';
 import { CodeEditorComponent } from '../code-editor/code-editor';
-import { HttpClient } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
+import { Judge0Service } from '../../services/judge0.service';
+import { normalizeOutput } from '../../utils/normalize-output';
 
 export interface TestCaseResult {
   caseNumber: number;
@@ -18,13 +19,6 @@ export interface TestCaseResult {
   actualOutput: string;
   status: string;
   passed: boolean;
-}
-
-export interface LogicAnalysisResult {
-  name: string;
-  passed: boolean;
-  weight: number;
-  score: number;
 }
 
 @Component({
@@ -43,36 +37,80 @@ export class Judge0 implements OnChanges {
   @Input() submitStatus = '';
   @Input() isSubmitting = false;
   @Input() testCaseResults: TestCaseResult[] = [];
-  @Input() logicAnalysisResults: LogicAnalysisResult[] = [];
   @Input() hasQuestion = true;
   @Input() requiresQuestion = false;
+  // Show the code without letting it be edited, e.g. when grading must run on
+  // the saved code and edits belong in an earlier step.
+  @Input() codeReadOnly = false;
   codeToRun = ''; // editable copy
   stdout = '';
   stderr = '';
   compileOutput = '';
   statusDescription = '';
+  // Judge0's own status id — 3 means Accepted (compiled + ran with no
+  // compile error or runtime crash). This is the real success/failure
+  // signal; compileOutput/stderr being non-empty does NOT by itself mean
+  // failure (a program can compile with warnings, e.g. a missing include,
+  // and still run correctly).
+  statusId: number | null = null;
   runNotification = '';
   firstRunTestCasePassed: boolean | null = null;
   isRunning = false;
-  logicAnalysisExpanded = false;
   resultMode: 'run' | 'submit' = 'run';
   @Output() submitCode = new EventEmitter<void>();
   @Output() codeChange = new EventEmitter<string>();
 
   constructor(
-    private http: HttpClient,
+    private judge0: Judge0Service,
     private cdr: ChangeDetectorRef,
   ) {}
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['initialCode']) {
       this.codeToRun = this.initialCode || '';
     }
-
-    if (changes['logicAnalysisResults']) {
-      this.logicAnalysisExpanded = false;
+    // Only a different grade switches the view: a new one, or a regrade from
+    // another tab. The parent re-sends the same persisted grade as a fresh
+    // array on every realtime reload, which must not pull the teacher away
+    // from a sample run they are reading.
+    const resultsChange = changes['testCaseResults'];
+    if (
+      resultsChange &&
+      this.testCaseResults.length > 0 &&
+      !Judge0.sameResults(resultsChange.previousValue ?? [], this.testCaseResults)
+    ) {
+      this.resultMode = 'submit';
     }
   }
+
+  // Field by field rather than by reference or JSON: a reloaded grade is a new
+  // array whose objects come back from jsonb with their keys reordered.
+  private static sameResults(
+    previous: TestCaseResult[],
+    next: TestCaseResult[],
+  ): boolean {
+    return (
+      previous.length === next.length &&
+      previous.every((result, index) => {
+        const other = next[index];
+        return (
+          result.caseNumber === other.caseNumber &&
+          result.stdin === other.stdin &&
+          result.expectedOutput === other.expectedOutput &&
+          result.actualOutput === other.actualOutput &&
+          result.status === other.status &&
+          result.passed === other.passed
+        );
+      })
+    );
+  }
+
+  get isExecutionBusy(): boolean {
+    return this.isRunning || this.isSubmitting;
+  }
+
   executeCode() {
+    if (this.isExecutionBusy) return;
+
     if (this.requiresQuestion && !this.hasQuestion) {
       this.runNotification = 'Please select a question before running code.';
       this.cdr.detectChanges();
@@ -86,23 +124,19 @@ export class Judge0 implements OnChanges {
     this.stderr = '';
     this.compileOutput = '';
     this.statusDescription = '';
+    this.statusId = null;
     this.firstRunTestCasePassed = null;
 
     this.cdr.detectChanges();
-    console.log('Execute clicked');
-
-    this.http
-      .post<any>('http://127.0.0.1:8001/api/judge0/run', {
-        source_code: this.runCode || this.codeToRun,
-        language_id: 50,
-        stdin: this.stdin,
-      })
+    this.judge0
+      .runCCode(this.runCode || this.codeToRun, this.stdin)
       .subscribe({
         next: (result) => {
           this.stdout = result.stdout || '';
           this.stderr = result.stderr || '';
           this.compileOutput = result.compile_output || '';
           this.statusDescription = result.status?.description || '';
+          this.statusId = result.status?.id ?? null;
           this.firstRunTestCasePassed = this.evaluateFirstRunTestCase();
           this.isRunning = false;
 
@@ -110,7 +144,8 @@ export class Judge0 implements OnChanges {
         },
         error: (error) => {
           this.stderr = 'Failed to execute code.';
-          this.firstRunTestCasePassed = false;
+          this.statusDescription = 'Execution failed';
+          this.firstRunTestCasePassed = null;
           this.isRunning = false;
 
           console.error(error);
@@ -125,15 +160,22 @@ export class Judge0 implements OnChanges {
   }
 
   requestSubmit() {
+    if (this.isExecutionBusy) return;
+
     this.resultMode = 'submit';
     this.submitCode.emit();
   }
 
-  toggleLogicAnalysis() {
-    this.logicAnalysisExpanded = !this.logicAnalysisExpanded;
-  }
-
   get displayedOutput(): string {
+    if (this.resultMode === 'run') {
+      return (
+        this.stdout ||
+        this.stderr ||
+        this.compileOutput ||
+        (this.isRunning ? 'Running...' : '(no output)')
+      );
+    }
+
     return (
       this.submittedOutput ||
       this.stdout ||
@@ -144,13 +186,17 @@ export class Judge0 implements OnChanges {
   }
 
   get shouldShowProcessingState(): boolean {
-    return this.isRunning && !this.stdout && !this.stderr && !this.compileOutput;
+    return (
+      this.isRunning && !this.stdout && !this.stderr && !this.compileOutput
+    );
   }
 
   get displayedStatus(): string {
-    if (this.isRunning) return 'Running';
+    if (this.resultMode === 'run') {
+      return this.isRunning ? 'Running' : this.statusDescription;
+    }
     if (this.isSubmitting) return 'Checking';
-    return this.submitStatus || this.statusDescription;
+    return this.submitStatus;
   }
 
   get shouldShowTerminalResults(): boolean {
@@ -159,10 +205,10 @@ export class Judge0 implements OnChanges {
 
     return (
       !!this.stdout ||
-      !!this.submittedOutput ||
       !!this.stderr ||
       !!this.compileOutput ||
-      this.testCaseResults.length > 0
+      !!this.statusDescription ||
+      this.firstRunTestCasePassed !== null
     );
   }
 
@@ -170,9 +216,9 @@ export class Judge0 implements OnChanges {
     return (
       this.resultMode === 'run' &&
       (!!this.stdout ||
-        !!this.submittedOutput ||
         !!this.stderr ||
         !!this.compileOutput ||
+        !!this.statusDescription ||
         this.firstRunTestCasePassed !== null)
     );
   }
@@ -183,10 +229,10 @@ export class Judge0 implements OnChanges {
 
   get hasErrorStatus(): boolean {
     return (
-      !!this.compileOutput ||
-      !!this.stderr ||
+      (this.statusId !== null && this.statusId !== 3) ||
       this.displayedStatus === 'Wrong Answer' ||
       this.displayedStatus === 'Error' ||
+      this.displayedStatus === 'Execution failed' ||
       this.firstRunTestCasePassed === false
     );
   }
@@ -195,41 +241,56 @@ export class Judge0 implements OnChanges {
     return this.testCaseResults.filter((result) => result.passed).length;
   }
 
+  get testCaseScorePercentage(): number {
+    if (!this.testCaseResults.length) return 0;
+    return Number(
+      ((this.passedTestCaseCount / this.testCaseResults.length) * 100).toFixed(
+        2,
+      ),
+    );
+  }
+
+  get testCaseScoreSummary(): string {
+    if (!this.testCaseResults.length) return '';
+    return `${this.passedTestCaseCount}/${this.testCaseResults.length} test cases passed — Score: ${this.testCaseScorePercentage}%`;
+  }
+
+  getTestCasePointLabel(result: TestCaseResult): string {
+    return result.passed ? '1/1 point' : '0/1 point';
+  }
+
   get firstTestCaseResult(): TestCaseResult | null {
     return this.testCaseResults[0] ?? null;
   }
 
   get firstTestCasePassedLabel(): string {
-    const passed = this.firstTestCaseResult?.passed ?? this.firstRunTestCasePassed;
+    const passed = this.firstRunTestCasePassed;
     if (passed === null) return '';
     return passed ? 'First Test Case Passed' : 'First Test Case Failed';
   }
 
   get runResultTitle(): string {
-    const passed = this.firstTestCaseResult?.passed ?? this.firstRunTestCasePassed;
+    const passed = this.firstRunTestCasePassed;
     if (passed === null) return '';
     return passed ? 'Accepted' : 'Wrong Answer :(';
   }
 
   get runResultSummary(): string {
-    const passed = this.firstTestCaseResult?.passed ?? this.firstRunTestCasePassed;
+    const passed = this.firstRunTestCasePassed;
     if (passed === null) return '';
     return passed ? '1/1 test case passed' : '1/1 test case failed';
   }
 
-  get passedLogicCheckCount(): number {
-    return this.logicAnalysisResults.filter((result) => result.passed).length;
-  }
-
   private evaluateFirstRunTestCase(): boolean | null {
-    if (this.stderr || this.compileOutput || !this.expectedOutput.trim()) {
-      return null;
+    if (!this.expectedOutput.trim()) {
+      return null; // nothing configured to compare against
+    }
+    if (this.statusId !== 3) {
+      return false; // real compile error or runtime crash
     }
 
-    return this.normalizeOutput(this.stdout) === this.normalizeOutput(this.expectedOutput);
-  }
-
-  private normalizeOutput(value: string): string {
-    return value.trim().toLowerCase().replace(/\s*:\s*/g, ':').replace(/\s+/g, ' ');
+    return (
+      normalizeOutput(this.stdout) === normalizeOutput(this.expectedOutput)
+    );
   }
 }

@@ -157,7 +157,7 @@ SET row_security = off;
 -- Data for Name: questions; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-INSERT INTO "public"."questions" ("id", "question_name", "question_text", "model_answer", "test_cases", "created_at", "validation_status", "can_publish", "model_validation_results", "question_type") VALUES
+INSERT INTO "public"."questions" ("id", "question_name", "question_text", "model_answer", "test_cases", "created_at", "question_type") VALUES
 	('eb9df3fc-e1c3-4d30-a13d-6333dd7d5eec', 'the sum of two numbers', 'add the two numbers', '#include <stdio.h>
 
 int main()
@@ -168,7 +168,7 @@ int main()
     printf("sum: %d", num1);
 
     return 0;
-}', '[{"mark": 2, "test_code": "", "test_input": "", "expected_output": "sum: 15"}]', '2026-08-06 16:00:28.218158+00', 'draft', false, '[]', 'program'),
+}', '[{"test_code": "", "test_input": "", "expected_output": "sum: 15"}]', '2026-08-06 16:00:28.218158+00', 'program'),
 	('ab31a894-a044-403c-8fd1-6b93c771d162', 'write a program that adds the two numbers', 'asd', '#include <stdio.h>
 int main () {
 int a, b, sum;
@@ -176,7 +176,7 @@ scanf ("%d %d ", &a ,&b);
 sum = a + b;
 printf ("sum: %d\n ", sum);
 return 0;
-}', '[{"mark": 2, "test_code": "", "test_input": "5 3", "expected_output": "sum: 8"}]', '2026-08-06 16:14:11.450585+00', 'draft', false, '[]', 'program');
+}', '[{"test_code": "", "test_input": "5 3", "expected_output": "sum: 8"}]', '2026-08-06 16:14:11.450585+00', 'program');
 
 
 --

@@ -105,13 +105,38 @@
   <!-- Model Answer -->
   <div class="form-group">
     <label>Model Answer</label>
-    <app-code-editor
-      [(value)]="modelAnswer"
-      (valueChange)="clearValidationResults()"
-    ></app-code-editor>
+    <p class="code-hint" id="model-answer-hint">
+      <ng-container *ngIf="questionType === 'function'">
+        Enter the function definitions only. Do not add #include or main(); the
+        system supplies them.
+      </ng-container>
+      <ng-container *ngIf="questionType === 'program'">
+        Enter a complete program with main(). The system supplies #include
+        &lt;stdio.h&gt;.
+      </ng-container>
+    </p>
+    <div class="code-editor-shell" [class.invalid]="!!modelAnswerError">
+      <app-code-editor
+        [(value)]="modelAnswer"
+        (valueChange)="clearValidationResults()"
+        [attr.aria-invalid]="!!modelAnswerError"
+        aria-describedby="model-answer-hint model-answer-error"
+      ></app-code-editor>
+    </div>
+    <div
+      class="error-message field-error"
+      id="model-answer-error"
+      role="alert"
+      *ngIf="modelAnswerError"
+    >
+      {{ modelAnswerError }}
+    </div>
     <div class="test-cases-header">
       <!-- Test Cases -->
-      <span>Test Cases</span>
+      <span>
+        Test Cases
+        <small>Each test case is worth 1 point.</small>
+      </span>
       <button class="btn-add" (click)="addTestCase()">+ Add</button>
     </div>
 
@@ -147,38 +172,64 @@
       <div class="test-case-body" *ngIf="!isTestCaseCollapsed(i)">
         <ng-container *ngIf="questionType === 'function'">
           <label>Test Code</label>
+          <p class="code-hint" [id]="'test-code-hint-' + i">
+            Assign fixed test values, call your function, and print the result
+            with printf(). Example: <code>int value; value = 5;</code> Do not
+            use scanf(), #include, or main().
+          </p>
 
           <div
             class="test-editor-shell"
             [class.running]="getTestCaseStatus(i) === 'running'"
             [class.passed]="getTestCaseStatus(i) === 'passed'"
-            [class.failed]="getTestCaseStatus(i) === 'failed'"
+            [class.failed]="getTestCaseStatus(i) === 'failed' || !!getTestCodeError(i)"
           >
             <app-code-editor
               [(value)]="tc.test_code"
               (valueChange)="clearValidationResults()"
+              [attr.aria-invalid]="!!getTestCodeError(i)"
+              [attr.aria-describedby]="'test-code-hint-' + i + ' test-code-error-' + i"
             ></app-code-editor>
+          </div>
+          <div
+            class="error-message field-error"
+            [id]="'test-code-error-' + i"
+            role="alert"
+            *ngIf="getTestCodeError(i)"
+          >
+            {{ getTestCodeError(i) }}
           </div>
         </ng-container>
 
         <label>Expected Output</label>
+        <p class="code-hint">
+          Enter the expected result manually. Validation compares it with the
+          model answer output and does not replace it.
+        </p>
         <textarea
           [(ngModel)]="tc.expected_output"
           (ngModelChange)="clearValidationResults()"
+          [attr.aria-invalid]="!!getExpectedOutputError(i)"
+          [attr.aria-describedby]="'expected-output-error-' + i"
         ></textarea>
-
-        <label>Standard Input</label>
-        <textarea
-          [(ngModel)]="tc.test_input"
-          rows="3"
-          placeholder="Input passed to scanf"
-          (ngModelChange)="clearValidationResults()"
-        ></textarea>
-
-        <div class="form-group">
-          <label>Mark</label>
-          <input type="number" [(ngModel)]="tc.mark" style="width: 80px" />
+        <div
+          class="error-message field-error"
+          [id]="'expected-output-error-' + i"
+          role="alert"
+          *ngIf="getExpectedOutputError(i)"
+        >
+          {{ getExpectedOutputError(i) }}
         </div>
+
+        <ng-container *ngIf="questionType === 'program'">
+          <label>Standard Input</label>
+          <textarea
+            [(ngModel)]="tc.test_input"
+            rows="3"
+            placeholder="Input passed to scanf"
+            (ngModelChange)="clearValidationResults()"
+          ></textarea>
+        </ng-container>
       </div>
 
       <div
@@ -200,20 +251,36 @@
 
         <div class="test-cell">
           <strong>Got</strong>
-          <pre>
-            {{ validationResults[i].actual || validationResults[i].compile_output || validationResults[i].stderr || '(no output)' }}
-          </pre>
+          <pre>{{ validationResults[i].actual || '(no output)' }}</pre>
         </div>
 
         <div class="test-cell result-cell">
           <strong>Result</strong>
           <span> {{ validationResults[i].passed ? 'Passed' : 'Failed' }} </span>
+          <p>{{ validationResults[i].status }}</p>
+        </div>
+        <div
+          class="validation-diagnostics"
+          *ngIf="validationResults[i].message || validationResults[i].compile_output || validationResults[i].stderr"
+          aria-live="polite"
+        >
+          <p *ngIf="validationResults[i].message">
+            {{ validationResults[i].message }}
+          </p>
+          <ng-container *ngIf="validationResults[i].compile_output">
+            <strong>Compiler details</strong>
+            <pre>{{ validationResults[i].compile_output }}</pre>
+          </ng-container>
+          <ng-container *ngIf="validationResults[i].stderr">
+            <strong>Standard error</strong>
+            <pre>{{ validationResults[i].stderr }}</pre>
+          </ng-container>
         </div>
       </div>
     </div>
     <div class="test-summary" *ngIf="validationResults.length">
-      {{ passedAllTests() ? 'Passed all tests' : 'Failed ' + failedTestCount() +
-      ' test(s)' }}
+      {{ isValidating ? 'Validating test cases...' : passedAllTests() ? 'Passed
+      all tests' : 'Failed ' + failedTestCount() + ' test(s)' }}
     </div>
   </div>
 </div>

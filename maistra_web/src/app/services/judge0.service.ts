@@ -1,26 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 
-export interface LogicCheck {
-  name: string;
-  passed: boolean;
-  weight: number;
-  score: number;
-}
-
-export interface GradingResult {
-  final_score: number;
-  compilation_score: number;
-  logic_score: number;
-  output_score: number;
-  logic_details: LogicCheck[];
-  output_details: {
-    passed: boolean;
-    score: number;
-    expected_normalized: string;
-    actual_normalized: string;
-  };
-}
 export interface Judge0RunResult {
   stdout?: string;
   stderr?: string;
@@ -30,6 +10,20 @@ export interface Judge0RunResult {
     id?: number;
     description?: string;
   };
+}
+
+export interface Judge0RunError {
+  error: {
+    status_code: number;
+    detail: string;
+  };
+}
+
+export type Judge0BatchOutcome = Judge0RunResult | Judge0RunError;
+
+export interface Judge0BatchRun {
+  sourceCode: string;
+  stdin?: string;
 }
 
 @Injectable({
@@ -42,25 +36,35 @@ export class Judge0Service {
 
   runCCode(sourceCode: string, stdin = '') {
     return this.http.post<Judge0RunResult>(
-      'http://127.0.0.1:8001/api/judge0/run',
+      `${this.apiUrl}/run`,
       {
         source_code: sourceCode,
-        language_id: 50,
         stdin,
       },
     );
   }
 
-  gradeSubmission(payload: {
-    model_code: string;
-    student_code: string;
-    expected_output: string;
-    actual_output: string;
-    compilation_passed: boolean;
-  }) {
-    return this.http.post<GradingResult>(
-      `${this.apiUrl}/grade-submission`,
-      payload,
-    );
+  // All-or-nothing: the first failed run fails the whole request. Use this
+  // when every result is required, e.g. to persist a grade.
+  runCCodeBatch(runs: ReadonlyArray<Judge0BatchRun>) {
+    return this.http.post<Judge0RunResult[]>(`${this.apiUrl}/run-batch`, {
+      runs: this.toBatchRuns(runs),
+    });
+  }
+
+  // Each run reports its own outcome; a failed run comes back as
+  // { error: { status_code, detail } } in its slot instead of failing the rest.
+  runCCodeBatchSettled(runs: ReadonlyArray<Judge0BatchRun>) {
+    return this.http.post<Judge0BatchOutcome[]>(`${this.apiUrl}/run-batch`, {
+      runs: this.toBatchRuns(runs),
+      stop_on_error: false,
+    });
+  }
+
+  private toBatchRuns(runs: ReadonlyArray<Judge0BatchRun>) {
+    return runs.map(({ sourceCode, stdin = '' }) => ({
+      source_code: sourceCode,
+      stdin,
+    }));
   }
 }

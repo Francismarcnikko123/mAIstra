@@ -31,7 +31,9 @@ function createComponent(overrides: Record<string, unknown> = {}) {
     getQuestionSections: vi.fn().mockResolvedValue({ data: sections, error: null }),
     getSectionItems: vi.fn().mockResolvedValue({ data: items, error: null }),
     getGateResults: vi.fn().mockResolvedValue(new Map([['s2', 'FIXABLE']])),
-    updateSubmissionDetails: vi.fn().mockResolvedValue(undefined),
+    getSubmission: vi.fn().mockResolvedValue({ data: null, error: null }),
+    // Returns the new grading_revision (Jayrald's compare-and-set save).
+    updateSubmissionDetails: vi.fn().mockResolvedValue(1),
     ...overrides,
   };
   const cdr = { detectChanges: vi.fn() } as unknown as ChangeDetectorRef;
@@ -83,7 +85,7 @@ describe('SubmissionsListComponent section folders', () => {
     expect(component.selectedSectionName()).toBe('Loops');
 
     await component.continueFromDetails();
-    expect(supabase.updateSubmissionDetails).toHaveBeenCalledWith('s4', 'Loops', 'q-vowels');
+    expect(supabase.updateSubmissionDetails).toHaveBeenCalledWith('s4', 'Loops', 'q-vowels', 0);
     expect(component.groupedSubmissions.find((g) => g.topic === 'Loops')?.submissions).toHaveLength(2);
   });
 
@@ -95,7 +97,7 @@ describe('SubmissionsListComponent section folders', () => {
 
     expect(component.selectedSectionName()).toBe('No section yet');
     await component.continueFromDetails();
-    expect(supabase.updateSubmissionDetails).toHaveBeenCalledWith('s3', 'Chapter 3', 'q-unsectioned');
+    expect(supabase.updateSubmissionDetails).toHaveBeenCalledWith('s3', 'Chapter 3', 'q-unsectioned', 0);
   });
 
   it('still lists every paper when sections cannot be loaded', async () => {

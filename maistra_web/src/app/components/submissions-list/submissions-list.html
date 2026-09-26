@@ -81,6 +81,9 @@
                 *ngIf="gateBadge(gateResults.get(submission.id)) as badge"
                 [attr.data-tone]="badge.tone"
               >{{ badge.icon }} {{ badge.label }}</small>
+              <span *ngIf="getSubmissionGradeSummary(submission) as gradeSummary">
+                {{ gradeSummary }}
+              </span>
             </div>
           </button>
         </div>
@@ -125,20 +128,26 @@
         <strong>Details</strong>
         <small>Organize submission</small>
       </button>
-      <button type="button" [class.active]="reviewStep === 2" [class.complete]="reviewStep > 2" (click)="setReviewStep(2)">
+      <button
+        type="button"
+        [class.active]="reviewStep === 2"
+        [class.complete]="reviewStep > 2"
+        [disabled]="reviewStep < 2 && !!stepBlocker(2)"
+        (click)="setReviewStep(2)"
+      >
         <span>2</span>
         <strong>Review code</strong>
-        <small>Extract and verify</small>
+        <small>{{ (reviewStep < 2 && stepBlocker(2)) || 'Extract and verify' }}</small>
       </button>
       <button
         type="button"
         [class.active]="reviewStep === 3"
-        [disabled]="!canOpenGradingStep()"
+        [disabled]="reviewStep < 3 && !!stepBlocker(3)"
         (click)="setReviewStep(3)"
       >
         <span>3</span>
         <strong>Run &amp; grade</strong>
-        <small>{{ canOpenGradingStep() ? 'Check test cases' : 'Verify code and question first' }}</small>
+        <small>{{ (reviewStep < 3 && stepBlocker(3)) || 'Check test cases' }}</small>
       </button>
     </nav>
 
@@ -184,11 +193,21 @@
               <small *ngIf="selectedQuestionId">
                 This question will supply the grading test cases.
               </small>
+              <small class="field-error" *ngIf="detailsSaveError">
+                {{ detailsSaveError }}
+              </small>
             </label>
 
             <div class="status-summary">
               <span>Status</span>
               <strong>{{ getSubmissionStatusLabel(selectedSubmission) }}</strong>
+            </div>
+            <div
+              class="status-summary"
+              *ngIf="getSubmissionGradeSummary(selectedSubmission) as gradeSummary"
+            >
+              <span>Grade</span>
+              <strong>{{ gradeSummary }}</strong>
             </div>
           </div>
         </div>
@@ -412,7 +431,8 @@
                   #codeEditor
                   class="text-editor"
                   [hidden]="activeTab !== 0"
-                  [(value)]="editableText[selectedSubmission.id]"
+                  [value]="editableText[selectedSubmission.id]"
+                  (valueChange)="updateSubmissionCode(selectedSubmission.id, $event)"
                 ></app-code-editor>
 
                 <app-code-editor
@@ -440,8 +460,12 @@
             <p class="extract-error" *ngIf="extractionError[selectedSubmission.id]">
               {{ extractionError[selectedSubmission.id] }}
             </p>
-            <p class="save-status" *ngIf="saveStatus[selectedSubmission.id]" [ngClass]="saveStatus[selectedSubmission.id]">
-              {{ saveStatus[selectedSubmission.id] === 'saved' ? '✓ Verified code saved' : '✕ Save failed—please try again' }}
+            <p
+              class="save-status"
+              *ngIf="saveStatusMessage(selectedSubmission.id) as message"
+              [class.saved]="saveStatus[selectedSubmission.id] === 'saved' && !hasUnsavedCode(selectedSubmission.id)"
+            >
+              {{ message }}
             </p>
           </div>
         </div>
@@ -451,7 +475,10 @@
         <div class="stage-heading">
           <p class="eyebrow">Step 3</p>
           <h3>Run and grade</h3>
-          <p>Run a sample first, then submit against every test case.</p>
+          <p>
+            Run a sample first, then submit against every test case. Grading uses
+            the saved code; to change it, go back to Review code and save.
+          </p>
         </div>
 
         <div class="grading-context">
@@ -470,8 +497,7 @@
           [submitStatus]="submissionCheckStatus[selectedSubmission.id] || ''"
           [isSubmitting]="isChecking"
           [testCaseResults]="submissionTestResults[selectedSubmission.id] || []"
-          [logicAnalysisResults]="submissionLogicResults[selectedSubmission.id] || []"
-          (codeChange)="updateSubmissionCode(selectedSubmission.id, $event)"
+          [codeReadOnly]="true"
           (submitCode)="checkSubmission(selectedSubmission)"
         ></app-judge0>
 

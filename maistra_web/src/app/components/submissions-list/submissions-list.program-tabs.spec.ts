@@ -189,10 +189,13 @@ describe('SubmissionsListComponent program tabs', () => {
     await component.saveVerifiedText();
 
     expect(updateSubmissionText).toHaveBeenCalledTimes(1);
+    // 4th argument: the grading_revision the draft started from (Jayrald's
+    // compare-and-set save); the programs follow it.
     expect(updateSubmissionText).toHaveBeenCalledWith(
       'paper-1',
       'int main() { return 0; }',
       undefined,
+      0,
       [{ code: 'int f(void) { return 1; }', question_id: 'q-2' }],
     );
     expect(component.saveStatus['paper-1']).toBe('saved');
@@ -218,7 +221,7 @@ describe('SubmissionsListComponent program tabs', () => {
 
     await component.saveVerifiedText();
 
-    expect(updateSubmissionText.mock.calls[0][3]).toEqual([]);
+    expect(updateSubmissionText.mock.calls[0][4]).toEqual([]);
   });
 
   it('re-extract on a paper without tabs still replaces Program 1', async () => {
@@ -519,9 +522,11 @@ describe('SubmissionsListComponent program tabs', () => {
       error: null,
     });
     const { component } = createComponent({ getSubmission });
-    component.editableText['paper-1'] = 'teacher typed this';
 
+    // Closing a review now saves or discards (requestCloseModal), so a draft
+    // can only exist while the paper is open: type before the re-read lands.
     component.openModal({ id: 'paper-1', image_url: 'x', captured_at: 'y' });
+    component.updateSubmissionCode('paper-1', 'teacher typed this');
     await vi.waitFor(() => expect(getSubmission).toHaveBeenCalled());
     await Promise.resolve();
 

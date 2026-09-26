@@ -13,9 +13,11 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { SupabaseService } from '../../services/supabase';
 import { CodeEditorComponent } from '../code-editor/code-editor';
-import { Judge0, LogicAnalysisResult, TestCaseResult } from '../judge0/judge0';
+import { Judge0, TestCaseResult } from '../judge0/judge0';
 import { Judge0Service } from '../../services/judge0.service';
 import { firstValueFrom, timeout } from 'rxjs';
+import { buildCQuestionSource } from '../../utils/c-question';
+import { normalizeOutput } from '../../utils/normalize-output';
 import {
   SubmissionAnswer,
   answerProblems,
@@ -37,14 +39,14 @@ interface TestCase {
   test_code: string;
   test_input: string;
   expected_output: string;
-  mark: number;
 }
 interface SubmissionQuestion {
   id: string;
   question_name: string;
   question_text?: string;
   question_type: 'function' | 'program';
-  model_answer: string;
+  // Still selected with the question; grading no longer reads it.
+  model_answer?: string;
   test_cases: TestCase[];
 }
 
@@ -59,6 +61,12 @@ interface Submission {
   answers?: unknown;
   topic?: string;
   question_id?: string;
+  grading_results?: TestCaseResult[];
+  passed_test_cases?: number;
+  total_test_cases?: number;
+  score_percent?: number;
+  graded_at?: string;
+  grading_revision?: number;
   questions?: SubmissionQuestion | SubmissionQuestion[];
 }
 
@@ -109,14 +117,18 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   reviewStep: ReviewStep = 1;
   editableTopic: string = '';
   savingTopic = false;
+  detailsSaveError = '';
 
   // OCR state
-  extractingId: string | null = null;
-  savingId: string | null = null;
+  // Tracked per submission: the modal can switch to another submission while
+  // one's save or OCR is still running, and each must stay busy until its own
+  // request finishes.
+  private extractingIds = new Set<string>();
+  private savingIds = new Set<string>();
   extractedText: Record<string, string> = {};
   editableText: Record<string, string> = {};
   extractionError: Record<string, string> = {};
-  saveStatus: Record<string, string> = {}; // '' | 'saved' | 'error'
+  saveStatus: Record<string, string> = {}; // '' | 'saved' | 'error' | 'conflict'
   autoExtract: { enabled: boolean; since: string | null; failed: Set<string> } = {
     enabled: false, since: null, failed: new Set<string>(),
   };
@@ -148,13 +160,26 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   submissionCheckStatus: Record<string, string> = {};
   submissionRunOutput: Record<string, string> = {};
   submissionTestResults: Record<string, TestCaseResult[]> = {};
-  submissionLogicResults: Record<string, LogicAnalysisResult[]> = {};
 
-  private subscription?: ReturnType<
-    SupabaseService['subscribeToSubmissions']
-  >;
+  private subscription?: ReturnType<SupabaseService['subscribeToSubmissions']>;
   private saveStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private saveGenerations = new Map<string, number>();
+  private gradingGenerations = new Map<string, number>();
+  private persistedSubmissions = new Map<string, Submission>();
+  // The revision each draft started from, for the code editor and the Details
+  // form. Saves send it so the database refuses to overwrite a newer change by
+  // someone else. It deliberately lags behind live updates while a draft is
+  // unsaved: the draft is still built on the older version.
+  private codeBaseRevisions = new Map<string, number>();
+  private detailsBaseRevisions = new Map<string, number>();
+  private dirtyCodeIds = new Set<string>();
+  private dirtyQuestionIds = new Set<string>();
+  private dirtyTopicIds = new Set<string>();
+  private loadGeneration = 0;
+  // Orders every fetch (full reload or single row) by when it started, so a
+  // slower, older fetch never overwrites a row a newer one already applied.
+  private snapshotSequence = 0;
+  private rowSnapshots = new Map<string, number>();
   private ocrHealthInterval?: ReturnType<typeof setInterval>;
   private ocrHealthGeneration = 0;
   private destroyed = false;
@@ -169,14 +194,25 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   async ngOnInit() {
     void this.checkOcrServer();
     this.ocrHealthInterval = setInterval(() => void this.checkOcrServer(), 30_000);
-    await this.loadQuestions();
-    await this.loadSubmissions();
-    if (this.destroyed) return;
 
-    this.subscription = this.supabase.subscribeToSubmissions(
-      () => void this.loadSubmissions(),
-      (payload) => this.applyFreshSubmission(payload.new as Submission),
-    );
+    const onChange = (payload: any) => {
+      if (this.destroyed) return;
+      // Refetch only the row that changed. A full reload per event re-downloads
+      // every submission, including on the echo of this page's own saves.
+      const id = payload?.new?.id;
+      if (typeof id === 'string') void this.refreshSubmission(id);
+      else void this.loadSubmissions();
+    };
+    this.subscription = this.supabase.subscribeToSubmissions(onChange, (payload) => {
+      // An UPDATE from the auto-extract worker shows its OCR text at once;
+      // the refetch then brings the rest of the row (e.g. the question join).
+      if (payload?.new) this.applyFreshSubmission(payload.new as Submission);
+      onChange(payload);
+    });
+
+    await this.loadQuestions();
+    if (this.destroyed) return;
+    await this.loadSubmissions();
   }
 
   ngOnDestroy() {
@@ -212,6 +248,23 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     return !this.destroyed && this.saveGenerations.get(id) === generation;
   }
 
+  private startGradingGeneration(id: string): number {
+    const generation = (this.gradingGenerations.get(id) ?? 0) + 1;
+    this.gradingGenerations.set(id, generation);
+    return generation;
+  }
+
+  private invalidateGrading(id: string): void {
+    this.startGradingGeneration(id);
+    this.isChecking = false;
+  }
+
+  private isCurrentGrading(id: string, generation: number): boolean {
+    return (
+      !this.destroyed && this.gradingGenerations.get(id) === generation
+    );
+  }
+
   async checkOcrServer() {
     const generation = ++this.ocrHealthGeneration;
     try {
@@ -232,31 +285,156 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   }
 
   async loadSubmissions() {
+    const generation = ++this.loadGeneration;
+    const snapshot = ++this.snapshotSequence;
     const { data, error } = await this.supabase.getSubmissions();
+    if (this.destroyed || generation !== this.loadGeneration) return;
     if (error) {
       console.error(error);
       return;
     }
-    this.submissions = (data ?? []) as unknown as Submission[];
     await this.loadSectionFolders();
+    if (this.destroyed || generation !== this.loadGeneration) return;
+    this.applySubmissionRows(
+      (data ?? []) as unknown as Submission[],
+      snapshot,
+      true,
+    );
+    void this.checkOcrServer();
+  }
+
+  private async refreshSubmission(id: string) {
+    const snapshot = ++this.snapshotSequence;
+    const { data, error } = await this.supabase.getSubmission(id);
+    if (this.destroyed) return;
+    if (error) {
+      console.error(error);
+      return;
+    }
+    // No row means this page cannot see it (e.g. RLS); leave the list alone.
+    if (!data) return;
+    this.applySubmissionRows([data as unknown as Submission], snapshot, false);
+  }
+
+  // Merges freshly fetched rows into the list. `replaceList` is true for a
+  // full reload (the rows are the whole list) and false for a single-row fetch.
+  private applySubmissionRows(
+    rows: Submission[],
+    snapshot: number,
+    replaceList: boolean,
+  ) {
+    // Fetches can land out of order: a snapshot taken before a newer row fetch,
+    // or before one of this page's own writes, is older than the local copy.
+    // Keep the newer local row rather than regress to the stale one.
+    // grading_revision only ever increases, so it also orders our own writes.
+    const currentById = new Map(
+      this.submissions.map((item) => [item.id, item]),
+    );
+    const staleIds = new Set<string>();
+    const incoming = rows.map((row) => {
+      const current = currentById.get(row.id);
+      if (
+        current &&
+        ((this.rowSnapshots.get(row.id) ?? 0) > snapshot ||
+          (current.grading_revision ?? 0) > (row.grading_revision ?? 0))
+      ) {
+        staleIds.add(row.id);
+        return current;
+      }
+      this.rowSnapshots.set(row.id, snapshot);
+      return row;
+    });
+
+    const selectedId = this.selectedSubmission?.id;
+    const refreshed = selectedId
+      ? incoming.find((item) => item.id === selectedId)
+      : undefined;
+    if (selectedId && refreshed) {
+      const persisted = this.persistedSubmissions.get(selectedId);
+      const persistedTopic = persisted?.topic || 'Uncategorized';
+      if (this.editableTopic !== persistedTopic) {
+        this.dirtyTopicIds.add(selectedId);
+      }
+    }
+
+    for (const submission of incoming) {
+      if (!staleIds.has(submission.id)) {
+        this.rememberPersistedSubmission(submission);
+      }
+    }
+
+    if (replaceList) {
+      const incomingIds = new Set(incoming.map((item) => item.id));
+      // Rows fetched on their own after this snapshot was taken (e.g. a new
+      // upload) are newer than it, so they stay even though it lacks them.
+      const newerRows = this.submissions.filter(
+        (item) =>
+          !incomingIds.has(item.id) &&
+          (this.rowSnapshots.get(item.id) ?? 0) > snapshot,
+      );
+      this.submissions = newerRows.length
+        ? this.byNewestCapture([...newerRows, ...incoming])
+        : incoming;
+    } else {
+      const incomingById = new Map(incoming.map((item) => [item.id, item]));
+      this.submissions = this.byNewestCapture([
+        ...this.submissions.map((item) => incomingById.get(item.id) ?? item),
+        ...incoming.filter((item) => !currentById.has(item.id)),
+      ]);
+    }
+
     // Seed the editor with previously saved text so verified/extracted work
     // reappears when the page reloads or a submission is reopened.
-    for (const s of this.submissions) {
-      const saved = s.verified_text || s.extracted_text || '';
-      // Seed once. This also runs on every realtime INSERT, and must not
-      // replace unsaved edits in a review that is open.
-      if (saved && this.editableText[s.id] === undefined) this.editableText[s.id] = saved;
-      if (this.savedProgram1[s.id] === undefined) this.savedProgram1[s.id] = saved;
+    for (const s of incoming) {
       // Seed saved program tabs once. Never replace a loaded list: the teacher
       // may have pasted programs that aren't saved yet.
       if (!this.extraAnswers[s.id]) {
         this.extraAnswers[s.id] = parseAnswers(s.answers);
         this.savedExtras[s.id] = parseAnswers(s.answers);
       }
+      if (this.dirtyCodeIds.has(s.id)) continue;
+      const saved = s.verified_text ?? s.extracted_text ?? '';
+      this.editableText[s.id] = saved;
+      this.savedProgram1[s.id] = saved;
+      this.codeBaseRevisions.set(s.id, s.grading_revision ?? 0);
+    }
+
+    if (selectedId && refreshed) {
+      const draftQuestionId = this.selectedSubmission?.question_id;
+      const codeIsDirty = this.dirtyCodeIds.has(selectedId);
+      const questionIsDirty = this.dirtyQuestionIds.has(selectedId);
+      const topicIsDirty = this.dirtyTopicIds.has(selectedId);
+
+      this.selectedSubmission = this.cloneSubmission(refreshed);
+      if (questionIsDirty) {
+        this.selectedSubmission.question_id = draftQuestionId;
+      } else {
+        this.selectedQuestionId =
+          refreshed.question_id || this.getLinkedQuestion(refreshed)?.id || '';
+      }
+
+      if (codeIsDirty || questionIsDirty) {
+        this.clearCompletedGrade(selectedId);
+      } else if (!this.isChecking) {
+        // While grading runs, the persisted grade is about to be replaced;
+        // restoring it would show stale results next to the in-flight check.
+        this.restorePersistedGrade(refreshed);
+      }
+      if (!topicIsDirty) {
+        this.editableTopic = refreshed.topic || 'Uncategorized';
+      }
+      if (!questionIsDirty && !topicIsDirty) {
+        this.detailsBaseRevisions.set(selectedId, refreshed.grading_revision ?? 0);
+      }
     }
     this.groupSubmissions();
     this.cdr.detectChanges();
-    void this.checkOcrServer();
+  }
+
+  private byNewestCapture(submissions: Submission[]): Submission[] {
+    return [...submissions].sort(
+      (a, b) => Date.parse(b.captured_at) - Date.parse(a.captured_at),
+    );
   }
 
   groupSubmissions() {
@@ -338,6 +516,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     return this.selectedQuestionId ? 'No section yet' : 'Choose a question first';
   }
 
+
   onFiltersChanged() {
     this.groupSubmissions();
   }
@@ -353,10 +532,15 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   }
 
   openModal(submission: Submission) {
-    this.selectedSubmission = { ...submission };
+    this.rememberPersistedSubmission(submission);
+    this.dirtyCodeIds.delete(submission.id);
+    this.dirtyQuestionIds.delete(submission.id);
+    this.dirtyTopicIds.delete(submission.id);
+    this.selectedSubmission = this.cloneSubmission(submission);
     this.editableTopic = submission.topic || 'Uncategorized';
     const linkedQuestion = this.getLinkedQuestion(submission);
-    this.selectedQuestionId = submission.question_id || linkedQuestion?.id || '';
+    this.selectedQuestionId =
+      submission.question_id || linkedQuestion?.id || '';
     this.reviewStep = 1;
     this.activeTab = 0;
     this.removeConfirmIndex = null;
@@ -368,14 +552,12 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
     this.checkError = '';
     this.isChecking = false;
-    this.submissionCheckStatus[submission.id] = '';
-    this.submissionTestResults[submission.id] = [];
-    this.submissionLogicResults[submission.id] = [];
+    this.restorePersistedGrade(submission);
 
-    const saved = submission.verified_text || submission.extracted_text || '';
-    if (saved && !this.editableText[submission.id]) {
-      this.editableText[submission.id] = saved;
-    }
+    const saved = submission.verified_text ?? submission.extracted_text ?? '';
+    this.editableText[submission.id] = saved;
+    this.detailsSaveError = '';
+    this.setBaseRevisions(submission);
     void this.refreshOpenSubmission(submission.id);
   }
 
@@ -414,9 +596,25 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+
   closeModal() {
+    if (this.selectedSubmission) {
+      const id = this.selectedSubmission.id;
+      this.invalidateGrading(id);
+      this.restorePersistedSubmission(id);
+      this.dirtyCodeIds.delete(id);
+      this.dirtyQuestionIds.delete(id);
+      this.dirtyTopicIds.delete(id);
+      // The draft is discarded, so messages about saving it are stale too.
+      this.clearSaveStatusTimer(id);
+      this.saveStatus[id] = '';
+      // Unsaved program tabs go with it (requestCloseModal asked first).
+      this.extraAnswers[id] = (this.savedExtras[id] ?? []).map((answer) => ({ ...answer }));
+      this.extraAnswersError[id] = '';
+    }
     this.selectedSubmission = null;
     this.reviewStep = 1;
+    this.detailsSaveError = '';
     this.closeConfirmOpen = false;
   }
 
@@ -458,49 +656,198 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     }
   }
 
+
   setReviewStep(step: ReviewStep) {
-    if (step === 3 && !this.canOpenGradingStep()) return;
+    // Going back is always allowed; going forward needs the earlier steps saved.
+    if (step > this.reviewStep && this.stepBlocker(step)) return;
     this.reviewStep = step;
   }
 
+  // Why a step cannot be opened yet, or '' when it can. Every edit has to be
+  // saved before moving on, so grading always runs on exactly what is stored.
+  stepBlocker(step: ReviewStep): string {
+    const submission = this.selectedSubmission;
+    if (!submission || step === 1) return '';
+    if (this.hasUnsavedDetails()) return 'Save the topic and question first';
+    if (step === 2) return '';
+    if (!this.canOpenGradingStep()) return 'Verify code and question first';
+    if (this.hasUnsavedCode(submission.id)) return 'Save the code first';
+    return '';
+  }
+
+  private hasUnsavedDetails(): boolean {
+    const submission = this.selectedSubmission;
+    if (!submission) return false;
+    const saved = this.savedSubmission(submission.id);
+    return (
+      this.selectedQuestionId !== this.savedQuestionId(submission.id) ||
+      this.editableTopic !== (saved?.topic || 'Uncategorized')
+    );
+  }
+
+  // Describes the editor as it is now, not just the last request: after an
+  // edit made during or after a save, the code on screen is not saved yet.
+  saveStatusMessage(id: string): string {
+    const status = this.saveStatus[id];
+    if (status === 'error') return '✕ Save failed—please try again';
+    if (status === 'conflict') {
+      return 'Someone else changed this submission while you were editing. Save again to keep your code, or close to keep their version.';
+    }
+    if (status !== 'saved') return '';
+    return this.hasUnsavedCode(id)
+      ? 'New changes need to be saved.'
+      : '✓ Verified code saved';
+  }
+
+  // Compares the editor with the stored code rather than tracking edits, so
+  // typing the saved text back counts as saved. Code counts as saved only once
+  // it is stored as verified_text: OCR output never saved in Review code is not
+  // graded.
+  hasUnsavedCode(id: string): boolean {
+    const savedCode = this.savedSubmission(id)?.verified_text;
+    return (
+      savedCode === undefined ||
+      savedCode === null ||
+      this.editableText[id] !== savedCode
+    );
+  }
+
+  // The submission as last loaded from or saved to Supabase.
+  private savedSubmission(id: string): Submission | undefined {
+    return (
+      this.persistedSubmissions.get(id) ??
+      this.submissions.find((item) => item.id === id)
+    );
+  }
+
+  private savedQuestionId(id: string): string {
+    const saved = this.savedSubmission(id);
+    if (!saved) return '';
+    return saved.question_id || this.getLinkedQuestion(saved)?.id || '';
+  }
+
   async continueFromDetails() {
-    if (!this.selectedQuestionId) return;
+    const submissionId = this.selectedSubmission?.id;
+    if (!submissionId || !this.selectedQuestionId) return;
+    // Nothing to write. Saving anyway could only report a conflict about a
+    // change this form does not touch, such as another teacher's grade.
+    if (!this.hasUnsavedDetails()) {
+      this.reviewStep = 2;
+      return;
+    }
 
     const saved = await this.saveSubmissionDetails();
-    if (saved) this.reviewStep = 2;
+    if (
+      saved &&
+      !this.destroyed &&
+      this.selectedSubmission?.id === submissionId &&
+      // Edits made while saving are not saved yet; stay so they can be.
+      !this.hasUnsavedDetails()
+    ) {
+      this.reviewStep = 2;
+      // Set after an await, so the zoneless app will not re-render on its own.
+      this.cdr.detectChanges();
+    }
   }
 
   async saveCodeAndContinue() {
-    if (!this.canOpenGradingStep()) return;
+    const submissionId = this.selectedSubmission?.id;
+    if (!submissionId || !this.canOpenGradingStep()) return;
+    // Same for code that is already stored, unless fresh OCR output still
+    // needs recording as extracted_text.
+    if (
+      !this.hasUnsavedCode(submissionId) &&
+      !this.hasUnsavedExtras(submissionId) &&
+      this.extractedText[submissionId] === undefined
+    ) {
+      if (!this.stepBlocker(3)) this.reviewStep = 3;
+      return;
+    }
 
     await this.saveVerifiedText();
-    if (this.selectedSubmission && this.saveStatus[this.selectedSubmission.id] === 'saved') {
+    // Code typed while the save was in flight is not saved yet; stay so it can be.
+    if (
+      this.selectedSubmission?.id === submissionId &&
+      this.saveStatus[submissionId] === 'saved' &&
+      !this.stepBlocker(3)
+    ) {
       this.reviewStep = 3;
+      this.cdr.detectChanges();
     }
   }
 
   async saveSubmissionDetails(): Promise<boolean> {
     if (!this.selectedSubmission) return false;
+    const submission = this.selectedSubmission;
+    const submissionId = submission.id;
+    // The folder follows the question's section; the typed topic only
+    // remains for questions that have no section yet.
+    const place = this.questionPlaces.get(this.selectedQuestionId);
+    if (place) this.editableTopic = place.sectionName;
+    const topic = this.editableTopic;
+    const questionId = this.selectedQuestionId || null;
+    const expectedRevision = this.baseRevision(
+      this.detailsBaseRevisions,
+      submissionId,
+    );
     this.savingTopic = true;
     try {
-      // The folder follows the question's section; the typed topic only
-      // remains for questions that have no section yet.
-      const place = this.questionPlaces.get(this.selectedQuestionId);
-      if (place) this.editableTopic = place.sectionName;
-      await this.supabase.updateSubmissionDetails(
-        this.selectedSubmission.id,
-        this.editableTopic,
-        this.selectedQuestionId || null,
+      const gradingRevision = await this.supabase.updateSubmissionDetails(
+        submissionId,
+        topic,
+        questionId,
+        expectedRevision,
       );
-      const s = this.submissions.find(
-        (x) => x.id === this.selectedSubmission!.id,
-      );
-      if (s) {
-        s.topic = this.editableTopic;
-        s.question_id = this.selectedQuestionId || undefined;
+      if (gradingRevision === null) {
+        // Someone else changed the code or question since this form was
+        // loaded. Keep the teacher's draft, load the other version, and let a
+        // second save replace it knowingly.
+        if (this.selectedSubmission?.id === submissionId) {
+          this.detailsSaveError =
+            'Someone else changed this submission while you were editing. Save again to keep your topic and question, or cancel to keep their version.';
+        }
+        await this.refreshSubmission(submissionId);
+        this.detailsBaseRevisions.set(
+          submissionId,
+          this.savedSubmission(submissionId)?.grading_revision ??
+            expectedRevision,
+        );
+        return false;
       }
-      this.selectedSubmission.topic = this.editableTopic;
-      this.selectedSubmission.question_id = this.selectedQuestionId || undefined;
+      this.detailsSaveError = '';
+      const storedSubmission = this.submissions.find(
+        (item) => item.id === submissionId,
+      );
+      const openSubmission =
+        this.selectedSubmission?.id === submissionId
+          ? this.selectedSubmission
+          : undefined;
+      const savedFields: Partial<Submission> = {
+        topic,
+        question_id: questionId || undefined,
+        grading_revision: gradingRevision,
+      };
+      this.advanceBaseRevisions(submissionId, expectedRevision, gradingRevision);
+      this.detailsBaseRevisions.set(submissionId, gradingRevision);
+      // Edits the teacher made while this save was in flight are newer than
+      // what was saved; they stay as unsaved drafts instead of being replaced.
+      const questionDraftChanged =
+        !!openSubmission && (this.selectedQuestionId || null) !== questionId;
+      const topicDraftChanged =
+        !!openSubmission && this.editableTopic !== topic;
+
+      if (storedSubmission) Object.assign(storedSubmission, savedFields);
+      if (openSubmission) {
+        const draftQuestionId = openSubmission.question_id;
+        Object.assign(openSubmission, savedFields);
+        if (questionDraftChanged) openSubmission.question_id = draftQuestionId;
+      }
+      if (!questionDraftChanged) this.dirtyQuestionIds.delete(submissionId);
+      if (!topicDraftChanged) this.dirtyTopicIds.delete(submissionId);
+      this.rememberPersistedSubmission({
+        ...(storedSubmission ?? submission),
+        ...savedFields,
+      });
       this.groupSubmissions();
       this.cdr.detectChanges();
       return true;
@@ -509,6 +856,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       return false;
     } finally {
       this.savingTopic = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -546,10 +894,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   }
 
   /** Confirm handler for the re-extract dialog: proceed with the extraction. */
-  confirmReextract() {
+  confirmReextract(): Promise<void> {
     const id = this.reextractConfirmId;
     this.reextractConfirmId = null;
-    if (id) this.performExtract(id);
+    return id ? this.performExtract(id) : Promise.resolve();
   }
 
   /** Cancel handler for the re-extract dialog: keep the teacher's edits. */
@@ -559,7 +907,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   private async performExtract(id: string, options = { replaceProgram1: true }) {
     if (!this.selectedSubmission) return;
-    this.extractingId = id;
+    this.extractingIds.add(id);
     this.extractionError[id] = '';
     try {
       const res = await firstValueFrom(
@@ -571,10 +919,13 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
           },
         ),
       );
+      // Closing the modal restored this submission's saved code; a late OCR
+      // result must not turn into an unsaved edit nobody is looking at.
+      if (this.selectedSubmission?.id !== id) return;
       const text = res?.cleaned_text ?? '';
       this.extractedText[id] = text;
       if (options.replaceProgram1) {
-        this.editableText[id] = text;
+        this.updateSubmissionCode(id, text);
       } else {
         this.ocrPanelOpen = true;
       }
@@ -584,7 +935,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       this.extractionError[id] =
         'Failed to extract text. Please try again later.';
     } finally {
-      this.extractingId = null;
+      this.extractingIds.delete(id);
       this.cdr.detectChanges();
     }
   }
@@ -613,7 +964,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.extraAnswersError[id] = '';
 
     const generation = this.startSaveGeneration(id);
-    this.savingId = id;
+    const expectedRevision = this.baseRevision(this.codeBaseRevisions, id);
+    this.savingIds.add(id);
     this.clearSaveStatusTimer(id);
     this.saveStatus[id] = '';
     try {
@@ -622,25 +974,63 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       // extracted_text; the teacher's edits only ever become verified_text.
       const ocrText = this.extractedText[id];
       const extras = answersToSave(this.getExtraAnswers(id));
-      await this.supabase.updateSubmissionText(id, text, ocrText, extras);
+      // Send the programs only when this paper has tabs, or had saved ones
+      // to clear; otherwise the column is left exactly as it was.
+      const sendExtras =
+        this.getExtraAnswers(id).length > 0 || (this.savedExtras[id]?.length ?? 0) > 0;
+      const gradingRevision = await this.supabase.updateSubmissionText(
+        id,
+        text,
+        ocrText,
+        expectedRevision,
+        ...(sendExtras ? [extras] : []),
+      );
       if (!this.isCurrentSave(id, generation)) return;
+      if (gradingRevision === null) {
+        // Someone else changed the code or question since this draft was
+        // loaded. Keep the draft (the reload leaves an edited editor alone),
+        // load the other version, and let a second save replace it knowingly.
+        // If the submission was closed meanwhile, its draft is already gone.
+        if (this.selectedSubmission?.id === id) this.saveStatus[id] = 'conflict';
+        await this.refreshSubmission(id);
+        if (!this.isCurrentSave(id, generation)) return;
+        this.codeBaseRevisions.set(
+          id,
+          this.savedSubmission(id)?.grading_revision ?? expectedRevision,
+        );
+        return;
+      }
+      // The draft now descends from this save, even if typed during it.
+      this.advanceBaseRevisions(id, expectedRevision, gradingRevision);
+      this.codeBaseRevisions.set(id, gradingRevision);
 
       const s = this.submissions.find((x) => x.id === id);
       if (s) {
         s.verified_text = text;
         if (ocrText !== undefined) s.extracted_text = ocrText;
         if (!extrasUnsaved) s.answers = extras;
+        s.grading_revision = gradingRevision;
       }
       if (this.selectedSubmission?.id === id) {
         this.selectedSubmission.verified_text = text;
         if (ocrText !== undefined)
           this.selectedSubmission.extracted_text = ocrText;
         if (!extrasUnsaved) this.selectedSubmission.answers = extras;
+        this.selectedSubmission.grading_revision = gradingRevision;
       }
       if (extrasUnsaved) this.extraAnswersError[id] = EXTRA_PROGRAMS_UNSAVABLE;
       this.savedProgram1[id] = text;
       if (!extrasUnsaved) this.savedExtras[id] = extras.map((answer) => ({ ...answer }));
+      // Edits typed while the save was in flight are still unsaved.
+      const savedLatest = this.editableText[id] === text;
+      if (savedLatest) this.dirtyCodeIds.delete(id);
+      const persisted = this.submissions.find((item) => item.id === id);
+      if (persisted) this.rememberPersistedSubmission(persisted);
       this.saveStatus[id] = 'saved';
+      // If newer edits are still open, keep the reminder until they are saved.
+      // A save that finishes after this submission was closed gets the normal
+      // confirmation timer so the message is not stale when it is reopened.
+      if (!savedLatest && this.selectedSubmission?.id === id) return;
       // Auto-clear the confirmation after a few seconds.
       const timer = setTimeout(() => {
         if (!this.isCurrentSave(id, generation)) return;
@@ -655,9 +1045,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       console.error('Save failed:', err);
       this.saveStatus[id] = 'error';
     } finally {
+      // A newer save of the same submission is still running; it clears this.
       if (!this.isCurrentSave(id, generation)) return;
 
-      this.savingId = null;
+      this.savingIds.delete(id);
       this.cdr.detectChanges();
     }
   }
@@ -668,18 +1059,24 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   canOpenGradingStep(): boolean {
     if (!this.selectedSubmission) return false;
+    const question = this.getSubmissionQuestion(this.selectedSubmission);
     return (
       !!this.getStudentCode(this.selectedSubmission).trim() &&
-      !!this.getSubmissionQuestion(this.selectedSubmission)
+      !!question &&
+      (question.test_cases?.length ?? 0) > 0
     );
   }
 
-  getSubmissionStatus(submission: Submission): Exclude<SubmissionFilter, 'all'> {
+  getSubmissionStatus(
+    submission: Submission,
+  ): Exclude<SubmissionFilter, 'all'> {
     const persistedStatus = submission.status?.trim().toLowerCase();
+    const checkStatus = this.submissionCheckStatus[submission.id];
     if (
       persistedStatus === 'graded' ||
       this.submissionTestResults[submission.id]?.length ||
-      this.submissionCheckStatus[submission.id]
+      checkStatus === 'Accepted' ||
+      checkStatus === 'Wrong Answer'
     ) {
       return 'graded';
     }
@@ -718,6 +1115,26 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     return Number.isFinite(capturedAt) && Number.isFinite(since) && capturedAt >= since;
   }
 
+
+  getSubmissionGradeSummary(submission: Submission | null): string {
+    if (
+      !submission ||
+      submission.passed_test_cases === undefined ||
+      submission.total_test_cases === undefined ||
+      submission.total_test_cases <= 0
+    ) {
+      return '';
+    }
+
+    const score = Number(
+      (
+        submission.score_percent ??
+        (submission.passed_test_cases / submission.total_test_cases) * 100
+      ).toFixed(2),
+    );
+    return `${submission.passed_test_cases}/${submission.total_test_cases} test cases passed — Score: ${score}%`;
+  }
+
   getQuestionName(submission: Submission): string {
     const selectedOrAssignedId =
       submission.id === this.selectedSubmission?.id
@@ -733,15 +1150,19 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   }
 
   isExtracting(id: string): boolean {
-    return this.extractingId === id;
+    return this.extractingIds.has(id);
   }
 
   isSaving(id: string): boolean {
-    return this.savingId === id;
+    return this.savingIds.has(id);
   }
 
   updateSubmissionCode(id: string, code: string) {
+    if (this.editableText[id] === code) return;
     this.editableText[id] = code;
+    this.dirtyCodeIds.add(id);
+    this.invalidateGrading(id);
+    this.clearCompletedGrade(id);
   }
 
   /** False while the database lacks submissions.answers (migration pending). */
@@ -801,11 +1222,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   /** Anything on this paper that a close would lose, including removed tabs. */
   hasUnsavedPrograms(id: string): boolean {
-    return (
-      this.isProgram1Unsaved(id) ||
-      JSON.stringify(answersToSave(this.getExtraAnswers(id))) !==
-        JSON.stringify(this.savedExtras[id] ?? [])
-    );
+    return this.isProgram1Unsaved(id) || this.hasUnsavedExtras(id);
   }
 
   /** The question linked to the open tab, for the read-only "View question". */
@@ -926,6 +1343,14 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (this.selectedSubmission) this.extraAnswersError[this.selectedSubmission.id] = '';
   }
 
+  /** Programs 2..n differ from what was last loaded or saved. */
+  private hasUnsavedExtras(id: string): boolean {
+    return (
+      JSON.stringify(answersToSave(this.getExtraAnswers(id))) !==
+      JSON.stringify(this.savedExtras[id] ?? [])
+    );
+  }
+
   /** Formats the open tab only. */
   formatCode() {
     this.getActiveEditor()?.format();
@@ -936,45 +1361,50 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
     if (!this.selectedSubmission) return;
 
+    this.dirtyQuestionIds.add(this.selectedSubmission.id);
+    this.invalidateGrading(this.selectedSubmission.id);
     this.selectedSubmission.question_id = questionId || undefined;
+    const place = this.questionPlaces.get(questionId);
+    if (place) this.editableTopic = place.sectionName;
 
-    this.clearExecutionResults(this.selectedSubmission.id);
+    this.clearCompletedGrade(this.selectedSubmission.id);
     this.cdr.detectChanges();
   }
 
   async checkSubmission(submission: Submission | null) {
     if (!submission) return;
 
+    const submissionId = submission.id;
+    const generation = this.startGradingGeneration(submissionId);
+    // Grade exactly what is stored in Supabase: the saved code, paired with
+    // the revision it was saved at. The database re-checks both on the write.
+    const saved = this.savedSubmission(submissionId);
+    const gradingRevision = saved?.grading_revision ?? 0;
+
     this.isChecking = true;
     this.checkError = '';
     this.submissionCheckStatus[submission.id] = '';
     this.submissionRunOutput[submission.id] = '';
     this.submissionTestResults[submission.id] = [];
-    this.submissionLogicResults[submission.id] = [];
 
     try {
       const question = this.getSubmissionQuestion(submission);
-
-      const studentCode =
-        this.editableText[submission.id] ||
-        submission.verified_text ||
-        submission.extracted_text ||
-        '';
 
       if (!question) {
         this.checkError = 'No question is linked to this submission.';
         return;
       }
 
-      if (!studentCode.trim()) {
+      if (!this.getStudentCode(submission).trim()) {
         this.checkError = 'No student code found.';
         return;
       }
 
-      if (!question.model_answer?.trim()) {
-        this.checkError = 'No model answer found.';
+      if (this.hasUnsavedCode(submissionId)) {
+        this.checkError = 'Save the edited code before grading.';
         return;
       }
+      const studentCode = saved?.verified_text ?? '';
 
       const testCases = question.test_cases || [];
 
@@ -983,56 +1413,61 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         return;
       }
 
+      // Grade only against the saved question assignment. Grading an unsaved
+      // selection would run every test case on Judge0 and then fail the
+      // database check (which matches on the saved question_id) with a
+      // misleading "inputs changed" error.
+      if (this.savedQuestionId(submissionId) !== question.id) {
+        this.checkError = 'Save the selected question before grading.';
+        return;
+      }
+
       const testResults: TestCaseResult[] = [];
-      let logicResults: LogicAnalysisResult[] | null = null;
+      const runResults = await firstValueFrom(
+        this.judge0Service.runCCodeBatch(
+          testCases.map((testCase) => ({
+            sourceCode: buildCQuestionSource(
+              question.question_type,
+              studentCode,
+              testCase.test_code,
+            ),
+            stdin: this.stdinFor(
+              question.question_type,
+              testCase.test_input,
+            ),
+          })),
+        ),
+      );
+
+      if (!this.isCurrentGrading(submissionId, generation)) return;
 
       for (const [index, testCase] of testCases.entries()) {
-        const sourceCode =
-          question.question_type === 'function'
-            ? `#include <stdio.h>
-
-${studentCode}
-
-int main() {
-${testCase.test_code}
-
-  return 0;
-}`
-            : studentCode;
-
-        const stdin =
-          question.question_type === 'program' ? testCase.test_input || '' : '';
-
-        const runResult = await firstValueFrom(
-          this.judge0Service.runCCode(sourceCode, stdin),
+        const runResult = runResults[index];
+        const stdin = this.stdinFor(
+          question.question_type,
+          testCase.test_input,
         );
 
         const actualOutput = (runResult.stdout || '').trim();
         const expectedOutput = (testCase.expected_output || '').trim();
 
-        const compilationPassed =
-          !runResult.stderr &&
-          !runResult.compile_output &&
-          runResult.status?.id === 3;
+        // status.id === 3 ("Accepted") already means Judge0 compiled and ran
+        // the code without a compile error (status 6) or runtime crash
+        // (status 7-12). Don't additionally require stderr/compile_output to
+        // be empty — a program can compile with only warnings (e.g. a
+        // missing #include) and still run correctly.
+        const compilationPassed = runResult.status?.id === 3;
 
-        const result = await firstValueFrom(
-          this.judge0Service.gradeSubmission({
-            model_code: question.model_answer,
-            student_code: studentCode,
-            expected_output: expectedOutput,
-            actual_output: actualOutput,
-            compilation_passed: compilationPassed,
-          }),
-        );
-
-        const passed = result.output_details.passed && compilationPassed;
-        logicResults ??= result.logic_details;
+        const normalizedExpected = normalizeOutput(expectedOutput);
+        const normalizedActual = normalizeOutput(actualOutput);
+        const outputPassed = normalizedExpected === normalizedActual;
+        const passed = outputPassed && compilationPassed;
 
         testResults.push({
           caseNumber: index + 1,
           stdin,
-          expectedOutput: result.output_details.expected_normalized,
-          actualOutput: result.output_details.actual_normalized || actualOutput,
+          expectedOutput: normalizedExpected,
+          actualOutput: normalizedActual || actualOutput,
           status: passed
             ? 'Accepted'
             : compilationPassed
@@ -1042,8 +1477,39 @@ ${testCase.test_code}
         });
       }
 
+      if (!this.isCurrentGrading(submissionId, generation)) return;
+
+      let gradedRevision: number;
+      try {
+        const newGradingRevision = await this.supabase.updateSubmissionGrade(
+          submissionId,
+          testResults,
+          gradingRevision,
+          question.id,
+          studentCode,
+        );
+        if (!this.isCurrentGrading(submissionId, generation)) return;
+        if (newGradingRevision === null) {
+          this.checkError =
+            'Submission inputs changed during grading. Run grading again.';
+          this.submissionCheckStatus[submission.id] = 'Error';
+          return;
+        }
+        gradedRevision = newGradingRevision;
+        this.advanceBaseRevisions(
+          submissionId,
+          gradingRevision,
+          newGradingRevision,
+        );
+      } catch {
+        if (!this.isCurrentGrading(submissionId, generation)) return;
+        this.checkError =
+          'Test cases completed, but the grade could not be saved.';
+        this.submissionCheckStatus[submission.id] = 'Error';
+        return;
+      }
+
       this.submissionTestResults[submission.id] = testResults;
-      this.submissionLogicResults[submission.id] = logicResults ?? [];
       this.submissionRunOutput[submission.id] =
         testResults.at(-1)?.actualOutput || '';
       this.submissionCheckStatus[submission.id] = testResults.every(
@@ -1051,10 +1517,42 @@ ${testCase.test_code}
       )
         ? 'Accepted'
         : 'Wrong Answer';
+
+      const passedTestCases = testResults.filter((result) => result.passed).length;
+      const scorePercent = Number(
+        ((passedTestCases / testResults.length) * 100).toFixed(2),
+      );
+      const gradedAt = new Date().toISOString();
+      const storedSubmission = this.submissions.find(
+        (item) => item.id === submission.id,
+      );
+      // A realtime reload during grading replaces the open submission with a
+      // fresh copy, so `submission` may no longer be the one on screen.
+      const openSubmission =
+        this.selectedSubmission?.id === submissionId
+          ? this.selectedSubmission
+          : undefined;
+      for (const item of new Set([
+        submission,
+        storedSubmission,
+        openSubmission,
+      ])) {
+        if (!item) continue;
+        item.grading_revision = gradedRevision;
+        item.status = 'graded';
+        item.grading_results = testResults;
+        item.passed_test_cases = passedTestCases;
+        item.total_test_cases = testResults.length;
+        item.score_percent = scorePercent;
+        item.graded_at = gradedAt;
+      }
+      if (storedSubmission) this.rememberPersistedSubmission(storedSubmission);
     } catch (error) {
-      this.checkError = 'Failed to check logic and output.';
+      if (!this.isCurrentGrading(submissionId, generation)) return;
+      this.checkError = 'Failed to execute test cases.';
       this.submissionCheckStatus[submission.id] = 'Error';
     } finally {
+      if (!this.isCurrentGrading(submissionId, generation)) return;
       this.isChecking = false;
       this.cdr.detectChanges();
     }
@@ -1082,27 +1580,26 @@ ${testCase.test_code}
     const studentCode = this.getStudentCode(submission);
     const firstTestCase = question?.test_cases?.[0];
 
-    if (!question || question.question_type === 'program' || !firstTestCase) {
+    if (
+      !question ||
+      (question.question_type === 'function' && !firstTestCase)
+    ) {
       return studentCode;
     }
 
-    return `#include <stdio.h>
-
-${studentCode}
-
-int main() {
-${firstTestCase.test_code}
-
-  return 0;
-}`;
+    return buildCQuestionSource(
+      question.question_type,
+      studentCode,
+      firstTestCase?.test_code,
+    );
   }
 
   getExecutionStdin(submission: Submission | null): string {
     const question = submission ? this.getSubmissionQuestion(submission) : null;
     const firstTestCase = question?.test_cases?.[0];
 
-    return question?.question_type === 'program'
-      ? firstTestCase?.test_input || ''
+    return question
+      ? this.stdinFor(question.question_type, firstTestCase?.test_input)
       : '';
   }
 
@@ -1116,12 +1613,116 @@ ${firstTestCase.test_code}
     return !!(submission && this.getSubmissionQuestion(submission));
   }
 
+  private stdinFor(
+    questionType: SubmissionQuestion['question_type'],
+    input: string | null | undefined,
+  ): string {
+    return questionType === 'program' ? input || '' : '';
+  }
+
   private clearExecutionResults(id: string) {
     this.checkError = '';
     this.submissionCheckStatus[id] = '';
     this.submissionRunOutput[id] = '';
     this.submissionTestResults[id] = [];
-    this.submissionLogicResults[id] = [];
+  }
+
+  private cloneSubmission(submission: Submission): Submission {
+    return {
+      ...submission,
+      grading_results: submission.grading_results?.map((result) => ({
+        ...result,
+      })),
+    };
+  }
+
+  private rememberPersistedSubmission(submission: Submission): void {
+    this.persistedSubmissions.set(
+      submission.id,
+      this.cloneSubmission(submission),
+    );
+  }
+
+  private restorePersistedSubmission(id: string): void {
+    const snapshot = this.persistedSubmissions.get(id);
+    if (!snapshot) return;
+
+    const restored = this.cloneSubmission(snapshot);
+    const storedSubmission = this.submissions.find((item) => item.id === id);
+    if (storedSubmission) Object.assign(storedSubmission, restored);
+
+    this.editableText[id] =
+      restored.verified_text ?? restored.extracted_text ?? '';
+    this.selectedQuestionId =
+      restored.question_id || this.getLinkedQuestion(restored)?.id || '';
+    this.editableTopic = restored.topic || 'Uncategorized';
+    this.restorePersistedGrade(restored);
+    this.setBaseRevisions(restored);
+  }
+
+  private setBaseRevisions(submission: Submission): void {
+    const revision = submission.grading_revision ?? 0;
+    this.codeBaseRevisions.set(submission.id, revision);
+    this.detailsBaseRevisions.set(submission.id, revision);
+  }
+
+  // After this page's own write moved the row from `from` to `to`, any draft
+  // still based on `from` is based on the latest version, so it must not
+  // conflict with the page's own save.
+  private advanceBaseRevisions(id: string, from: number, to: number): void {
+    for (const bases of [this.codeBaseRevisions, this.detailsBaseRevisions]) {
+      if (bases.get(id) === from) bases.set(id, to);
+    }
+  }
+
+  private baseRevision(bases: Map<string, number>, id: string): number {
+    return (
+      bases.get(id) ??
+      this.savedSubmission(id)?.grading_revision ??
+      this.selectedSubmission?.grading_revision ??
+      0
+    );
+  }
+
+  private restorePersistedGrade(submission: Submission): void {
+    const persistedResults = Array.isArray(submission.grading_results)
+      ? submission.grading_results.map((result) => ({ ...result }))
+      : [];
+    this.submissionTestResults[submission.id] = persistedResults;
+    this.submissionCheckStatus[submission.id] = persistedResults.length
+      ? persistedResults.every((result) => result.passed)
+        ? 'Accepted'
+        : 'Wrong Answer'
+      : '';
+    this.submissionRunOutput[submission.id] =
+      persistedResults.at(-1)?.actualOutput || '';
+  }
+
+  private clearCompletedGrade(id: string) {
+    this.clearExecutionResults(id);
+
+    const storedSubmission = this.submissions.find((item) => item.id === id);
+    for (const submission of [this.selectedSubmission, storedSubmission]) {
+      if (!submission || submission.id !== id) continue;
+      const hadCompletedGrade =
+        submission.status?.trim().toLowerCase() === 'graded' ||
+        !!submission.grading_results?.length ||
+        !!submission.graded_at;
+
+      submission.grading_results = [];
+      submission.passed_test_cases = undefined;
+      submission.total_test_cases = undefined;
+      submission.score_percent = undefined;
+      submission.graded_at = undefined;
+
+      if (hadCompletedGrade) {
+        submission.status = submission.verified_text
+          ? 'verified'
+          : submission.extracted_text
+            ? 'extracted'
+            : 'pending';
+      }
+    }
   }
 
   private getSubmissionQuestion(
@@ -1135,9 +1736,7 @@ ${firstTestCase.test_code}
     return linkedQuestion || null;
   }
 
-  private getLinkedQuestion(
-    submission: Submission,
-  ): SubmissionQuestion | null {
+  private getLinkedQuestion(submission: Submission): SubmissionQuestion | null {
     if (Array.isArray(submission.questions)) {
       return submission.questions[0] || null;
     }
@@ -1146,9 +1745,9 @@ ${firstTestCase.test_code}
 
   private getStudentCode(submission: Submission): string {
     return (
-      this.editableText[submission.id] ||
-      submission.verified_text ||
-      submission.extracted_text ||
+      this.editableText[submission.id] ??
+      submission.verified_text ??
+      submission.extracted_text ??
       ''
     );
   }
