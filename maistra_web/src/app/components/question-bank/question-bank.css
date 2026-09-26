@@ -1,0 +1,259 @@
+/* Follows Nombrado's mock: section cards, red numbers, paper pills. */
+:host {
+  display: block;
+  color: #1a1a1a;
+}
+
+.bank-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.bank-header h2 {
+  display: inline;
+  margin: 0 12px 0 0;
+  font-size: 26px;
+}
+
+.count {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.btn-create {
+  min-height: 44px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #b71c1c;
+  color: white;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-create:hover {
+  background: #8b0000;
+}
+
+.bank-search {
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  font: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.bank-search:focus {
+  outline: none;
+  border-color: #b71c1c;
+}
+
+.notice {
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+}
+
+.loading,
+.empty {
+  padding: 16px 0;
+  color: #6b7280;
+}
+
+.error {
+  color: #c62828;
+}
+
+.btn-retry {
+  margin-left: 8px;
+  padding: 4px 12px;
+  border: 1px solid #c62828;
+  border-radius: 8px;
+  background: white;
+  color: #c62828;
+  cursor: pointer;
+}
+
+/* ── Section cards ── */
+.bank-group {
+  margin-bottom: 16px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: white;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 16px;
+  border: none;
+  background: #fafafa;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.group-header:hover {
+  background: #1a1a1a;
+  color: white;
+}
+
+.group-header:hover .count-pill {
+  background: white;
+  color: #1a1a1a;
+}
+
+.chevron {
+  width: 14px;
+  font-size: 12px;
+}
+
+.group-name {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.count-pill {
+  padding: 2px 10px;
+  border-radius: 12px;
+  background: #e5e7eb;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.group-empty {
+  padding: 12px 16px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* Unsectioned questions read as a to-do, not a category. */
+.bank-group.unsectioned {
+  border-style: dashed;
+}
+
+.bank-group.unsectioned .group-name {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.bank-group.unsectioned .group-header:hover .group-name {
+  color: white;
+}
+
+/* ── Question rows ── */
+.bank-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  border-top: 1px solid #f0f0f0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bank-row:hover {
+  background: #fafafa;
+}
+
+.row-number {
+  color: #b71c1c;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* No number yet: a plain grey dash, not a red one. */
+.row-number.none {
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+.row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.row-name {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.row-text {
+  overflow: hidden;
+  color: #4b5563;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.badge {
+  padding: 1px 8px;
+  border: 1px solid #b91c1c;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.badge.validated {
+  border-color: #15803d;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.papers-pill {
+  padding: 4px 12px;
+  border-radius: 14px;
+  background: #fde8e8;
+  color: #b71c1c;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .bank-row {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .papers-pill {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

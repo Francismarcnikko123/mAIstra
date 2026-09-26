@@ -1,14 +1,67 @@
 <div class="form-container">
   <h2>Create Question</h2>
 
+  <!-- Section and number -->
+  <div class="form-row">
+    <div class="form-group">
+      <label for="question-section">Section *</label>
+      <select
+        id="question-section"
+        [(ngModel)]="sectionId"
+        (ngModelChange)="onSectionChange()"
+      >
+        <option value="" disabled>Choose a section</option>
+        <option *ngFor="let s of sections" [value]="s.id">{{ s.name }}</option>
+        <option [value]="NEW_SECTION">+ New section</option>
+      </select>
+      <ng-container *ngIf="sectionId === NEW_SECTION">
+        <label for="new-section-name" class="sub-label">New section name *</label>
+        <input
+          id="new-section-name"
+          type="text"
+          class="new-section-input"
+          [(ngModel)]="newSectionName"
+          placeholder="e.g. Basic, Conditionals, Loops"
+          maxlength="60"
+        />
+        <div class="field-hint">
+          The group this question belongs to, not the question's own name.
+        </div>
+      </ng-container>
+      <div class="field-error" *ngIf="sectionsError">{{ sectionsError }}</div>
+    </div>
+
+    <div class="form-group number-group">
+      <label for="question-number">Question No. *</label>
+      <input
+        id="question-number"
+        type="number"
+        min="1"
+        step="1"
+        [(ngModel)]="questionNumber"
+        [class.invalid]="numberTaken"
+      />
+      <div class="field-error" *ngIf="numberTaken">
+        Q{{ questionNumber }} is already used in {{ sectionName }}.
+      </div>
+      <div class="field-hint" *ngIf="!numberTaken && takenNumbers.length">
+        Already used: {{ takenNumbers.join(', ') }}
+      </div>
+    </div>
+  </div>
+
   <!-- Question Name -->
   <div class="form-group">
-    <label>Question Name *</label>
+    <label for="question-name">Question Name *</label>
     <input
+      id="question-name"
       type="text"
       [(ngModel)]="questionName"
-      placeholder="e.g. Skill Test 1A"
+      placeholder="e.g. Sum of two numbers"
     />
+    <div class="label-preview" *ngIf="labelPreview">
+      Teachers will see: <strong>{{ labelPreview }}</strong>
+    </div>
   </div>
 
   <!-- Question Type -->
@@ -174,8 +227,15 @@
   >
     {{ isValidating ? 'Validating...' : 'Validate Test Cases' }}
   </button>
-  <!-- Save -->
-  <button class="btn-save" (click)="save()" [disabled]="isSaving">
+  <!-- Save: locked until every test case passes -->
+  <button
+    class="btn-save"
+    (click)="save()"
+    [disabled]="isSaving || !!saveBlockedReason()"
+  >
     {{ isSaving ? 'Saving...' : 'Save Question' }}
   </button>
+  <div class="save-hint" *ngIf="!isSaving && saveBlockedReason()">
+    {{ saveBlockedReason() }}
+  </div>
 </div>

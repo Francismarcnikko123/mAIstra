@@ -47,6 +47,82 @@ async saveQuestion(question: any) {
       .order('created_at', { ascending: false });
   }
 
+  // ── QUESTION SECTIONS (Nikko) ───────────────────────────
+  // Tables from supabase/migrations/20260924000000_add_question_sections.sql.
+
+  async getQuestionSections() {
+    return await this.supabase
+      .from('question_sections')
+      .select('id, name, position')
+      .order('position')
+      .order('name');
+  }
+
+  async createQuestionSection(name: string) {
+    return await this.supabase
+      .from('question_sections')
+      .insert([{ name }])
+      .select('id, name, position')
+      .single();
+  }
+
+  /** Question numbers already used in one section. */
+  async getSectionNumbers(sectionId: string) {
+    return await this.supabase
+      .from('question_section_items')
+      .select('number')
+      .eq('section_id', sectionId);
+  }
+
+  async addQuestionToSection(questionId: string, sectionId: string, number: number) {
+    return await this.supabase
+      .from('question_section_items')
+      .insert([{ section_id: sectionId, question_id: questionId, number }]);
+  }
+
+  /** Every question's section and number, for the question bank. */
+  async getSectionItems() {
+    return await this.supabase
+      .from('question_section_items')
+      .select('section_id, question_id, number');
+  }
+
+  /**
+   * Which questions each paper is linked to, for the bank's paper counts and
+   * the question page's linked papers. Falls back to Program 1 only while
+   * submissions.answers is missing.
+   */
+  async getQuestionPaperLinks() {
+    const columns = 'id, image_url, captured_at, status, question_id';
+    const withAnswers = await this.supabase
+      .from('submissions')
+      .select(`${columns}, answers`)
+      .order('captured_at', { ascending: false });
+    if (withAnswers.error?.code !== '42703') return withAnswers;
+    return await this.supabase
+      .from('submissions')
+      .select(columns)
+      .order('captured_at', { ascending: false });
+  }
+
+  /**
+   * Quality-gate verdict per submission id ('PASS' | 'FIXABLE' | 'RETAKE').
+   * Read separately from getSubmissions() so a missing gate_result column
+   * (migration not applied yet) gives an empty map instead of breaking the
+   * submissions list.
+   */
+  async getGateResults(): Promise<Map<string, string>> {
+    const { data, error } = await this.supabase
+      .from('submissions')
+      .select('id, gate_result');
+    const results = new Map<string, string>();
+    if (error) return results;
+    for (const row of (data ?? []) as { id: string; gate_result: string | null }[]) {
+      if (row.gate_result) results.set(row.id, row.gate_result);
+    }
+    return results;
+  }
+
   // ── SUBMISSIONS ─────────────────────────────────────────
   /**
    * False once the database reports that submissions.answers doesn't exist,
