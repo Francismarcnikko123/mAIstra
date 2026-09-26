@@ -1,15 +1,39 @@
-<div style="background: #B71C1C; padding: 16px 24px; margin-bottom: 0;">
-  <h1 style="color: white; margin: 0; font-size: 22px; font-weight: 700;">mAIstra</h1>
-  <p style="color: rgba(255,255,255,0.8); margin: 2px 0 0 0; font-size: 13px;">
-    Vision-based Handwritten Assessment Grading
-  </p>
-</div>
+<header class="topbar">
+  <span class="brand">mAIstra</span>
+  <nav class="topnav" aria-label="Main">
+    <button
+      type="button"
+      [class.active]="page === 'bank' || page === 'create'"
+      [attr.aria-current]="page === 'bank' || page === 'create' ? 'page' : null"
+      (click)="page = 'bank'"
+    >Question bank</button>
+    <button
+      type="button"
+      [class.active]="page === 'submissions'"
+      [attr.aria-current]="page === 'submissions' ? 'page' : null"
+      (click)="page = 'submissions'"
+    >Submissions</button>
+  </nav>
+</header>
 
-<div style="display: flex; gap: 24px; padding: 24px; min-height: calc(100vh - 70px); background: #f0f0f0;">
-  <div style="flex: 1;">
+<main class="page">
+  <!-- Kept alive: the review keeps unsaved edits and its realtime updates.
+       Hidden with an inline style because the component's :host sets display,
+       which would override the [hidden] attribute. -->
+  <div [style.display]="page === 'submissions' ? null : 'none'">
     <app-submissions-list #submissionsList></app-submissions-list>
   </div>
-  <div style="flex: 1;">
+
+  <!-- Recreated each time so it reloads and shows newly saved questions. -->
+  <app-question-bank
+    *ngIf="page === 'bank'"
+    (createQuestion)="page = 'create'"
+  ></app-question-bank>
+
+  <!-- Kept alive so a half-filled form survives a look elsewhere. -->
+  <div [style.display]="page === 'create' ? null : 'none'">
+    <button type="button" class="back-link" (click)="page = 'bank'">← Question bank</button>
+    <!-- Refreshes the review's question picker after a save (Jayrald). -->
     <app-question-form (questionSaved)="submissionsList.loadQuestions()"></app-question-form>
   </div>
-</div>
+</main>

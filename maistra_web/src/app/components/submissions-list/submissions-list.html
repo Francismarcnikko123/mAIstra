@@ -47,15 +47,15 @@
       <button
         type="button"
         class="folder-header"
-        (click)="toggleFolder(group.topic)"
-        [attr.aria-expanded]="!collapsedFolders[group.topic]"
+        (click)="toggleFolder(group.key)"
+        [attr.aria-expanded]="!collapsedFolders[group.key]"
       >
-        <span class="folder-arrow" [class.collapsed]="collapsedFolders[group.topic]">▾</span>
+        <span class="folder-arrow" [class.collapsed]="collapsedFolders[group.key]">▾</span>
         <span class="folder-name">{{ group.topic }}</span>
         <span class="folder-count">{{ group.submissions.length }}</span>
       </button>
 
-      <div class="folder-content" [class.hidden]="collapsedFolders[group.topic]">
+      <div class="folder-content" [class.hidden]="collapsedFolders[group.key]">
         <div class="submission-grid">
           <button
             type="button"
@@ -68,17 +68,22 @@
               <span
                 class="status-badge"
                 [attr.data-status]="getSubmissionStatus(submission)"
+                [class.is-extracting]="isBeingExtracted(submission)"
               >
                 {{ getSubmissionStatusLabel(submission) }}
               </span>
             </div>
             <div class="card-content">
-              <strong>{{ submission.student_name || 'Unnamed student' }}</strong>
-              <span>{{ getQuestionName(submission) }}</span>
+              <strong>{{ submission.captured_at | date:'MMM d · HH:mm' }}</strong>
+              <span>{{ getQuestionLabel(submission) }}</span>
+              <small
+                class="gate-badge"
+                *ngIf="gateBadge(gateResults.get(submission.id)) as badge"
+                [attr.data-tone]="badge.tone"
+              >{{ badge.icon }} {{ badge.label }}</small>
               <span *ngIf="getSubmissionGradeSummary(submission) as gradeSummary">
                 {{ gradeSummary }}
               </span>
-              <time>{{ submission.captured_at | date:'mediumDate' }}</time>
             </div>
           </button>
         </div>
@@ -94,13 +99,13 @@
   </ng-template>
 </section>
 
-<div class="review-overlay" *ngIf="selectedSubmission" (click)="closeModal()">
+<div class="review-overlay" *ngIf="selectedSubmission" (click)="requestCloseModal()">
   <section
     class="review-workspace"
     role="dialog"
     aria-modal="true"
     aria-labelledby="review-title"
-    (click)="$event.stopPropagation()"
+    (click)="$event.stopPropagation(); cancelPendingRemove()"
   >
     <header class="review-header">
       <div>
@@ -114,7 +119,7 @@
           {{ getQuestionName(selectedSubmission) }}
         </p>
       </div>
-      <button type="button" class="review-close" (click)="closeModal()" aria-label="Close review">✕</button>
+      <button type="button" class="review-close" (click)="requestCloseModal()" aria-label="Close review">✕</button>
     </header>
 
     <nav class="review-steps" aria-label="Submission review progress">
@@ -164,8 +169,9 @@
             </div>
 
             <label class="field-group">
-              <span>Topic or folder</span>
-              <input [(ngModel)]="editableTopic" placeholder="For example: Loops or Chapter 3" />
+              <span>Section</span>
+              <input [value]="selectedSectionName()" readonly />
+              <small>Comes from the question. Change it in the question bank.</small>
             </label>
 
             <label class="field-group">
@@ -220,23 +226,41 @@
             (click)="extractText()"
             [disabled]="isExtracting(selectedSubmission.id)"
           >
-            {{ isExtracting(selectedSubmission.id) ? 'Extracting…' : (hasExtractedText(selectedSubmission.id) ? 'Re-extract code' : 'Extract code') }}
+            {{ isExtracting(selectedSubmission.id) ? 'Extracting…' : (hasExtractedText(selectedSubmission.id) ? 'Re-extract code' : 'Extract now') }}
           </button>
         </div>
 
-        <div class="ocr-layout">
+        <div class="ocr-layout" [class.with-ocr-text]="ocrPanelOpen">
           <div class="submission-preview compact">
             <a [href]="selectedSubmission.image_url" target="_blank" rel="noopener">
               <img [src]="selectedSubmission.image_url" alt="Handwritten submission for comparison" />
             </a>
           </div>
 
+          <section class="ocr-text-panel" *ngIf="ocrPanelOpen" aria-label="OCR text, read-only">
+            <div class="ocr-text-header">
+              <strong>OCR text</strong>
+              <span>Read-only · copy what you need into a tab</span>
+              <button type="button" class="btn-quiet" (click)="ocrPanelOpen = false">Hide</button>
+            </div>
+            <pre class="ocr-text" tabindex="0">{{ getOcrText(selectedSubmission) || 'No OCR text yet.' }}</pre>
+          </section>
+
           <div class="editor-panel">
             <div class="editor-panel-header">
               <div>
                 <strong>Verified code</strong>
-                <span>Edit OCR mistakes before continuing.</span>
+                <span>Move each program into its own tab. Each question can be linked to one tab.</span>
               </div>
+              <button
+                *ngIf="!ocrPanelOpen && getOcrText(selectedSubmission)"
+                type="button"
+                class="btn-quiet"
+                (click)="ocrPanelOpen = true"
+                title="Show the OCR reading beside the photo"
+              >
+                Show OCR text
+              </button>
               <button
                 *ngIf="hasExtractedText(selectedSubmission.id)"
                 type="button"
@@ -249,17 +273,189 @@
             </div>
 
             <div class="extract-placeholder" *ngIf="!hasExtractedText(selectedSubmission.id)">
-              <strong>No code extracted yet</strong>
-              <span>Choose “Extract code” to create an editable OCR result.</span>
+              <strong>Not extracted yet</strong>
+              <span>Papers are read automatically while the OCR server is running. Choose “Extract now” to read this one yourself.</span>
             </div>
 
-            <app-code-editor
-              *ngIf="hasExtractedText(selectedSubmission.id)"
-              #codeEditor
-              class="text-editor"
-              [value]="editableText[selectedSubmission.id]"
-              (valueChange)="updateSubmissionCode(selectedSubmission.id, $event)"
-            ></app-code-editor>
+            <ng-container *ngIf="hasExtractedText(selectedSubmission.id)">
+              <div class="program-tabs" role="tablist" aria-label="Programs on this paper" #tabList>
+                <button
+                  type="button"
+                  role="tab"
+                  class="program-tab"
+                  [class.active]="activeTab === 0"
+                  [attr.aria-selected]="activeTab === 0"
+                  (click)="selectTab(0)"
+                  (keydown.arrowright)="moveTab(1, $event)"
+                  (keydown.arrowleft)="moveTab(-1, $event)"
+                >
+                  <span class="program-tab-dot" *ngIf="isProgram1Unsaved(selectedSubmission.id)" title="Unsaved changes" aria-label="Unsaved changes"></span>
+                  <span class="program-tab-label">
+                    <strong>Program 1</strong> · {{ getQuestionName(selectedSubmission) }}
+                  </span>
+                </button>
+
+                <div
+                  *ngFor="let answer of getExtraAnswers(selectedSubmission.id); let i = index; trackBy: trackByIndex"
+                  role="tab"
+                  tabindex="0"
+                  class="program-tab"
+                  [class.active]="activeTab === i + 1"
+                  [attr.aria-selected]="activeTab === i + 1"
+                  (click)="selectTab(i + 1)"
+                  (keydown.enter)="selectTab(i + 1)"
+                  (keydown.arrowright)="moveTab(1, $event)"
+                  (keydown.arrowleft)="moveTab(-1, $event)"
+                >
+                  <span class="program-tab-dot" *ngIf="isExtraAnswerUnsaved(selectedSubmission.id, answer)" title="Unsaved changes" aria-label="Unsaved changes"></span>
+                  <span class="program-tab-label">
+                    <strong>Program {{ i + 2 }}</strong>
+                    <ng-container *ngIf="answer.question_id"> · {{ getQuestionTitle(answer.question_id) }}</ng-container>
+                  </span>
+                  <span class="program-tab-warn" *ngIf="!answer.question_id" title="No question linked yet" aria-label="No question linked yet">!</span>
+                  <button
+                    type="button"
+                    class="program-tab-close"
+                    [class.armed]="removeConfirmIndex === i"
+                    [attr.aria-label]="'Remove program ' + (i + 2)"
+                    title="Remove program"
+                    (click)="$event.stopPropagation(); requestRemoveExtraAnswer(i)"
+                  >
+                    {{ removeConfirmIndex === i ? 'Remove?' : '×' }}
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  class="program-tab-add"
+                  aria-label="Add program"
+                  title="Add another program from this paper"
+                  (click)="addExtraAnswer()"
+                >
+                  +
+                </button>
+              </div>
+
+              <div class="program-panel" role="tabpanel">
+                <div class="program-question">
+                  <span>Question</span>
+
+                  <span class="question-locked" *ngIf="activeTab === 0">
+                    {{ getQuestionName(selectedSubmission) }} · set in Details
+                  </span>
+                  <button type="button" class="question-link" *ngIf="activeTab === 0" (click)="setReviewStep(1)">
+                    Change
+                  </button>
+
+                  <div
+                    class="question-picker"
+                    *ngIf="getActiveExtraAnswer() as answer"
+                    (focusout)="onPickerFocusOut($event)"
+                    (keydown.escape)="questionPickerOpen = false"
+                  >
+                    <button
+                      type="button"
+                      class="question-picker-button"
+                      [class.empty]="!answer.question_id"
+                      aria-haspopup="listbox"
+                      [attr.aria-expanded]="questionPickerOpen"
+                      (click)="questionPickerOpen = !questionPickerOpen"
+                    >
+                      <span class="question-picker-value">
+                        {{ answer.question_id ? getQuestionTitle(answer.question_id) : 'Choose a question…' }}
+                      </span>
+                      <span aria-hidden="true">▾</span>
+                    </button>
+
+                    <div class="question-picker-menu" role="listbox" *ngIf="questionPickerOpen">
+                      <p class="question-picker-label">Question bank</p>
+                      <button
+                        *ngFor="let question of questions"
+                        type="button"
+                        role="option"
+                        class="question-option"
+                        [class.selected]="answer.question_id === question.id"
+                        [attr.aria-selected]="answer.question_id === question.id"
+                        [disabled]="questionOwner(question.id, activeTab - 1) !== null"
+                        (click)="chooseExtraQuestion(activeTab - 1, question.id)"
+                      >
+                        <span class="question-option-text">
+                          <strong>{{ question.question_name }}</strong>
+                          <small>{{ questionPreview(question) }} · {{ question.test_cases.length }} test cases</small>
+                        </span>
+                        <span class="question-option-used" *ngIf="questionOwner(question.id, activeTab - 1) as owner">
+                          In Program {{ owner }}
+                        </span>
+                        <span class="question-option-check" *ngIf="answer.question_id === question.id" aria-hidden="true">✓</span>
+                      </button>
+                      <p class="question-picker-empty" *ngIf="!questions.length">
+                        No questions in the question bank yet.
+                      </p>
+                      <button
+                        type="button"
+                        class="question-option clear"
+                        *ngIf="answer.question_id"
+                        (click)="chooseExtraQuestion(activeTab - 1, null)"
+                      >
+                        Clear question
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="question-link"
+                    *ngIf="getActiveTabQuestion()"
+                    [attr.aria-expanded]="questionPeekOpen"
+                    (click)="questionPeekOpen = !questionPeekOpen"
+                  >
+                    {{ questionPeekOpen ? 'Hide question' : 'View question' }}
+                  </button>
+                </div>
+
+                <div class="question-peek" *ngIf="questionPeekOpen && getActiveTabQuestion() as peek">
+                  <div class="question-peek-head">
+                    <strong>{{ peek.question_name }}</strong>
+                    <span>Read-only · {{ peek.test_cases.length }} test case{{ peek.test_cases.length === 1 ? '' : 's' }}</span>
+                  </div>
+                  <p *ngIf="peek.question_text">{{ peek.question_text }}</p>
+                  <ul class="question-peek-tests">
+                    <li *ngFor="let testCase of peek.test_cases">
+                      <code>{{ peek.question_type === 'function' ? testCase.test_code : ('in ' + (testCase.test_input || '(none)')) }}</code>
+                      → <code>{{ testCase.expected_output || '(no output)' }}</code>
+                    </li>
+                  </ul>
+                </div>
+
+                <app-code-editor
+                  #codeEditor
+                  class="text-editor"
+                  [hidden]="activeTab !== 0"
+                  [value]="editableText[selectedSubmission.id]"
+                  (valueChange)="updateSubmissionCode(selectedSubmission.id, $event)"
+                ></app-code-editor>
+
+                <app-code-editor
+                  *ngFor="let answer of getExtraAnswers(selectedSubmission.id); let i = index; trackBy: trackByAnswer"
+                  #extraEditor
+                  class="text-editor"
+                  [hidden]="activeTab !== i + 1"
+                  [value]="answer.code"
+                  [placeholder]="extraTabPlaceholder(i)"
+                  (valueChange)="updateExtraAnswerCode(i, $event)"
+                ></app-code-editor>
+              </div>
+            </ng-container>
+
+            <p
+              class="program-tabs-note"
+              *ngIf="!extraProgramsSavable && getExtraAnswers(selectedSubmission.id).length && !extraAnswersError[selectedSubmission.id]"
+            >
+              Preview only: Programs 2 and up can't be saved until the database has the answers column.
+            </p>
+            <p class="extract-error" *ngIf="extraAnswersError[selectedSubmission.id]">
+              {{ extraAnswersError[selectedSubmission.id] }}
+            </p>
 
             <p class="extract-error" *ngIf="extractionError[selectedSubmission.id]">
               {{ extractionError[selectedSubmission.id] }}
@@ -310,7 +506,7 @@
     </div>
 
     <footer class="review-footer">
-      <button type="button" class="btn-secondary" (click)="reviewStep === 1 ? closeModal() : setReviewStep(reviewStep === 3 ? 2 : 1)">
+      <button type="button" class="btn-secondary" (click)="reviewStep === 1 ? requestCloseModal() : setReviewStep(reviewStep === 3 ? 2 : 1)">
         {{ reviewStep === 1 ? 'Cancel' : 'Back' }}
       </button>
 
@@ -319,6 +515,9 @@
       </div>
       <div class="footer-guidance" *ngIf="reviewStep === 2 && hasExtractedText(selectedSubmission.id) && !selectedQuestionId && !selectedSubmission.questions">
         Go back to Details and select a question before grading.
+      </div>
+      <div class="footer-guidance" *ngIf="reviewStep === 2 && hasExtractedText(selectedSubmission.id) && getExtraAnswers(selectedSubmission.id).length">
+        Every program is saved with this paper. Only Program 1 is graded for now.
       </div>
 
       <button
@@ -342,9 +541,62 @@
         {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save and continue to grading' }}
       </button>
 
-      <button *ngIf="reviewStep === 3" type="button" class="btn-primary" (click)="closeModal()">
+      <button *ngIf="reviewStep === 3" type="button" class="btn-primary" (click)="requestCloseModal()">
         Finish review
       </button>
     </footer>
   </section>
+</div>
+
+<div
+  class="confirm-overlay"
+  *ngIf="reextractConfirmId"
+  (click)="cancelReextract()"
+>
+  <div
+    class="confirm-card"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="reextract-title"
+    (click)="$event.stopPropagation()"
+  >
+    <h3 id="reextract-title" class="confirm-title">Re-extract and discard edits?</h3>
+    <p class="confirm-body">
+      Re-extracting replaces the code in the editor with a fresh OCR result.
+      Your current corrections will be lost.
+    </p>
+    <div class="confirm-actions">
+      <button type="button" class="btn-secondary" (click)="cancelReextract()">
+        Cancel
+      </button>
+      <button type="button" class="btn-danger" (click)="confirmReextract()">
+        Re-extract
+      </button>
+    </div>
+  </div>
+</div>
+
+<div
+  class="confirm-overlay"
+  *ngIf="closeConfirmOpen && selectedSubmission"
+  (click)="keepEditing()"
+>
+  <div
+    class="confirm-card close-confirm"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="close-confirm-title"
+    (click)="$event.stopPropagation()"
+  >
+    <h3 id="close-confirm-title" class="confirm-title">Some programs aren't saved yet</h3>
+    <p class="confirm-body">
+      Changes on this paper aren't in the database. Save them, or discard them
+      and go back to what was last saved.
+    </p>
+    <div class="confirm-actions">
+      <button type="button" class="btn-secondary" (click)="keepEditing()">Keep editing</button>
+      <button type="button" class="btn-danger" (click)="discardChangesAndClose()">Discard changes</button>
+      <button type="button" class="btn-primary" (click)="saveAndClose()">Save and close</button>
+    </div>
+  </div>
 </div>

@@ -15,11 +15,14 @@ Writes to datasets/verified/:
     labels.csv   one row per verified submission
     images/      the submission images, named <submission_id>.jpg
 
-Re-running is safe: already-downloaded images are kept, the CSV is
-rewritten from the current database state. Rows whose image can't be
-downloaded are skipped with a warning rather than failing the export.
-Rows whose verified text matches the stored OCR text after whitespace
-normalization are quarantined and listed in a warning.
+Re-running is safe: already-downloaded images are kept, and the CSV write
+merges rather than overwrites -- rows from import_verified_batch.py's
+writer-batch namespace (see evaluators/labels_schema.py) are preserved
+untouched; only this script's own Supabase-sourced rows are rebuilt from
+current database state. Rows whose image can't be downloaded are skipped
+with a warning rather than failing the export. Rows whose verified text
+matches the stored OCR text after whitespace normalization are quarantined
+and listed in a warning.
 """
 import csv
 import os
@@ -33,7 +36,8 @@ from dotenv import load_dotenv
 # The contamination guard compares texts with whitespace collapsed, which is
 # exactly the normalization the CER evaluator uses. Import the one canonical
 # implementation from evaluation.py rather than keeping a second copy here.
-from evaluators.evaluation import normalize_ws as normalize_whitespace
+from evaluators.evaluation import edit_distance, normalize_ws as normalize_whitespace
+from evaluators.labels_schema import is_writer_batch_id, load_existing_rows, write_labels_csv
 
 EXPORT_DIR = Path("datasets/verified")
 IMAGES_DIR = EXPORT_DIR / "images"
@@ -135,22 +139,32 @@ def main() -> None:
             continue
         exported.append(row)
 
-    with LABELS_CSV.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            "submission_id", "image_path", "verified_text",
-            "extracted_text", "verified_at", "topic", "student_name",
-        ])
-        for row in exported:
-            writer.writerow([
-                row["id"],
-                f"images/{row['id']}.jpg",
-                row["verified_text"],
-                row.get("extracted_text") or "",
-                row.get("verified_at") or "",
-                row.get("topic") or "",
-                row.get("student_name") or "",
-            ])
+    existing = load_existing_rows(LABELS_CSV)
+    preserved = {
+        sid: row for sid, row in existing.items() if is_writer_batch_id(sid)
+    }
+    own_new = {}
+    for row in exported:
+        extracted = row.get("extracted_text") or ""
+        verified = row["verified_text"]
+        distance = edit_distance(
+            normalize_whitespace(extracted), normalize_whitespace(verified)
+        )
+        own_new[row["id"]] = {
+            "submission_id": row["id"],
+            "image_path": f"images/{row['id']}.jpg",
+            "verified_text": verified,
+            "extracted_text": extracted,
+            "verified_at": row.get("verified_at") or "",
+            "topic": row.get("topic") or "",
+            "student_name": row.get("student_name") or "",
+            "literal_verified": "",
+            "literal_verified_by": "",
+            "literal_verified_at": "",
+            "correction_edit_distance": str(distance),
+        }
+    merged = {**preserved, **own_new}
+    write_labels_csv(LABELS_CSV, merged)
 
     # Re-captures of the same page produce identical verified text; they must
     # not straddle a future train/test split, so flag them at export time.
@@ -158,8 +172,34 @@ def main() -> None:
         normalize_whitespace(row["verified_text"]) for row in exported)
     duplicate_groups = {t: n for t, n in duplicates.items() if n > 1}
 
+    fully_verified = sum(
+        1 for row in merged.values()
+        if str(row.get("literal_verified", "")).strip().lower() == "true"
+        and row.get("literal_verified_by")
+        and row.get("literal_verified_at")
+    )
+    distances = [
+        int(row["correction_edit_distance"])
+        for row in merged.values()
+        if str(row.get("correction_edit_distance", "")).strip().isdigit()
+    ]
+
     print(f"Exported {len(exported)} pair(s) to {LABELS_CSV} "
           f"({skipped} skipped).")
+    print(f"labels.csv now contains {len(merged)} total row(s) "
+          f"({len(preserved)} preserved, {len(own_new)} from this run).")
+    print(f"Provenance: {fully_verified}/{len(merged)} fully verified "
+          f"(literal_verified=true with verifier and date recorded).")
+    if distances:
+        distances.sort()
+        mid = len(distances) // 2
+        median = (
+            distances[mid] if len(distances) % 2
+            else (distances[mid - 1] + distances[mid]) / 2
+        )
+        print(f"Correction edit-distance (OCR-sourced rows only, n={len(distances)}): "
+              f"mean {sum(distances) / len(distances):.1f}, median {median}, "
+              f"min {min(distances)}, max {max(distances)}.")
     if suspected_unedited_ids:
         print(
             "WARNING: skipped submission(s) whose verified_text matches "

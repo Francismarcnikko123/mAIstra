@@ -10,7 +10,6 @@ from evaluators.evaluation import (
     evaluate_word_token_pair,
     literal_provenance_issues,
     normalize_ws,
-    suggestion_improves_reference,
     summarize_metrics,
     token_accuracy,
     tokenize_c,
@@ -131,55 +130,6 @@ class EvaluationTests(unittest.TestCase):
 
     def test_summarize_metrics_ignores_empty_input(self):
         self.assertEqual(summarize_metrics([], "paper_type"), {})
-
-    def test_suggestion_improves_reference_without_mutating_raw_text(self):
-        raw = 'printe("x");\nreturn 0;'
-        suggestion = {
-            "line": 1,
-            "start": 0,
-            "end": 6,
-            "original": "printe",
-            "candidate": "printf",
-        }
-
-        helpful = suggestion_improves_reference(
-            raw,
-            'printf("x");\nreturn 0;',
-            suggestion,
-        )
-
-        self.assertTrue(helpful)
-        self.assertEqual(raw, 'printe("x");\nreturn 0;')
-
-    def test_suggestion_that_does_not_improve_reference_is_rejected(self):
-        suggestion = {
-            "line": 1,
-            "start": 0,
-            "end": 6,
-            "original": "printe",
-            "candidate": "printf",
-        }
-
-        self.assertFalse(suggestion_improves_reference(
-            'printe("x");',
-            'printe("x");',
-            suggestion,
-        ))
-
-    def test_suggestion_with_invalid_location_is_rejected(self):
-        suggestion = {
-            "line": 3,
-            "start": 0,
-            "end": 6,
-            "original": "printe",
-            "candidate": "printf",
-        }
-
-        self.assertFalse(suggestion_improves_reference(
-            'printe("x");',
-            'printf("x");',
-            suggestion,
-        ))
 
     def test_wer_counts_whole_word_errors(self):
         self.assertEqual(wer("int main", "int main"), 0.0)

@@ -22,6 +22,10 @@ From `maistra_web`:
 ## Documentation
 
 - [Project overview and changes](docs/PROJECT_OVERVIEW_AND_CHANGES.md)
+- [Team sync: cross-team changes, needs and open questions](docs/TEAM_SYNC.md)
+- [Real handwriting margin validation](ocr_feature/reports/2026-09-13-real-margin-validation.md)
+- [Current OCR continuation session and next steps](ocr_feature/reports/2026-09-14-continuation-session-handoff.md)
+- [Manual continuation photo tester (usage in docstring)](ocr_feature/tests/manual_continuation.py)
 - [Judge0 Ubuntu Docker setup](docs/setup/JUDGE0_UBUNTU_DOCKER_SETUP.md)
 - [Supabase local setup](docs/setup/SUPABASE_LOCAL_SETUP.md)
 - [Switching between local and cloud Supabase](docs/setup/SUPABASE_CLOUD_LOCAL_SWITCHING.md)

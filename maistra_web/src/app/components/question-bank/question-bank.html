@@ -1,0 +1,86 @@
+<app-question-page
+  *ngIf="openQuestionData as question; else list"
+  [question]="question"
+  [place]="openQuestionPlace"
+  [papers]="paperLinks"
+  [gateResults]="gateResults"
+  (back)="closeQuestion()"
+></app-question-page>
+
+<ng-template #list>
+  <div class="bank-header">
+    <div>
+      <h2>Question bank</h2>
+      <span class="count" *ngIf="!isLoading">{{ plural(totalCount, 'question') }}</span>
+    </div>
+    <button type="button" class="btn-create" (click)="createQuestion.emit()">+ Create question</button>
+  </div>
+
+  <input
+    type="search"
+    class="bank-search"
+    [(ngModel)]="search"
+    placeholder="Search questions…"
+    aria-label="Search questions by name or text"
+  />
+
+  <div class="notice" *ngIf="sectionsNotice">{{ sectionsNotice }}</div>
+  <div class="loading" *ngIf="isLoading">Loading questions…</div>
+  <div class="error" *ngIf="errorMessage">
+    {{ errorMessage }}
+    <button type="button" class="btn-retry" (click)="load()">Try again</button>
+  </div>
+
+  <ng-container *ngIf="!isLoading && !errorMessage">
+    <div class="empty" *ngIf="totalCount === 0">
+      No questions yet. Use "+ Create question" to add the first one.
+    </div>
+    <div class="empty" *ngIf="totalCount > 0 && groups.length === 0">
+      No questions match "{{ search }}".
+    </div>
+
+    <section
+      class="bank-group"
+      *ngFor="let group of groups; trackBy: trackGroup"
+      [class.unsectioned]="group.sectionId === null"
+    >
+      <button
+        type="button"
+        class="group-header"
+        (click)="toggleGroup(group)"
+        [attr.aria-expanded]="!isCollapsed(group)"
+      >
+        <span class="chevron" aria-hidden="true">{{ isCollapsed(group) ? '▸' : '▾' }}</span>
+        <span class="group-name">{{ group.name }}</span>
+        <span class="count-pill">{{ plural(group.rows.length, 'question') }}</span>
+      </button>
+
+      <ng-container *ngIf="!isCollapsed(group)">
+        <div class="group-empty" *ngIf="group.rows.length === 0">
+          No questions in this section yet.
+        </div>
+        <button
+          type="button"
+          class="bank-row"
+          *ngFor="let row of group.rows"
+          (click)="openQuestion(row.question.id)"
+        >
+          <span class="row-number" [class.none]="!row.number">{{ row.number ? 'Q' + row.number : '—' }}</span>
+          <span class="row-body">
+            <span class="row-name">{{ row.question.question_name }}</span>
+            <span class="row-text">{{ row.question.question_text }}</span>
+            <span class="row-meta">
+              {{ typeLabel(row.question.question_type) }} · {{ plural(row.testCount, 'test') }}
+              <span class="badge" [class.validated]="row.validated">
+                {{ row.validated ? '✓ Validated' : '! Not validated' }}
+              </span>
+            </span>
+          </span>
+          <span class="papers-pill">
+            {{ plural(row.paperCount, 'paper') }}
+          </span>
+        </button>
+      </ng-container>
+    </section>
+  </ng-container>
+</ng-template>

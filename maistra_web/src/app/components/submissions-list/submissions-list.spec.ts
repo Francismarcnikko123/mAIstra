@@ -2105,6 +2105,11 @@ describe('SubmissionsListComponent save feedback', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     selectSubmission(component, 'submission-1');
     component.reviewStep = 2;
+    // selectSubmission seeds editableText but not extractedText; mark them equal
+    // so there are no unsaved edits and extractText() proceeds to the OCR call
+    // instead of opening the re-extract confirmation dialog.
+    component.extractedText['submission-1'] =
+      component.editableText['submission-1'];
 
     await component.extractText();
 
@@ -2218,9 +2223,13 @@ describe('SubmissionsListComponent save feedback', () => {
         post: vi.fn().mockReturnValueOnce(ocrA).mockReturnValueOnce(ocrB),
       });
       component.openModal(component.submissions[0]);
-      const extractingA = component.extractText();
+      // Both rows have saved code, so re-extracting asks first (Nombrado's
+      // re-extract guard); confirming starts the OCR.
+      await component.extractText();
+      const extractingA = component.confirmReextract();
       switchTo(component, 1);
-      const extractingB = component.extractText();
+      await component.extractText();
+      const extractingB = component.confirmReextract();
 
       ocrA.next({ cleaned_text: 'ocr A' });
       ocrA.complete();
@@ -2559,7 +2568,11 @@ describe('SubmissionsListComponent save feedback', () => {
       persistedSubmission.verified_text;
     component.openModal(component.submissions[0]);
 
+    // Saved code is on screen, so re-extracting asks first (Nombrado's
+    // re-extract guard); the teacher confirms.
     await component.extractText();
+    expect(component.reextractConfirmId).toBe(persistedSubmission.id);
+    await component.confirmReextract();
 
     expect(component.editableText[persistedSubmission.id]).toBe(
       'fresh OCR code',

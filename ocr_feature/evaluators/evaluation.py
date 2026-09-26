@@ -241,33 +241,3 @@ def summarize_metrics(
         }
         for group, metric_values in grouped.items()
     }
-
-
-def suggestion_improves_reference(
-    raw_text: str,
-    reference: str,
-    suggestion: dict,
-) -> bool:
-    """Return whether one suggested replacement reduces normalized edits."""
-    try:
-        line_number = int(suggestion["line"])
-        start = int(suggestion["start"])
-        end = int(suggestion["end"])
-        original = str(suggestion["original"])
-        candidate = str(suggestion["candidate"])
-    except (KeyError, TypeError, ValueError):
-        return False
-
-    lines = raw_text.splitlines(keepends=True)
-    if line_number < 1 or line_number > len(lines) or start < 0 or end < start:
-        return False
-
-    line = lines[line_number - 1]
-    if end > len(line) or line[start:end] != original:
-        return False
-
-    lines[line_number - 1] = line[:start] + candidate + line[end:]
-    candidate_text = "".join(lines)
-    before = edit_distance(normalize_ws(raw_text), normalize_ws(reference))
-    after = edit_distance(normalize_ws(candidate_text), normalize_ws(reference))
-    return after < before

@@ -256,6 +256,13 @@ npx supabase db diff --schema public -f update_public_schema
 
 ## 9. Apply Pending Migrations Without a Full Reset
 
+For the program-tabs feature, `20260923000000_add_submission_answers.sql`
+adds `submissions.answers` and grants `UPDATE (answers)` to the browser roles.
+The earlier public API lockdown migration grants UPDATE by column, so adding
+the column alone would leave Programs 2..n unable to save. Verify the
+column and grant locally before asking Jayrald to apply the migration to the
+hosted project.
+
 Apply migrations that have not yet run on the local database:
 
 ```bash

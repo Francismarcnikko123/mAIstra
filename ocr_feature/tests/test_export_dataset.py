@@ -117,5 +117,114 @@ class ExportDatasetContaminationGuardTests(unittest.TestCase):
         self.assertNotIn("d8cb2ec1-31e1-48a0-86f8-8ba61543caa4", warning)
 
 
+class ExportDatasetPreservesOtherSourceRowsTests(unittest.TestCase):
+    def test_preserves_writer_batch_rows_already_in_file(self):
+        existing_writer_batch_row = {
+            "submission_id": "bond_writer1_2",
+            "image_path": "images/bond/bond_writer1_2.jpg",
+            "verified_text": "int main() {}",
+            "extracted_text": "",
+            "verified_at": "2026-09-01",
+            "topic": "",
+            "student_name": "writer1",
+            "literal_verified": "true",
+            "literal_verified_by": "Jayrald",
+            "literal_verified_at": "2026-09-01",
+            "correction_edit_distance": "",
+        }
+        new_supabase_row = submission(
+            "d8cb2ec1-31e1-48a0-86f8-8ba61543caa4",
+            "printf(\"Result: %d\\n\", result);",
+            "printe(\"Result: %d\\n\", result);",
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            export_dir = Path(temp_dir)
+            labels_csv = export_dir / "labels.csv"
+            with labels_csv.open("w", newline="", encoding="utf-8") as f:
+                from evaluators.labels_schema import FIELDNAMES
+                writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+                writer.writeheader()
+                writer.writerow(existing_writer_batch_row)
+
+            output = io.StringIO()
+            with (
+                patch.object(export_dataset, "IMAGES_DIR", export_dir / "images"),
+                patch.object(export_dataset, "LABELS_CSV", labels_csv),
+                patch.object(export_dataset, "load_dotenv"),
+                patch.object(
+                    export_dataset.os, "getenv", side_effect=["https://db", "key"],
+                ),
+                patch.object(
+                    export_dataset, "fetch_verified_submissions",
+                    return_value=[new_supabase_row],
+                ),
+                patch.object(export_dataset, "download_image", return_value=True),
+                redirect_stdout(output),
+            ):
+                export_dataset.main()
+
+            with labels_csv.open(newline="", encoding="utf-8") as f:
+                rows = list(csv.DictReader(f))
+
+        ids = [row["submission_id"] for row in rows]
+        self.assertIn("bond_writer1_2", ids)
+        self.assertIn("d8cb2ec1-31e1-48a0-86f8-8ba61543caa4", ids)
+        preserved = next(r for r in rows if r["submission_id"] == "bond_writer1_2")
+        self.assertEqual(preserved["literal_verified_by"], "Jayrald")
+
+
+class ExportDatasetSummaryTests(unittest.TestCase):
+    def test_summary_reports_provenance_and_correction_distance_over_full_file(self):
+        pre_verified_row = {
+            "submission_id": "bond_writer1_2",
+            "image_path": "images/bond/bond_writer1_2.jpg",
+            "verified_text": "int main() {}",
+            "extracted_text": "",
+            "verified_at": "2026-09-01",
+            "topic": "",
+            "student_name": "writer1",
+            "literal_verified": "true",
+            "literal_verified_by": "Jayrald",
+            "literal_verified_at": "2026-09-01",
+            "correction_edit_distance": "",
+        }
+        new_row = submission(
+            "d8cb2ec1-31e1-48a0-86f8-8ba61543caa4",
+            "printf(\"Result: %d\\n\", result);",
+            "printe(\"Result: %d\\n\", result);",
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            export_dir = Path(temp_dir)
+            labels_csv = export_dir / "labels.csv"
+            with labels_csv.open("w", newline="", encoding="utf-8") as f:
+                from evaluators.labels_schema import FIELDNAMES
+                writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+                writer.writeheader()
+                writer.writerow(pre_verified_row)
+
+            output = io.StringIO()
+            with (
+                patch.object(export_dataset, "IMAGES_DIR", export_dir / "images"),
+                patch.object(export_dataset, "LABELS_CSV", labels_csv),
+                patch.object(export_dataset, "load_dotenv"),
+                patch.object(
+                    export_dataset.os, "getenv", side_effect=["https://db", "key"],
+                ),
+                patch.object(
+                    export_dataset, "fetch_verified_submissions",
+                    return_value=[new_row],
+                ),
+                patch.object(export_dataset, "download_image", return_value=True),
+                redirect_stdout(output),
+            ):
+                export_dataset.main()
+
+        summary = output.getvalue()
+        self.assertIn("Provenance: 1/2 fully verified", summary)
+        self.assertIn("labels.csv now contains 2 total row(s)", summary)
+
+
 if __name__ == "__main__":
     unittest.main()

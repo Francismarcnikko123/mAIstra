@@ -11,7 +11,15 @@ describe('QuestionFormComponent', () => {
     saveQuestion = vi.fn().mockResolvedValue({ data: {}, error: null }),
     runCCode = vi.fn().mockReturnValue(of({ stdout: '2', status: { id: 3 } })),
   ) {
-    const supabase = { saveQuestion } as unknown as SupabaseService;
+    // Section methods for Nikko's section/number fields (tested in
+    // question-form.sections.spec.ts); a valid section is preset below so
+    // these tests exercise validation and saving as before.
+    const supabase = {
+      saveQuestion,
+      getQuestionSections: vi.fn().mockResolvedValue({ data: [], error: null }),
+      getSectionNumbers: vi.fn().mockResolvedValue({ data: [], error: null }),
+      addQuestionToSection: vi.fn().mockResolvedValue({ error: null }),
+    } as unknown as SupabaseService;
     const cdr = { detectChanges: vi.fn() } as unknown as ChangeDetectorRef;
     // Mirrors the server's settled batch: each run reports its own result, and
     // a failed run takes the { error: { detail } } shape in its own slot.
@@ -33,7 +41,11 @@ describe('QuestionFormComponent', () => {
         ),
     } as unknown as Judge0Service;
 
-    return new QuestionFormComponent(supabase, cdr, judge0);
+    const component = new QuestionFormComponent(supabase, cdr, judge0);
+    component.sections = [{ id: 'sec-basic', name: 'Basic' }];
+    component.sectionId = 'sec-basic';
+    component.questionNumber = 1;
+    return component;
   }
 
   it('resets test cases after a successful save', async () => {

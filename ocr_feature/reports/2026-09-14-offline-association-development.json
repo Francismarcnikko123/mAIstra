@@ -1,0 +1,1906 @@
+{
+  "scope": "development only; frozen OCR detections",
+  "reserved_examples_excluded": [
+    3,
+    7,
+    10,
+    12
+  ],
+  "pages": [
+    {
+      "example": 1,
+      "detection_count": 8,
+      "expected_order": [
+        0,
+        3,
+        4,
+        7,
+        1,
+        2,
+        5,
+        6
+      ],
+      "actual_order": [
+        0,
+        3,
+        4,
+        7,
+        1,
+        2,
+        5,
+        6
+      ],
+      "exact_order": true,
+      "exact_rows": true,
+      "pairwise_order_accuracy": 1.0,
+      "all_detections_preserved": true,
+      "mechanisms": [
+        {
+          "mechanism": "_detect_two_columns",
+          "found": true
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        }
+      ],
+      "association_accuracy": null,
+      "association_note": "Current pipeline does not predict answer membership",
+      "actual_text_rows": [
+        "Question 1;",
+        "int sguare(int n) {",
+        "return n # n;",
+        "}",
+        "Question 2;",
+        "int cube (int n) {",
+        "return n* n * n;",
+        "}"
+      ],
+      "intended_text_rows": [
+        "Question 1;",
+        "int sguare(int n) {",
+        "return n # n;",
+        "}",
+        "Question 2;",
+        "int cube (int n) {",
+        "return n* n * n;",
+        "}"
+      ],
+      "prototype": {
+        "prediction": {
+          "rule_version": "local-gutter-scope-v1",
+          "baseline_ids": [
+            0,
+            3,
+            4,
+            7,
+            1,
+            2,
+            5,
+            6
+          ],
+          "ordered_ids": [
+            0,
+            3,
+            4,
+            7,
+            1,
+            2,
+            5,
+            6
+          ],
+          "blocks": [
+            {
+              "id": "L0",
+              "side": "L",
+              "detection_ids": [
+                0,
+                3,
+                4,
+                7
+              ],
+              "top": 116,
+              "bottom": 282,
+              "text_rows": [
+                "Question 1;",
+                "int sguare(int n) {",
+                "return n # n;",
+                "}"
+              ]
+            },
+            {
+              "id": "R0",
+              "side": "R",
+              "detection_ids": [
+                1,
+                2,
+                5,
+                6
+              ],
+              "top": 117,
+              "bottom": 272,
+              "text_rows": [
+                "Question 2;",
+                "int cube (int n) {",
+                "return n* n * n;",
+                "}"
+              ]
+            }
+          ],
+          "relations": [
+            {
+              "source_block": "R0",
+              "source_detection_ids": [
+                1,
+                2,
+                5,
+                6
+              ],
+              "target_block": "L0",
+              "target_detection_ids": [
+                0,
+                3,
+                4,
+                7
+              ],
+              "candidate_targets": [
+                "L0"
+              ],
+              "decision": "independent",
+              "reasons": [
+                "distinct_numbered_headings",
+                "clean_gutter"
+              ],
+              "local_gap_heights": 5.2631578947368425
+            }
+          ],
+          "changed_order": false,
+          "status": "supported",
+          "reasons": [
+            "heuristic_evidence_not_semantic_proof"
+          ]
+        },
+        "exact_order": true,
+        "pairwise_order_accuracy": 1.0,
+        "association": {
+          "true_continuation_links": 0,
+          "false_continuation_links": 0,
+          "missed_continuation_links": 0,
+          "false_cross_answer_links": 0,
+          "continuation_precision": null,
+          "continuation_recall": null,
+          "correct_independent_links": 1,
+          "incorrect_independent_links": 0,
+          "ambiguous_relations": 0,
+          "no_candidate_relationships": false
+        },
+        "ordered_text": [
+          "Question 1;",
+          "int sguare(int n) {",
+          "return n # n;",
+          "}",
+          "Question 2;",
+          "int cube (int n) {",
+          "return n* n * n;",
+          "}"
+        ]
+      }
+    },
+    {
+      "example": 2,
+      "detection_count": 12,
+      "expected_order": [
+        0,
+        1,
+        4,
+        5,
+        8,
+        10,
+        2,
+        3,
+        6,
+        7,
+        9,
+        11
+      ],
+      "actual_order": [
+        0,
+        1,
+        4,
+        5,
+        8,
+        10,
+        2,
+        3,
+        6,
+        7,
+        9,
+        11
+      ],
+      "exact_order": true,
+      "exact_rows": true,
+      "pairwise_order_accuracy": 1.0,
+      "all_detections_preserved": true,
+      "mechanisms": [
+        {
+          "mechanism": "_detect_two_columns",
+          "found": true
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        }
+      ],
+      "association_accuracy": null,
+      "association_note": "Current pipeline does not predict answer membership",
+      "actual_text_rows": [
+        "int larger(int a, int b) {",
+        "if (a > b) {",
+        "return a;",
+        "}",
+        "return b;",
+        "}",
+        "int smalter(int a, int b) {",
+        "if (a < b) {",
+        "return a;",
+        "}",
+        "return b;",
+        "}"
+      ],
+      "intended_text_rows": [
+        "int larger(int a, int b) {",
+        "if (a > b) {",
+        "return a;",
+        "}",
+        "return b;",
+        "}",
+        "int smalter(int a, int b) {",
+        "if (a < b) {",
+        "return a;",
+        "}",
+        "return b;",
+        "}"
+      ],
+      "prototype": {
+        "prediction": {
+          "rule_version": "local-gutter-scope-v1",
+          "baseline_ids": [
+            0,
+            1,
+            4,
+            5,
+            8,
+            10,
+            2,
+            3,
+            6,
+            7,
+            9,
+            11
+          ],
+          "ordered_ids": [
+            0,
+            1,
+            4,
+            5,
+            8,
+            10,
+            2,
+            3,
+            6,
+            7,
+            9,
+            11
+          ],
+          "blocks": [
+            {
+              "id": "L0",
+              "side": "L",
+              "detection_ids": [
+                0,
+                1,
+                4,
+                5,
+                8,
+                10
+              ],
+              "top": 176,
+              "bottom": 423,
+              "text_rows": [
+                "int larger(int a, int b) {",
+                "if (a > b) {",
+                "return a;",
+                "}",
+                "return b;",
+                "}"
+              ]
+            },
+            {
+              "id": "R0",
+              "side": "R",
+              "detection_ids": [
+                2,
+                3,
+                6,
+                7,
+                9,
+                11
+              ],
+              "top": 192,
+              "bottom": 419,
+              "text_rows": [
+                "int smalter(int a, int b) {",
+                "if (a < b) {",
+                "return a;",
+                "}",
+                "return b;",
+                "}"
+              ]
+            }
+          ],
+          "relations": [
+            {
+              "source_block": "R0",
+              "source_detection_ids": [
+                2,
+                3,
+                6,
+                7,
+                9,
+                11
+              ],
+              "target_block": "L0",
+              "target_detection_ids": [
+                0,
+                1,
+                4,
+                5,
+                8,
+                10
+              ],
+              "candidate_targets": [
+                "L0"
+              ],
+              "decision": "ambiguous",
+              "reasons": [
+                "insufficient_local_gutter"
+              ],
+              "local_gap_heights": 1.3176470588235294
+            }
+          ],
+          "changed_order": false,
+          "status": "ambiguous",
+          "reasons": [
+            "heuristic_evidence_not_semantic_proof"
+          ]
+        },
+        "exact_order": true,
+        "pairwise_order_accuracy": 1.0,
+        "association": {
+          "true_continuation_links": 0,
+          "false_continuation_links": 0,
+          "missed_continuation_links": 0,
+          "false_cross_answer_links": 0,
+          "continuation_precision": null,
+          "continuation_recall": null,
+          "correct_independent_links": 0,
+          "incorrect_independent_links": 0,
+          "ambiguous_relations": 1,
+          "no_candidate_relationships": false
+        },
+        "ordered_text": [
+          "int larger(int a, int b) {",
+          "if (a > b) {",
+          "return a;",
+          "}",
+          "return b;",
+          "}",
+          "int smalter(int a, int b) {",
+          "if (a < b) {",
+          "return a;",
+          "}",
+          "return b;",
+          "}"
+        ]
+      }
+    },
+    {
+      "example": 4,
+      "detection_count": 7,
+      "expected_order": [
+        0,
+        2,
+        4,
+        1,
+        3,
+        5,
+        6
+      ],
+      "actual_order": [
+        0,
+        2,
+        4,
+        1,
+        3,
+        5,
+        6
+      ],
+      "exact_order": true,
+      "exact_rows": true,
+      "pairwise_order_accuracy": 1.0,
+      "all_detections_preserved": true,
+      "mechanisms": [
+        {
+          "mechanism": "_detect_two_columns",
+          "found": false
+        },
+        {
+          "mechanism": "_detect_banded_column",
+          "found": true
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        }
+      ],
+      "association_accuracy": null,
+      "association_note": "Current pipeline does not predict answer membership",
+      "actual_text_rows": [
+        "int main(voind) {",
+        "int % = 3;",
+        "return *;",
+        "int main(void) {",
+        "int * = 7;",
+        "return +;",
+        "}"
+      ],
+      "intended_text_rows": [
+        "int main(voind) {",
+        "int % = 3;",
+        "return *;",
+        "int main(void) {",
+        "int * = 7;",
+        "return +;",
+        "}"
+      ],
+      "prototype": {
+        "prediction": {
+          "rule_version": "local-gutter-scope-v1",
+          "baseline_ids": [
+            0,
+            2,
+            4,
+            1,
+            3,
+            5,
+            6
+          ],
+          "ordered_ids": [
+            0,
+            2,
+            4,
+            1,
+            3,
+            5,
+            6
+          ],
+          "blocks": [
+            {
+              "id": "L0",
+              "side": "L",
+              "detection_ids": [
+                0,
+                2,
+                4
+              ],
+              "top": 208,
+              "bottom": 310,
+              "text_rows": [
+                "int main(voind) {",
+                "int % = 3;",
+                "return *;"
+              ]
+            },
+            {
+              "id": "R0",
+              "side": "R",
+              "detection_ids": [
+                1,
+                3,
+                5,
+                6
+              ],
+              "top": 216,
+              "bottom": 358,
+              "text_rows": [
+                "int main(void) {",
+                "int * = 7;",
+                "return +;",
+                "}"
+              ]
+            }
+          ],
+          "relations": [
+            {
+              "source_block": "R0",
+              "source_detection_ids": [
+                1,
+                3,
+                5,
+                6
+              ],
+              "target_block": "L0",
+              "target_detection_ids": [
+                0,
+                2,
+                4
+              ],
+              "candidate_targets": [
+                "L0"
+              ],
+              "decision": "independent",
+              "reasons": [
+                "separate_main_entries",
+                "clean_gutter"
+              ],
+              "local_gap_heights": 9.266666666666667
+            }
+          ],
+          "changed_order": false,
+          "status": "supported",
+          "reasons": [
+            "heuristic_evidence_not_semantic_proof"
+          ]
+        },
+        "exact_order": true,
+        "pairwise_order_accuracy": 1.0,
+        "association": {
+          "true_continuation_links": 0,
+          "false_continuation_links": 0,
+          "missed_continuation_links": 0,
+          "false_cross_answer_links": 0,
+          "continuation_precision": null,
+          "continuation_recall": null,
+          "correct_independent_links": 1,
+          "incorrect_independent_links": 0,
+          "ambiguous_relations": 0,
+          "no_candidate_relationships": false
+        },
+        "ordered_text": [
+          "int main(voind) {",
+          "int % = 3;",
+          "return *;",
+          "int main(void) {",
+          "int * = 7;",
+          "return +;",
+          "}"
+        ]
+      }
+    },
+    {
+      "example": 5,
+      "detection_count": 15,
+      "expected_order": [
+        0,
+        1,
+        3,
+        5,
+        2,
+        4,
+        6,
+        7,
+        8,
+        9,
+        11,
+        10,
+        12,
+        13,
+        14
+      ],
+      "actual_order": [
+        0,
+        1,
+        3,
+        5,
+        8,
+        9,
+        11,
+        2,
+        4,
+        6,
+        7,
+        10,
+        12,
+        13,
+        14
+      ],
+      "exact_order": false,
+      "exact_rows": false,
+      "pairwise_order_accuracy": 0.8857142857142857,
+      "all_detections_preserved": true,
+      "mechanisms": [
+        {
+          "mechanism": "_detect_two_columns",
+          "found": true
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        }
+      ],
+      "association_accuracy": null,
+      "association_note": "Current pipeline does not predict answer membership",
+      "actual_text_rows": [
+        "Question 1:",
+        "int larger(int a, int b) {",
+        "if (9 > b) {",
+        "return 9;",
+        "Question 2;",
+        "int is_even(int n) {",
+        "if (n % 2 == 0) {",
+        "} else {",
+        "return b;",
+        "}",
+        "}",
+        "return 1;",
+        "}",
+        "return 0;",
+        "}"
+      ],
+      "intended_text_rows": [
+        "Question 1:",
+        "int larger(int a, int b) {",
+        "if (9 > b) {",
+        "return 9;",
+        "} else {",
+        "return b;",
+        "}",
+        "}",
+        "Question 2;",
+        "int is_even(int n) {",
+        "if (n % 2 == 0) {",
+        "return 1;",
+        "}",
+        "return 0;",
+        "}"
+      ],
+      "prototype": {
+        "prediction": {
+          "rule_version": "local-gutter-scope-v1",
+          "baseline_ids": [
+            0,
+            1,
+            3,
+            5,
+            8,
+            9,
+            11,
+            2,
+            4,
+            6,
+            7,
+            10,
+            12,
+            13,
+            14
+          ],
+          "ordered_ids": [
+            0,
+            1,
+            3,
+            5,
+            2,
+            4,
+            6,
+            7,
+            8,
+            9,
+            11,
+            10,
+            12,
+            13,
+            14
+          ],
+          "blocks": [
+            {
+              "id": "L0",
+              "side": "L",
+              "detection_ids": [
+                0,
+                1,
+                3,
+                5
+              ],
+              "top": 108,
+              "bottom": 292,
+              "text_rows": [
+                "Question 1:",
+                "int larger(int a, int b) {",
+                "if (9 > b) {",
+                "return 9;"
+              ]
+            },
+            {
+              "id": "L1",
+              "side": "L",
+              "detection_ids": [
+                8,
+                9,
+                11
+              ],
+              "top": 379,
+              "bottom": 530,
+              "text_rows": [
+                "Question 2;",
+                "int is_even(int n) {",
+                "if (n % 2 == 0) {"
+              ]
+            },
+            {
+              "id": "R0",
+              "side": "R",
+              "detection_ids": [
+                2,
+                4,
+                6,
+                7
+              ],
+              "top": 194,
+              "bottom": 352,
+              "text_rows": [
+                "} else {",
+                "return b;",
+                "}",
+                "}"
+              ]
+            },
+            {
+              "id": "R1",
+              "side": "R",
+              "detection_ids": [
+                10,
+                12,
+                13,
+                14
+              ],
+              "top": 460,
+              "bottom": 604,
+              "text_rows": [
+                "return 1;",
+                "}",
+                "return 0;",
+                "}"
+              ]
+            }
+          ],
+          "relations": [
+            {
+              "source_block": "R0",
+              "source_detection_ids": [
+                2,
+                4,
+                6,
+                7
+              ],
+              "target_block": "L0",
+              "target_detection_ids": [
+                0,
+                1,
+                3,
+                5
+              ],
+              "candidate_targets": [
+                "L0"
+              ],
+              "decision": "continuation",
+              "reasons": [
+                "clean_gutter",
+                "unique_local_vertical_match",
+                "recognized_open_scope_and_closing_block"
+              ],
+              "local_gap_heights": 4.65,
+              "scope_evidence": {
+                "left_depth": 2,
+                "right_delta": -2,
+                "right_minimum": -2
+              }
+            },
+            {
+              "source_block": "R1",
+              "source_detection_ids": [
+                10,
+                12,
+                13,
+                14
+              ],
+              "target_block": "L1",
+              "target_detection_ids": [
+                8,
+                9,
+                11
+              ],
+              "candidate_targets": [
+                "L1"
+              ],
+              "decision": "continuation",
+              "reasons": [
+                "clean_gutter",
+                "unique_local_vertical_match",
+                "recognized_open_scope_and_closing_block"
+              ],
+              "local_gap_heights": 5.05,
+              "scope_evidence": {
+                "left_depth": 2,
+                "right_delta": -2,
+                "right_minimum": -2
+              }
+            }
+          ],
+          "changed_order": true,
+          "status": "supported",
+          "reasons": [
+            "heuristic_evidence_not_semantic_proof"
+          ]
+        },
+        "exact_order": true,
+        "pairwise_order_accuracy": 1.0,
+        "association": {
+          "true_continuation_links": 2,
+          "false_continuation_links": 0,
+          "missed_continuation_links": 0,
+          "false_cross_answer_links": 0,
+          "continuation_precision": 1.0,
+          "continuation_recall": 1.0,
+          "correct_independent_links": 0,
+          "incorrect_independent_links": 0,
+          "ambiguous_relations": 0,
+          "no_candidate_relationships": false
+        },
+        "ordered_text": [
+          "Question 1:",
+          "int larger(int a, int b) {",
+          "if (9 > b) {",
+          "return 9;",
+          "} else {",
+          "return b;",
+          "}",
+          "}",
+          "Question 2;",
+          "int is_even(int n) {",
+          "if (n % 2 == 0) {",
+          "return 1;",
+          "}",
+          "return 0;",
+          "}"
+        ]
+      }
+    },
+    {
+      "example": 6,
+      "detection_count": 17,
+      "expected_order": [
+        0,
+        1,
+        3,
+        5,
+        7,
+        2,
+        4,
+        6,
+        8,
+        9,
+        11,
+        13,
+        16,
+        10,
+        12,
+        14,
+        15
+      ],
+      "actual_order": [
+        0,
+        1,
+        3,
+        5,
+        7,
+        8,
+        9,
+        11,
+        13,
+        16,
+        2,
+        4,
+        6,
+        10,
+        12,
+        14,
+        15
+      ],
+      "exact_order": false,
+      "exact_rows": false,
+      "pairwise_order_accuracy": 0.8897058823529411,
+      "all_detections_preserved": true,
+      "mechanisms": [
+        {
+          "mechanism": "_detect_two_columns",
+          "found": true
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        }
+      ],
+      "association_accuracy": null,
+      "association_note": "Current pipeline does not predict answer membership",
+      "actual_text_rows": [
+        "Questton 1;",
+        "int sum_to(int n) {",
+        "int total = 0;",
+        "for <int i = 1; i <= n; i++) {",
+        "total += i;",
+        "Question 2",
+        "int fractoral(int n) {",
+        "int total = 1;",
+        "wite (n > >) {",
+        "total # = n;",
+        "}",
+        "return total;",
+        "}",
+        "n--;",
+        "}",
+        "return total;",
+        "}"
+      ],
+      "intended_text_rows": [
+        "Questton 1;",
+        "int sum_to(int n) {",
+        "int total = 0;",
+        "for <int i = 1; i <= n; i++) {",
+        "total += i;",
+        "}",
+        "return total;",
+        "}",
+        "Question 2",
+        "int fractoral(int n) {",
+        "int total = 1;",
+        "wite (n > >) {",
+        "total # = n;",
+        "n--;",
+        "}",
+        "return total;",
+        "}"
+      ],
+      "prototype": {
+        "prediction": {
+          "rule_version": "local-gutter-scope-v1",
+          "baseline_ids": [
+            0,
+            1,
+            3,
+            5,
+            7,
+            8,
+            9,
+            11,
+            13,
+            16,
+            2,
+            4,
+            6,
+            10,
+            12,
+            14,
+            15
+          ],
+          "ordered_ids": [
+            0,
+            1,
+            3,
+            5,
+            7,
+            2,
+            4,
+            6,
+            8,
+            9,
+            11,
+            13,
+            16,
+            10,
+            12,
+            14,
+            15
+          ],
+          "blocks": [
+            {
+              "id": "L0",
+              "side": "L",
+              "detection_ids": [
+                0,
+                1,
+                3,
+                5,
+                7
+              ],
+              "top": 133,
+              "bottom": 328,
+              "text_rows": [
+                "Questton 1;",
+                "int sum_to(int n) {",
+                "int total = 0;",
+                "for <int i = 1; i <= n; i++) {",
+                "total += i;"
+              ]
+            },
+            {
+              "id": "L1",
+              "side": "L",
+              "detection_ids": [
+                8,
+                9,
+                11,
+                13,
+                16
+              ],
+              "top": 344,
+              "bottom": 554,
+              "text_rows": [
+                "Question 2",
+                "int fractoral(int n) {",
+                "int total = 1;",
+                "wite (n > >) {",
+                "total # = n;"
+              ]
+            },
+            {
+              "id": "R0",
+              "side": "R",
+              "detection_ids": [
+                2,
+                4,
+                6
+              ],
+              "top": 183,
+              "bottom": 285,
+              "text_rows": [
+                "}",
+                "return total;",
+                "}"
+              ]
+            },
+            {
+              "id": "R1",
+              "side": "R",
+              "detection_ids": [
+                10,
+                12,
+                14,
+                15
+              ],
+              "top": 409,
+              "bottom": 540,
+              "text_rows": [
+                "n--;",
+                "}",
+                "return total;",
+                "}"
+              ]
+            }
+          ],
+          "relations": [
+            {
+              "source_block": "R0",
+              "source_detection_ids": [
+                2,
+                4,
+                6
+              ],
+              "target_block": "L0",
+              "target_detection_ids": [
+                0,
+                1,
+                3,
+                5,
+                7
+              ],
+              "candidate_targets": [
+                "L0"
+              ],
+              "decision": "continuation",
+              "reasons": [
+                "clean_gutter",
+                "unique_local_vertical_match",
+                "recognized_open_scope_and_closing_block"
+              ],
+              "local_gap_heights": 4.0,
+              "scope_evidence": {
+                "left_depth": 2,
+                "right_delta": -2,
+                "right_minimum": -2
+              }
+            },
+            {
+              "source_block": "R1",
+              "source_detection_ids": [
+                10,
+                12,
+                14,
+                15
+              ],
+              "target_block": "L1",
+              "target_detection_ids": [
+                8,
+                9,
+                11,
+                13,
+                16
+              ],
+              "candidate_targets": [
+                "L1"
+              ],
+              "decision": "continuation",
+              "reasons": [
+                "clean_gutter",
+                "unique_local_vertical_match",
+                "recognized_open_scope_and_closing_block"
+              ],
+              "local_gap_heights": 4.5,
+              "scope_evidence": {
+                "left_depth": 2,
+                "right_delta": -2,
+                "right_minimum": -2
+              }
+            }
+          ],
+          "changed_order": true,
+          "status": "supported",
+          "reasons": [
+            "heuristic_evidence_not_semantic_proof"
+          ]
+        },
+        "exact_order": true,
+        "pairwise_order_accuracy": 1.0,
+        "association": {
+          "true_continuation_links": 2,
+          "false_continuation_links": 0,
+          "missed_continuation_links": 0,
+          "false_cross_answer_links": 0,
+          "continuation_precision": 1.0,
+          "continuation_recall": 1.0,
+          "correct_independent_links": 0,
+          "incorrect_independent_links": 0,
+          "ambiguous_relations": 0,
+          "no_candidate_relationships": false
+        },
+        "ordered_text": [
+          "Questton 1;",
+          "int sum_to(int n) {",
+          "int total = 0;",
+          "for <int i = 1; i <= n; i++) {",
+          "total += i;",
+          "}",
+          "return total;",
+          "}",
+          "Question 2",
+          "int fractoral(int n) {",
+          "int total = 1;",
+          "wite (n > >) {",
+          "total # = n;",
+          "n--;",
+          "}",
+          "return total;",
+          "}"
+        ]
+      }
+    },
+    {
+      "example": 8,
+      "detection_count": 12,
+      "expected_order": [
+        0,
+        3,
+        5,
+        1,
+        2,
+        4,
+        6,
+        8,
+        10,
+        7,
+        9,
+        11
+      ],
+      "actual_order": [
+        0,
+        3,
+        5,
+        6,
+        8,
+        10,
+        1,
+        2,
+        4,
+        7,
+        9,
+        11
+      ],
+      "exact_order": false,
+      "exact_rows": false,
+      "pairwise_order_accuracy": 0.8636363636363636,
+      "all_detections_preserved": true,
+      "mechanisms": [
+        {
+          "mechanism": "_detect_two_columns",
+          "found": true
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        }
+      ],
+      "association_accuracy": null,
+      "association_note": "Current pipeline does not predict answer membership",
+      "actual_text_rows": [
+        "int absolute (int x ) {",
+        "if (* < 0){",
+        "return *;",
+        "int clarmnp(int x) {",
+        "if (+ > 1b0) {",
+        "return 100;",
+        "}",
+        "return +;",
+        "}",
+        "}",
+        "return x;",
+        "}"
+      ],
+      "intended_text_rows": [
+        "int absolute (int x ) {",
+        "if (* < 0){",
+        "return *;",
+        "}",
+        "return +;",
+        "}",
+        "int clarmnp(int x) {",
+        "if (+ > 1b0) {",
+        "return 100;",
+        "}",
+        "return x;",
+        "}"
+      ],
+      "prototype": {
+        "prediction": {
+          "rule_version": "local-gutter-scope-v1",
+          "baseline_ids": [
+            0,
+            3,
+            5,
+            6,
+            8,
+            10,
+            1,
+            2,
+            4,
+            7,
+            9,
+            11
+          ],
+          "ordered_ids": [
+            0,
+            3,
+            5,
+            1,
+            2,
+            4,
+            6,
+            8,
+            10,
+            7,
+            9,
+            11
+          ],
+          "blocks": [
+            {
+              "id": "L0",
+              "side": "L",
+              "detection_ids": [
+                0,
+                3,
+                5
+              ],
+              "top": 108,
+              "bottom": 226,
+              "text_rows": [
+                "int absolute (int x ) {",
+                "if (* < 0){",
+                "return *;"
+              ]
+            },
+            {
+              "id": "L1",
+              "side": "L",
+              "detection_ids": [
+                6,
+                8,
+                10
+              ],
+              "top": 348,
+              "bottom": 482,
+              "text_rows": [
+                "int clarmnp(int x) {",
+                "if (+ > 1b0) {",
+                "return 100;"
+              ]
+            },
+            {
+              "id": "R0",
+              "side": "R",
+              "detection_ids": [
+                1,
+                2,
+                4
+              ],
+              "top": 114,
+              "bottom": 226,
+              "text_rows": [
+                "}",
+                "return +;",
+                "}"
+              ]
+            },
+            {
+              "id": "R1",
+              "side": "R",
+              "detection_ids": [
+                7,
+                9,
+                11
+              ],
+              "top": 359,
+              "bottom": 480,
+              "text_rows": [
+                "}",
+                "return x;",
+                "}"
+              ]
+            }
+          ],
+          "relations": [
+            {
+              "source_block": "R0",
+              "source_detection_ids": [
+                1,
+                2,
+                4
+              ],
+              "target_block": "L0",
+              "target_detection_ids": [
+                0,
+                3,
+                5
+              ],
+              "candidate_targets": [
+                "L0"
+              ],
+              "decision": "continuation",
+              "reasons": [
+                "clean_gutter",
+                "unique_local_vertical_match",
+                "recognized_open_scope_and_closing_block"
+              ],
+              "local_gap_heights": 6.4186046511627906,
+              "scope_evidence": {
+                "left_depth": 2,
+                "right_delta": -2,
+                "right_minimum": -2
+              }
+            },
+            {
+              "source_block": "R1",
+              "source_detection_ids": [
+                7,
+                9,
+                11
+              ],
+              "target_block": "L1",
+              "target_detection_ids": [
+                6,
+                8,
+                10
+              ],
+              "candidate_targets": [
+                "L1"
+              ],
+              "decision": "continuation",
+              "reasons": [
+                "clean_gutter",
+                "unique_local_vertical_match",
+                "recognized_open_scope_and_closing_block"
+              ],
+              "local_gap_heights": 7.093023255813954,
+              "scope_evidence": {
+                "left_depth": 2,
+                "right_delta": -2,
+                "right_minimum": -2
+              }
+            }
+          ],
+          "changed_order": true,
+          "status": "supported",
+          "reasons": [
+            "heuristic_evidence_not_semantic_proof"
+          ]
+        },
+        "exact_order": true,
+        "pairwise_order_accuracy": 1.0,
+        "association": {
+          "true_continuation_links": 2,
+          "false_continuation_links": 0,
+          "missed_continuation_links": 0,
+          "false_cross_answer_links": 0,
+          "continuation_precision": 1.0,
+          "continuation_recall": 1.0,
+          "correct_independent_links": 0,
+          "incorrect_independent_links": 0,
+          "ambiguous_relations": 0,
+          "no_candidate_relationships": false
+        },
+        "ordered_text": [
+          "int absolute (int x ) {",
+          "if (* < 0){",
+          "return *;",
+          "}",
+          "return +;",
+          "}",
+          "int clarmnp(int x) {",
+          "if (+ > 1b0) {",
+          "return 100;",
+          "}",
+          "return x;",
+          "}"
+        ]
+      }
+    },
+    {
+      "example": 9,
+      "detection_count": 11,
+      "expected_order": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        6,
+        5,
+        7,
+        8,
+        9,
+        10
+      ],
+      "actual_order": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        6,
+        5,
+        7,
+        8,
+        9,
+        10
+      ],
+      "exact_order": true,
+      "exact_rows": true,
+      "pairwise_order_accuracy": 1.0,
+      "all_detections_preserved": true,
+      "mechanisms": [
+        {
+          "mechanism": "_detect_two_columns",
+          "found": false
+        },
+        {
+          "mechanism": "_detect_banded_column",
+          "found": true
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        }
+      ],
+      "association_accuracy": null,
+      "association_note": "Current pipeline does not predict answer membership",
+      "actual_text_rows": [
+        "Question 1;",
+        "int twice(int *) {",
+        "return x * 2;",
+        "}",
+        "int main(void) {",
+        "int result = twice (4);",
+        "if (result == 8) {",
+        "return 0;",
+        "}",
+        "return 1;",
+        "}"
+      ],
+      "intended_text_rows": [
+        "Question 1;",
+        "int twice(int *) {",
+        "return x * 2;",
+        "}",
+        "int main(void) {",
+        "int result = twice (4);",
+        "if (result == 8) {",
+        "return 0;",
+        "}",
+        "return 1;",
+        "}"
+      ],
+      "prototype": {
+        "prediction": {
+          "rule_version": "local-gutter-scope-v1",
+          "baseline_ids": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            6,
+            5,
+            7,
+            8,
+            9,
+            10
+          ],
+          "ordered_ids": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            6,
+            5,
+            7,
+            8,
+            9,
+            10
+          ],
+          "blocks": [
+            {
+              "id": "L0",
+              "side": "L",
+              "detection_ids": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                6
+              ],
+              "top": 141,
+              "bottom": 403,
+              "text_rows": [
+                "Question 1;",
+                "int twice(int *) {",
+                "return x * 2;",
+                "}",
+                "int main(void) {",
+                "int result = twice (4);"
+              ]
+            },
+            {
+              "id": "R0",
+              "side": "R",
+              "detection_ids": [
+                5,
+                7,
+                8,
+                9,
+                10
+              ],
+              "top": 339,
+              "bottom": 506,
+              "text_rows": [
+                "if (result == 8) {",
+                "return 0;",
+                "}",
+                "return 1;",
+                "}"
+              ]
+            }
+          ],
+          "relations": [
+            {
+              "source_block": "R0",
+              "source_detection_ids": [
+                5,
+                7,
+                8,
+                9,
+                10
+              ],
+              "target_block": "L0",
+              "target_detection_ids": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                6
+              ],
+              "candidate_targets": [
+                "L0"
+              ],
+              "decision": "continuation",
+              "reasons": [
+                "clean_gutter",
+                "unique_local_vertical_match",
+                "recognized_open_scope_and_closing_block"
+              ],
+              "local_gap_heights": 3.6052631578947367,
+              "scope_evidence": {
+                "left_depth": 1,
+                "right_delta": -1,
+                "right_minimum": -1
+              }
+            }
+          ],
+          "changed_order": false,
+          "status": "supported",
+          "reasons": [
+            "heuristic_evidence_not_semantic_proof"
+          ]
+        },
+        "exact_order": true,
+        "pairwise_order_accuracy": 1.0,
+        "association": {
+          "true_continuation_links": 0,
+          "false_continuation_links": 1,
+          "missed_continuation_links": 1,
+          "false_cross_answer_links": 0,
+          "continuation_precision": 0.0,
+          "continuation_recall": 0.0,
+          "correct_independent_links": 0,
+          "incorrect_independent_links": 0,
+          "ambiguous_relations": 0,
+          "no_candidate_relationships": false
+        },
+        "ordered_text": [
+          "Question 1;",
+          "int twice(int *) {",
+          "return x * 2;",
+          "}",
+          "int main(void) {",
+          "int result = twice (4);",
+          "if (result == 8) {",
+          "return 0;",
+          "}",
+          "return 1;",
+          "}"
+        ]
+      }
+    },
+    {
+      "example": 11,
+      "detection_count": 8,
+      "expected_order": [
+        0,
+        1,
+        4,
+        6,
+        7,
+        2,
+        3,
+        5
+      ],
+      "actual_order": [
+        0,
+        1,
+        4,
+        6,
+        7,
+        2,
+        3,
+        5
+      ],
+      "exact_order": true,
+      "exact_rows": true,
+      "pairwise_order_accuracy": 1.0,
+      "all_detections_preserved": true,
+      "mechanisms": [
+        {
+          "mechanism": "_detect_two_columns",
+          "found": false
+        },
+        {
+          "mechanism": "_detect_banded_column",
+          "found": false
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": false
+        },
+        {
+          "mechanism": "_sever_displaced_regions",
+          "changed_order": false
+        },
+        {
+          "mechanism": "_reassemble_displaced_regions",
+          "changed_order": true
+        },
+        {
+          "mechanism": "_reassemble_margin_candidates",
+          "changed_order": true
+        }
+      ],
+      "association_accuracy": null,
+      "association_note": "Current pipeline does not predict answer membership",
+      "actual_text_rows": [
+        "Question 1;",
+        "int adjjst (nt x) {",
+        "1.* teep { and } in tms comment. *;",
+        "if (x < 0) {",
+        "x= -*;",
+        "}",
+        "return x;",
+        "}"
+      ],
+      "intended_text_rows": [
+        "Question 1;",
+        "int adjjst (nt x) {",
+        "1.* teep { and } in tms comment. *;",
+        "if (x < 0) {",
+        "x= -*;",
+        "}",
+        "return x;",
+        "}"
+      ],
+      "prototype": {
+        "prediction": {
+          "rule_version": "local-gutter-scope-v1",
+          "baseline_ids": [
+            0,
+            1,
+            4,
+            6,
+            7,
+            2,
+            3,
+            5
+          ],
+          "ordered_ids": [
+            0,
+            1,
+            4,
+            6,
+            7,
+            2,
+            3,
+            5
+          ],
+          "blocks": [
+            {
+              "id": "L0",
+              "side": "L",
+              "detection_ids": [
+                0,
+                1,
+                4,
+                6,
+                7
+              ],
+              "top": 91,
+              "bottom": 311,
+              "text_rows": [
+                "Question 1;",
+                "int adjjst (nt x) {",
+                "1.* teep { and } in tms comment. *;",
+                "if (x < 0) {",
+                "x= -*;"
+              ]
+            },
+            {
+              "id": "R0",
+              "side": "R",
+              "detection_ids": [
+                2,
+                3,
+                5
+              ],
+              "top": 145,
+              "bottom": 250,
+              "text_rows": [
+                "}",
+                "return x;",
+                "}"
+              ]
+            }
+          ],
+          "relations": [
+            {
+              "source_block": "R0",
+              "source_detection_ids": [
+                2,
+                3,
+                5
+              ],
+              "target_block": "L0",
+              "target_detection_ids": [
+                0,
+                1,
+                4,
+                6,
+                7
+              ],
+              "candidate_targets": [
+                "L0"
+              ],
+              "decision": "ambiguous",
+              "reasons": [
+                "insufficient_local_gutter"
+              ],
+              "local_gap_heights": 1.4166666666666667
+            }
+          ],
+          "changed_order": false,
+          "status": "ambiguous",
+          "reasons": [
+            "heuristic_evidence_not_semantic_proof"
+          ]
+        },
+        "exact_order": true,
+        "pairwise_order_accuracy": 1.0,
+        "association": {
+          "true_continuation_links": 0,
+          "false_continuation_links": 0,
+          "missed_continuation_links": 1,
+          "false_cross_answer_links": 0,
+          "continuation_precision": null,
+          "continuation_recall": 0.0,
+          "correct_independent_links": 0,
+          "incorrect_independent_links": 0,
+          "ambiguous_relations": 1,
+          "no_candidate_relationships": false
+        },
+        "ordered_text": [
+          "Question 1;",
+          "int adjjst (nt x) {",
+          "1.* teep { and } in tms comment. *;",
+          "if (x < 0) {",
+          "x= -*;",
+          "}",
+          "return x;",
+          "}"
+        ]
+      }
+    }
+  ]
+}

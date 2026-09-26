@@ -130,7 +130,6 @@ class EvaluateCerTests(unittest.TestCase):
             return {
                 "raw_text": "abxd",
                 "cleaned_text": "abcd",
-                "review_suggestions": [],
             }
 
         output = io.StringIO()
@@ -159,7 +158,6 @@ class EvaluateCerTests(unittest.TestCase):
         self.assertIn("Evaluating 1 sample(s)...", rendered)
         self.assertIn("page.png", rendered)
         self.assertIn("AVERAGE CER", rendered)
-        self.assertIn("sample coverage: 0/1", rendered)
 
 
 if __name__ == "__main__":

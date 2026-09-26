@@ -42,8 +42,20 @@ FIXES = {
 _KNOWN_HEADERS = ("stdio", "stdlib", "stddef", "string", "math", "ctype", "time")
 # '#' is optional in the pattern: OCR sometimes drops it, but "include
 # <stdio.h>" is still unambiguous, so it gets added back.
+#
+# The tail after the header name is bounded to just a (possibly garbled) file
+# extension and closing bracket -- an optional '.', an optional single letter
+# ('.h', or '.n' when 'h' is misread), and an optional close ('>' or a '7'
+# misread of it). It deliberately does NOT end in '.*': a broad tail would let
+# a line that merely STARTS like an include but continues with real student
+# code (a fused OCR row such as "#include <stdio.h> printf(...)") match, and the
+# canonical replacement below would then silently drop everything after the
+# header. Bounding the tail means such a line simply fails to match and is
+# returned untouched -- never normalized, but never truncated either, keeping
+# the module's promise to leave content outside literals intact.
 _INCLUDE_LINE = re.compile(
-    r"^\s*#?\s*[Ii]nclude\s*<\s*(" + "|".join(_KNOWN_HEADERS) + r")\b.*$"
+    r"^\s*#?\s*[Ii]nclude\s*<\s*(" + "|".join(_KNOWN_HEADERS)
+    + r")\b\s*\.?\s*[A-Za-z]?\s*[>7]?\s*$"
 )
 
 
@@ -59,7 +71,14 @@ def _fix_segment(segment: str) -> str:
     """Apply whole-token keyword fixes to a chunk that has no string literals."""
     for wrong, right in FIXES.items():
         # \b won't help around '#', so match the token bounded by non-word chars.
-        pattern = r"(?<![\w#])" + re.escape(wrong) + r"(?![\w])"
+        before = r"(?<![\w#])"
+        if wrong[0].isdigit():
+            # A misread starting with a digit ("1f", "1nt") must start a
+            # statement or declaration, so it is only fixed after whitespace,
+            # a brace, ';', '(' or ','. Otherwise the float suffix in
+            # "1.1f" or "b-1f" would be rewritten to "1.if" / "b-if".
+            before = r"(?<![^\s{};(,])"
+        pattern = before + re.escape(wrong) + r"(?![\w])"
         segment = re.sub(pattern, right, segment)
     return segment
 

@@ -1,409 +1,260 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:image/image.dart' as img;
-import 'dart:typed_data';
+import '../models/captured_page.dart';
+import '../models/question_choice.dart';
+import '../utils/page_capture.dart';
+import '../utils/verdict.dart';
+import '../widgets/verdict_view.dart';
+import 'batch_review_screen.dart';
 
-// Result of the quality check
-class QualityResult {
-  final bool passed;
-  final List<String> issues;
-
-  QualityResult({required this.passed, required this.issues});
-}
-
-// This runs in a separate thread (isolate) so it doesn't freeze the UI
-// Heavy image processing should never run on the main thread
-QualityResult _analyzeInIsolate(List<int> bytes) {
-  final image = img.decodeImage(Uint8List.fromList(bytes));
-  if (image == null)
-    return QualityResult(passed: false, issues: ['Could not read image']);
-
-  // Resize to 200x200 for speed — we don't need full resolution to check quality
-  final small = img.copyResize(image, width: 200, height: 200);
-  final grayscale = img.grayscale(small);
-
-  double totalBrightness = 0;
-  double laplacianSum = 0;
-  double laplacianSumSquares = 0;
-  int count = 0;
-
-  for (int y = 1; y < grayscale.height - 1; y++) {
-    for (int x = 1; x < grayscale.width - 1; x++) {
-      // Brightness: average pixel value across all pixels
-      final center = grayscale.getPixel(x, y).r.toDouble();
-      totalBrightness += center;
-
-      // Blur detection using Laplacian operator
-      // It measures how much edges exist — blurry images have weak edges
-      final top = grayscale.getPixel(x, y - 1).r.toDouble();
-      final bottom = grayscale.getPixel(x, y + 1).r.toDouble();
-      final left = grayscale.getPixel(x - 1, y).r.toDouble();
-      final right = grayscale.getPixel(x + 1, y).r.toDouble();
-
-      final laplacian = 4 * center - top - bottom - left - right;
-      laplacianSum += laplacian;
-      laplacianSumSquares += laplacian * laplacian;
-      count++;
-    }
-  }
-
-  final totalPixels = grayscale.width * grayscale.height;
-  final avgBrightness = totalBrightness / totalPixels;
-
-  final mean = laplacianSum / count;
-  final blurScore = (laplacianSumSquares / count) - (mean * mean);
-  // Higher blurScore = sharper image. Low score = blurry.
-
-  final List<String> issues = [];
-
-  // Check for uneven lighting by comparing brightest vs darkest quadrant
-  final regions = [
-    [0, 0, grayscale.width ~/ 2, grayscale.height ~/ 2],
-    [grayscale.width ~/ 2, 0, grayscale.width, grayscale.height ~/ 2],
-    [0, grayscale.height ~/ 2, grayscale.width ~/ 2, grayscale.height],
-    [
-      grayscale.width ~/ 2,
-      grayscale.height ~/ 2,
-      grayscale.width,
-      grayscale.height,
-    ],
-  ];
-
-  double minRegion = 255;
-  double maxRegion = 0;
-
-  for (final r in regions) {
-    double regionBrightness = 0;
-    int regionCount = 0;
-    for (int y = r[1]; y < r[3]; y++) {
-      for (int x = r[0]; x < r[2]; x++) {
-        regionBrightness += grayscale.getPixel(x, y).r.toDouble();
-        regionCount++;
-      }
-    }
-    final avg = regionBrightness / regionCount;
-    if (avg < minRegion) minRegion = avg;
-    if (avg > maxRegion) maxRegion = avg;
-  }
-
-  if (maxRegion - minRegion > 50) {
-    issues.add('Uneven lighting or shadow detected — ensure even lighting');
-  }
-  if (avgBrightness < 60) issues.add('Too dark — find better lighting');
-  if (avgBrightness > 220) issues.add('Too bright / overexposed');
-  if (blurScore < 1300) issues.add('Image is blurry — hold camera steady');
-
-  return QualityResult(passed: issues.isEmpty, issues: issues);
-}
-
+/// Screen 2: capture the pages of one answer. The chosen question stays in
+/// the app bar for the whole session.
 class CaptureScreen extends StatefulWidget {
-  final String questionId;
+  final QuestionChoice question;
 
-  const CaptureScreen({super.key, required this.questionId});
+  const CaptureScreen({super.key, required this.question});
 
   @override
   State<CaptureScreen> createState() => _CaptureScreenState();
 }
 
 class _CaptureScreenState extends State<CaptureScreen> {
-  File? _capturedImage;
-  bool _isUploading = false;
-  bool _isCheckingQuality = false;
-  QualityResult? _qualityResult;
+  // Pages kept so far — shown and submitted from the review screen.
+  final List<CapturedPage> _pages = [];
 
-  final ImagePicker _picker = ImagePicker();
-  final supabase = Supabase.instance.client;
+  // The page just scanned, waiting for Keep page / Retake.
+  File? _pendingFile;
+  CapturedPage? _pending;
+  bool _busy = false;
 
-  Future<void> _captureImage() async {
-    final XFile? photo = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 90,
-    );
+  bool get _showingPending => _pendingFile != null;
 
-    if (photo == null) return;
-
-    setState(() {
-      _capturedImage = File(photo.path);
-      _isCheckingQuality = true;
-      _qualityResult = null;
-    });
-
+  Future<void> _scan() async {
+    setState(() => _busy = true);
     try {
-      final bytes = await _capturedImage!.readAsBytes();
-      final result = _analyzeInIsolate(bytes); // run directly, no isolate
+      final page = await scanPage(
+        onScanned: (file) {
+          if (mounted) setState(() => _pendingFile = file);
+        },
+      );
+      if (!mounted) return;
       setState(() {
-        _qualityResult = result;
-        _isCheckingQuality = false;
+        _pending = page;
+        if (page == null) _pendingFile = null;
       });
-    } catch (e) {
-      // if analysis fails, just let the user proceed
-      setState(() {
-        _qualityResult = QualityResult(passed: true, issues: []);
-        _isCheckingQuality = false;
-      });
-    }
-  }
-
-  Future<void> _saveToDatabase() async {
-    if (_capturedImage == null) return;
-
-    setState(() => _isUploading = true);
-
-    try {
-      final fileName =
-          'submission_${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-      await supabase.storage
-          .from('handwritten-submissions')
-          .upload(fileName, _capturedImage!);
-
-      final imageUrl = supabase.storage
-          .from('handwritten-submissions')
-          .getPublicUrl(fileName);
-
-      await supabase.from('submissions').insert({
-        'image_url': imageUrl,
-        'question_id': widget.questionId,
-        'status': 'pending',
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Saved successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        setState(() {
-          _capturedImage = null;
-          _qualityResult = null;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
     } finally {
-      setState(() => _isUploading = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  void _discard() {
+  Future<void> _importFromGallery() async {
+    setState(() => _busy = true);
+    try {
+      final pages = await importFromGallery();
+      if (!mounted || pages.isEmpty) return;
+      setState(() => _pages.addAll(pages));
+      await _openReview();
+    } catch (e) {
+      if (mounted) _showError('Could not process the photos: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _keepPending() {
+    final page = _pending;
+    if (page == null || page.verdict == Verdict.retake) return;
     setState(() {
-      _capturedImage = null;
-      _qualityResult = null;
+      _pages.add(page);
+      _pending = null;
+      _pendingFile = null;
     });
+  }
+
+  void _retakePending() {
+    setState(() {
+      _pending = null;
+      _pendingFile = null;
+    });
+    _scan();
+  }
+
+  Future<void> _openReview() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            BatchReviewScreen(question: widget.question, pages: _pages),
+      ),
+    );
+    // Pages may have been removed or retaken in review.
+    if (mounted) setState(() {});
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFB71C1C),
-        title: const Text(
-          'mAIstra',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+    return PopScope(
+      canPop: _pages.isEmpty && !_showingPending,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final navigator = Navigator.of(context);
+        if (await _confirmLeave()) navigator.pop();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            widget.question.shortLabel,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
-        centerTitle: true,
+        body: SafeArea(
+          child: _showingPending ? _buildPendingView() : _buildScanView(),
+        ),
       ),
-      body: _capturedImage == null ? _buildCaptureView() : _buildPreviewView(),
     );
   }
 
-  Widget _buildCaptureView() {
-    return Center(
+  Future<bool> _confirmLeave() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Discard these pages?'),
+        content: const Text(
+          'Going back to the question list removes the pages you have not submitted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep capturing'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Widget _buildScanView() {
+    final theme = Theme.of(context);
+    final kept = _pages.length;
+
+    return Padding(
+      padding: const EdgeInsets.all(24),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(
-            Icons.document_scanner,
-            size: 100,
-            color: Color(0xFFB71C1C),
+          const Spacer(),
+          Icon(
+            Icons.document_scanner_outlined,
+            size: 64,
+            color: theme.colorScheme.primary,
           ),
           const SizedBox(height: 24),
-          const Text(
-            'Capture Handwritten C Code',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Text(
+            widget.question.fullLabel,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Take a photo of the student\'s paper',
-            style: TextStyle(fontSize: 14, color: Colors.grey),
+          Text(
+            kept == 0
+                ? 'Place the page on a flat surface and scan it.'
+                : '$kept ${kept == 1 ? 'page' : 'pages'} kept',
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 40),
-          ElevatedButton.icon(
-            onPressed: _captureImage,
-            icon: const Icon(Icons.camera_alt, color: Colors.white),
-            label: const Text(
-              'Open Camera',
-              style: TextStyle(color: Colors.white, fontSize: 16),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFB71C1C),
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
+          const Spacer(),
+          FilledButton.icon(
+            onPressed: _busy ? null : _scan,
+            icon: const Icon(Icons.camera_alt_outlined),
+            label: Text(kept == 0 ? 'Scan page' : 'Scan next page'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _importFromGallery,
+            icon: _busy
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.photo_library_outlined),
+            label: Text(_busy ? 'Processing…' : 'Add from gallery'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _busy || kept == 0 ? null : _openReview,
+            icon: const Icon(Icons.arrow_forward),
+            label: const Text('Done — review pages'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPreviewView() {
+  Widget _buildPendingView() {
+    final page = _pending;
+    final isRetake = page?.verdict == Verdict.retake;
+
     return Column(
       children: [
-        // Image preview
         Expanded(
-          child: Container(
-            width: double.infinity,
-            margin: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.file(_capturedImage!, fit: BoxFit.contain),
+              borderRadius: BorderRadius.circular(8),
+              child: Image.file(
+                page?.file ?? _pendingFile!,
+                fit: BoxFit.contain,
+              ),
             ),
           ),
         ),
-
-        // Quality check result banner
-        if (_isCheckingQuality)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                SizedBox(width: 8),
-                Text('Checking image quality...'),
-              ],
-            ),
-          ),
-
-        if (!_isCheckingQuality && _qualityResult != null)
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              // Green if passed, red if failed
-              color: _qualityResult!.passed
-                  ? Colors.green.shade50
-                  : Colors.red.shade50,
-              border: Border.all(
-                color: _qualityResult!.passed ? Colors.green : Colors.red,
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      _qualityResult!.passed
-                          ? Icons.check_circle
-                          : Icons.warning,
-                      color: _qualityResult!.passed ? Colors.green : Colors.red,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _qualityResult!.passed
-                          ? 'Image quality is good'
-                          : 'Quality issues detected',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: _qualityResult!.passed
-                            ? Colors.green
-                            : Colors.red,
-                      ),
-                    ),
-                  ],
-                ),
-                // List each issue found
-                ..._qualityResult!.issues.map(
-                  (issue) => Padding(
-                    padding: const EdgeInsets.only(top: 4, left: 26),
-                    child: Text(
-                      '• $issue',
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-        const SizedBox(height: 12),
-
-        // Accept / Discard buttons
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: page == null
+              ? const Row(
+                  children: [
+                    SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    SizedBox(width: 8),
+                    Text('Checking photo quality…'),
+                  ],
+                )
+              : VerdictBanner(result: page.quality),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16),
           child: Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _isUploading || _isCheckingQuality
-                      ? null
-                      : _discard,
-                  icon: const Icon(Icons.close, color: Colors.red),
-                  label: const Text(
-                    'Discard',
-                    style: TextStyle(color: Colors.red, fontSize: 16),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(color: Colors.red),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+                  onPressed: page == null ? null : _retakePending,
+                  icon: const Icon(Icons.camera_alt_outlined),
+                  label: const Text('Retake'),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed:
-                      _isUploading ||
-                          _isCheckingQuality ||
-                          (_qualityResult != null && !_qualityResult!.passed)
-                      ? null
-                      : _saveToDatabase,
-                  icon: _isUploading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(Icons.check, color: Colors.white),
-                  label: Text(
-                    _isUploading ? 'Saving...' : 'Accept',
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFB71C1C),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+                child: FilledButton.icon(
+                  // A RETAKE page can never be kept.
+                  onPressed: page == null || isRetake ? null : _keepPending,
+                  icon: const Icon(Icons.check),
+                  label: const Text('Keep page'),
                 ),
               ),
             ],

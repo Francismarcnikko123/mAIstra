@@ -2,9 +2,11 @@
 
 Runs the CURRENTLY-CONFIGURED recognizer on the held-out greenbook pages
 (writers 7, 8, 20, 27 -- fully excluded from the cross-writer retrain's
-training data) and reports page-level CER + WER, comparable to the same-writer
-0.126 CER on samples/. This measures generalization to writers NEVER seen in
-training. Build the dataset + manifest first with
+training data) and reports page-level CER + WER. The same-writer samples/
+recognition-only fine-tune result was CER 0.126 / WER 0.359; current end-to-end
+results after the two-column split are CER 0.099 / WER 0.328 / token accuracy
+0.716. This measures generalization to writers NEVER seen in training.
+Build the dataset + manifest first with
 evaluators.build_crosswriter_dataset.
 
 Select which recognizer to evaluate via the MAISTRA_REC_MODEL_DIR env var
@@ -60,7 +62,12 @@ def main() -> int:
     print("\n  per writer (CER clean_ws):")
     for wtr, v in sorted(by_writer.items()):
         print(f"    {wtr}: {sum(v)/len(v):.3f}  (n={len(v)})")
-    print("\nCompare to same-writer held-out: CER 0.126 / WER 0.359.")
+    print("\nSame-writer held-out samples/ references:")
+    print("  Recognition-only fine-tune (before two-column split): "
+          "CER 0.126 / WER 0.359.")
+    print("  End-to-end after two-column split: "
+          "CER (clean_ws) 0.099 / WER (clean) 0.328 / "
+          "token accuracy (clean) 0.716.")
     return 0
 
 

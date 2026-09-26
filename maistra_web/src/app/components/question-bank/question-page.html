@@ -1,0 +1,87 @@
+<section class="card">
+  <button type="button" class="btn-back" (click)="back.emit()">← Question bank</button>
+
+  <header class="page-header">
+    <div class="title-block">
+      <h2>{{ label }}</h2>
+      <p class="question-text">{{ question.question_text }}</p>
+      <p class="summary">{{ summary }}</p>
+    </div>
+    <div class="page-actions">
+      <!-- Both need UPDATE access to questions, not granted yet. -->
+      <button type="button" class="btn-secondary" disabled>Edit</button>
+      <button type="button" class="btn-secondary" disabled>Validate test cases</button>
+    </div>
+  </header>
+  <p class="actions-note">
+    Editing and re-validating a saved question aren't available yet: the database doesn't
+    allow updating questions.
+  </p>
+
+  <div class="warning-strip" *ngIf="!validated" role="alert">
+    <span class="warning-icon" aria-hidden="true">!</span>
+    <span>
+      Model answer has not passed validation. This question will not appear on the
+      phone and cannot be graded.
+    </span>
+  </div>
+
+  <div class="two-col">
+    <div>
+      <h3>Model answer</h3>
+      <pre class="code-block">{{ question.model_answer }}</pre>
+    </div>
+    <div>
+      <h3>Test cases</h3>
+      <p class="muted" *ngIf="!testCases.length">No test cases.</p>
+      <div class="table-wrap" *ngIf="testCases.length">
+        <table class="tc-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th *ngIf="question.question_type === 'function'">Test code</th>
+              <th>Input</th>
+              <th>Expected</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let tc of testCases; let i = index">
+              <td>{{ i + 1 }}</td>
+              <td *ngIf="question.question_type === 'function'"><code>{{ tc['test_code'] }}</code></td>
+              <td><code *ngIf="tc['test_input']">{{ tc['test_input'] }}</code></td>
+              <td><code>{{ tc['expected_output'] }}</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card papers-card">
+  <header class="papers-header">
+    <h3>Papers linked to this question</h3>
+    <span class="count-pill">{{ linked.length }}</span>
+  </header>
+  <p class="muted papers-empty" *ngIf="!linked.length">No papers yet.</p>
+  <div class="paper-grid" *ngIf="linked.length">
+    <a
+      class="paper-card"
+      *ngFor="let item of linked; trackBy: trackPaper"
+      [href]="item.paper.image_url"
+      target="_blank"
+      rel="noopener"
+    >
+      <img [src]="item.paper.image_url" alt="Handwritten paper" loading="lazy" />
+      <div class="paper-info">
+        <strong>{{ item.paper.captured_at | date: 'MMM d · HH:mm' }}</strong>
+        <span class="program" *ngIf="item.program > 1">Program {{ item.program }} on this paper</span>
+        <ng-container *ngIf="gateBadge(gateResults.get(item.paper.id ?? '')) as badge">
+          <span class="gate-badge" [attr.data-tone]="badge.tone">
+            <span aria-hidden="true">{{ badge.icon }}</span> {{ badge.label }}
+          </span>
+        </ng-container>
+      </div>
+    </a>
+  </div>
+</section>

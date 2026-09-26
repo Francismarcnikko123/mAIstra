@@ -9,9 +9,10 @@ model (models/fine_tuned_rec/) trains on ALL writers; this excludes 4 of them
 purely to get an honest new-writer number. See docs/ocr/EVALUATION.md.
 
 Why greenbook writers 7/8/20/27: they are training-only (not in samples/), so
-excluding them leaves the held-out samples/ test set (and its 0.126 result)
-untouched, and greenbook has enough writers (~39) that removing 4 barely dents
-training. Bond/yellow have too few writers to hold out this way.
+excluding them leaves the held-out samples/ test set untouched. Its historical
+recognition-only fine-tune CER is 0.126; end-to-end CER after the two-column
+reading-order split is 0.099. Greenbook has enough writers (~39) that removing
+4 barely dents training. Bond/yellow have too few writers to hold out this way.
 
 Writer identity here uses number + batch (green_writerN_B<batch>): numbering
 resets per batch, so batch is part of the identity -- see

@@ -1,4 +1,4 @@
-import { Component, ChangeDetectorRef, EventEmitter, Output } from '@angular/core';
+import { Component, ChangeDetectorRef, EventEmitter, OnInit, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
@@ -19,6 +19,17 @@ interface TestCase {
 }
 
 type TestRunStatus = 'idle' | 'running' | 'passed' | 'failed';
+
+interface QuestionSection {
+  id: string;
+  name: string;
+}
+
+/** Value of the section dropdown option that creates a new section. */
+export const NEW_SECTION = '__new__';
+
+// Postgres unique_violation.
+const UNIQUE_VIOLATION = '23505';
 interface ValidationResult {
   passed: boolean;
   expected: string;
@@ -42,7 +53,7 @@ const DEFAULT_TEST_CASE: TestCase = {
   templateUrl: './question-form.html',
   styleUrls: ['./question-form.css'],
 })
-export class QuestionFormComponent {
+export class QuestionFormComponent implements OnInit {
   private readonly saveTimeoutMs = 15000;
   private validationVersion = 0;
   private validatedInputs = '';
@@ -65,6 +76,16 @@ export class QuestionFormComponent {
   // dialog's question picker.
   @Output() questionSaved = new EventEmitter<void>();
 
+  // Section and number, e.g. Basic · Q3. Stored in question_sections /
+  // question_section_items; a question needs both to reach the phone.
+  sections: QuestionSection[] = [];
+  sectionsError = '';
+  sectionId = '';
+  newSectionName = '';
+  questionNumber: number | null = null;
+  takenNumbers: number[] = [];
+  readonly NEW_SECTION = NEW_SECTION;
+
   readonly PROGRAM_TEMPLATE = `int main(void) {\n  return 0;\n}`;
 
   constructor(
@@ -72,6 +93,85 @@ export class QuestionFormComponent {
     private cdr: ChangeDetectorRef,
     private judge0: Judge0Service,
   ) {}
+
+  async ngOnInit() {
+    await this.loadSections();
+  }
+
+  async loadSections() {
+    const { data, error } = await this.supabase.getQuestionSections();
+    if (error) {
+      this.sectionsError = 'Could not load sections: ' + error.message;
+    } else {
+      this.sectionsError = '';
+      this.sections = data ?? [];
+    }
+    this.cdr.detectChanges();
+  }
+
+  async onSectionChange() {
+    this.takenNumbers = [];
+    if (this.sectionId && this.sectionId !== NEW_SECTION) {
+      const { data } = await this.supabase.getSectionNumbers(this.sectionId);
+      this.takenNumbers = (data ?? [])
+        .map((row: { number: number }) => row.number)
+        .sort((a: number, b: number) => a - b);
+    }
+    this.cdr.detectChanges();
+  }
+
+  /** Section name as it will be saved, or '' when none is chosen yet. */
+  get sectionName(): string {
+    if (this.sectionId === NEW_SECTION) return this.newSectionName.trim();
+    return this.sections.find((s) => s.id === this.sectionId)?.name ?? '';
+  }
+
+  get numberTaken(): boolean {
+    return (
+      this.questionNumber !== null &&
+      this.takenNumbers.includes(this.questionNumber)
+    );
+  }
+
+  /** "Basic · Q3 · Count vowels" — the label teachers and students see. */
+  get labelPreview(): string {
+    const parts = [
+      this.sectionName,
+      this.questionNumber ? `Q${this.questionNumber}` : '',
+      this.questionName.trim(),
+    ];
+    return parts.filter(Boolean).join(' · ');
+  }
+
+  /** Missing fields, section or number, or '' when they are all fine. */
+  fieldsBlockedReason(): string {
+    if (!this.questionName.trim() || !this.questionText.trim() || !this.modelAnswer.trim()) {
+      return 'Fill in all required fields.';
+    }
+    if (!this.sectionName) return 'Choose a section.';
+    if (
+      this.questionNumber === null ||
+      !Number.isInteger(this.questionNumber) ||
+      this.questionNumber < 1
+    ) {
+      return 'Question No. must be a whole number of 1 or more.';
+    }
+    if (this.numberTaken) {
+      return `Q${this.questionNumber} is already used in ${this.sectionName}. Pick another number.`;
+    }
+    return '';
+  }
+
+  /** Why the question can't be saved yet, or '' when it can. */
+  saveBlockedReason(): string {
+    const fields = this.fieldsBlockedReason();
+    if (fields) return fields;
+    if (!this.canPublish) {
+      return 'Validate the test cases first. The question can only be saved once every test passes.';
+    }
+    return '';
+  }
+
   toggleTestCase(index: number) {
     this.collapsedTestCases[index] = !this.collapsedTestCases[index];
   }
@@ -196,8 +296,9 @@ export class QuestionFormComponent {
   }
 
   async save() {
-    if (!this.questionName || !this.questionText || !this.modelAnswer) {
-      this.errorMessage = 'Fill in all required fields.';
+    const fieldsBlocked = this.fieldsBlockedReason();
+    if (fieldsBlocked) {
+      this.errorMessage = fieldsBlocked;
       this.cdr.detectChanges();
       return;
     }
@@ -221,8 +322,12 @@ export class QuestionFormComponent {
     this.cdr.detectChanges();
 
     try {
-      const { error } = await this.saveQuestionWithTimeout({
-        question_name: this.questionName,
+      const sectionId = await this.resolveSectionId();
+      if (!sectionId) return;
+      const label = this.labelPreview;
+
+      const { data, error } = await this.saveQuestionWithTimeout({
+        question_name: this.questionName.trim(),
         question_text: this.questionText,
         question_type: this.questionType,
         model_answer: this.modelAnswer,
@@ -230,22 +335,35 @@ export class QuestionFormComponent {
           ...testCase,
           test_input: this.stdinFor(this.questionType, testCase.test_input),
         })),
+        // save() only gets here after every test case passed.
+        can_publish: true,
       });
-
       if (error) {
         this.errorMessage = 'Error: ' + error.message;
-      } else {
-        this.successMessage = 'Question saved!';
-        this.questionName = '';
-        this.questionText = '';
-        this.questionType = 'program';
-        this.modelAnswer = '';
-        this.testCases = [this.createDefaultTestCase()];
-        this.collapsedTestCases = {};
-        this.hasAttemptedValidation = false;
-        this.clearValidationResults();
-        this.questionSaved.emit();
+        return;
       }
+      // The question exists now, so lists that show questions can refresh
+      // even if linking it to its section fails below.
+      this.questionSaved.emit();
+
+      const link = await this.supabase.addQuestionToSection(
+        data.id,
+        sectionId,
+        this.questionNumber!,
+      );
+      if (link.error) {
+        // The question itself is saved; it just has no section yet.
+        this.errorMessage =
+          link.error.code === UNIQUE_VIOLATION
+            ? `The question was saved, but Q${this.questionNumber} was taken in ${this.sectionName} in the meantime. It is under "No section yet" until it gets a free number.`
+            : `The question was saved, but not added to ${this.sectionName}: ${link.error.message}`;
+        await this.onSectionChange();
+        return;
+      }
+
+      this.resetForm();
+      this.successMessage = `Question saved: ${label}`;
+      await this.loadSections();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to save question.';
@@ -381,12 +499,55 @@ export class QuestionFormComponent {
     return { ...DEFAULT_TEST_CASE };
   }
 
+  /** The chosen section's id, creating the section first if it is new. */
+  private async resolveSectionId(): Promise<string | null> {
+    if (this.sectionId !== NEW_SECTION) return this.sectionId;
+
+    const name = this.newSectionName.trim();
+    const existing = this.sections.find(
+      (s) => s.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (existing) return existing.id;
+
+    const { data, error } = await this.supabase.createQuestionSection(name);
+    if (error) {
+      this.errorMessage =
+        error.code === UNIQUE_VIOLATION
+          ? `A section called "${name}" already exists. Choose it from the list.`
+          : 'Could not create the section: ' + error.message;
+      await this.loadSections();
+      return null;
+    }
+    this.sections = [...this.sections, data];
+    this.sectionId = data.id;
+    return data.id;
+  }
+
+  private resetForm() {
+    this.questionName = '';
+    this.questionText = '';
+    this.questionType = 'program';
+    this.modelAnswer = '';
+    this.testCases = [this.createDefaultTestCase()];
+    this.collapsedTestCases = {};
+    this.hasAttemptedValidation = false;
+    // Keep the section so the next question can go straight after this one.
+    this.questionNumber = null;
+    this.takenNumbers = [];
+    // Also clears errorMessage.
+    this.clearValidationResults();
+    if (this.sectionId && this.sectionId !== NEW_SECTION) {
+      void this.onSectionChange();
+    }
+  }
+
   private async saveQuestionWithTimeout(question: {
     question_name: string;
     question_text: string;
     question_type: string;
     model_answer: string;
     test_cases: TestCase[];
+    can_publish: boolean;
   }) {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
