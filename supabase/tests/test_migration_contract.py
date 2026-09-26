@@ -133,3 +133,10 @@ def test_each_program_on_a_page_is_a_gradable_row():
     assert "create function public.save_program_grade(" in MIGRATION_SQL
     assert "and grading_revision = p_grading_revision" in MIGRATION_SQL
     assert "alter table public.submissions drop column if exists answers" in MIGRATION_SQL
+
+
+def test_program_one_follows_the_page_and_tab_saves_move_the_revision():
+    assert "create function public.advance_page_revision(" in MIGRATION_SQL
+    assert "v_revision := public.advance_page_revision(p_submission_id)" in MIGRATION_SQL
+    assert "create trigger sync_program_one_on_question_change" in MIGRATION_SQL
+    assert "after update of question_id" in MIGRATION_SQL

@@ -293,3 +293,50 @@ ${program('a * b')}`, stdin: '2 3' },
   await expect(card).toContainText('Graded');
   await expect(card).toContainText('Program 1 2/2 · Program 2 2/2');
 });
+
+test('a question changed on Details is the one Program 1 is graded against', async ({
+  page,
+  backend,
+}) => {
+  const PRODUCT_ID = '55555555-5555-4555-8555-555555555555';
+  backend.addQuestion({
+    id: PRODUCT_ID,
+    question_name: 'Product of two numbers',
+    question_type: 'program',
+    model_answer: program('a * b'),
+    test_cases: [
+      { test_code: '', test_input: '2 2', expected_output: '4' },
+      { test_code: '', test_input: '2 3', expected_output: '6' },
+    ],
+  });
+  // Graded 1/2 against the wrong question (Sum) before the teacher noticed.
+  backend.addSubmission({
+    id: SUBMISSION_ID,
+    captured_at: CAPTURED_AT,
+    student_name: 'Tomas Diaz',
+    status: 'graded',
+    question_id: QUESTION_ID,
+    verified_text: program('a * b'),
+    grading_results: [{ passed: true }, { passed: false }],
+    passed_test_cases: 1,
+    total_test_cases: 2,
+    score_percent: 50,
+    graded_at: '2026-09-26T08:00:00Z',
+  });
+
+  const dialog = await openSubmission(page, 'Tomas Diaz');
+  await dialog.getByRole('combobox').selectOption({ label: 'Product of two numbers' });
+  await dialog.getByRole('button', { name: 'Save and review code' }).click();
+  // The code is unchanged, so this goes straight to grading without a save.
+  await dialog.getByRole('button', { name: 'Continue to grading' }).click();
+
+  await expect(dialog.locator('.grading-context')).toContainText('Product of two numbers');
+  await dialog.getByRole('button', { name: 'Submit Code' }).click();
+  await expect(dialog.getByText('2/2 test cases passed — Score: 100%')).toBeVisible();
+
+  const [batch] = backend.requestsTo('POST', '/run-batch');
+  expect(batch.body.runs.map((run: { stdin: string }) => run.stdin)).toEqual(['2 2', '2 3']);
+  expect(backend.programsOf(SUBMISSION_ID)).toEqual([
+    expect.objectContaining({ question_id: PRODUCT_ID, passed_test_cases: 2, total_test_cases: 2 }),
+  ]);
+});

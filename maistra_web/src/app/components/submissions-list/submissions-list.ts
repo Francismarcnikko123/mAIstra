@@ -864,6 +864,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         ...(storedSubmission ?? submission),
         ...savedFields,
       });
+      // A new question moves Program 1's row to it in the database
+      // (20260926000700), so Step 3 re-reads the programs before grading.
+      this.staleProgramIds.add(submissionId);
       this.groupSubmissions();
       this.cdr.detectChanges();
       return true;

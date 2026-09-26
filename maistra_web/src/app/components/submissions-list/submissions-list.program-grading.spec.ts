@@ -59,10 +59,12 @@ function setup(options: {
     options.getSubmission ?? vi.fn().mockResolvedValue({ data: null, error: null });
   const updateSubmissionGrade = vi.fn();
   const getSubmissions = vi.fn();
+  const updateSubmissionDetails = vi.fn().mockImplementation(async (_id, _topic, _q, revision) => revision + 1);
   const supabase = {
     saveProgramGrade,
     getSubmission,
     getSubmissions,
+    updateSubmissionDetails,
     updateSubmissionGrade,
     getQuestionSections: vi.fn().mockResolvedValue({ data: [], error: null }),
     getSectionItems: vi.fn().mockResolvedValue({ data: [], error: null }),
@@ -222,5 +224,29 @@ describe('SubmissionsListComponent grading several programs', () => {
       'sum code, saved',
       expect.any(Array),
     );
+  });
+
+  it('grades Program 1 against the question just chosen on Details (review #1)', async () => {
+    // After the Details save the database has moved Program 1 to q-max.
+    // The Details save moved the page from revision 4 to 5.
+    const moved = {
+      ...paper([programRow(1, 'q-max', 'sum code', { grading_revision: 1 })]),
+      question_id: 'q-max',
+      grading_revision: 5,
+    };
+    const getSubmission = vi.fn().mockResolvedValue({ data: moved, error: null });
+    const ctx = setup({ getSubmission, runs: [accepted('2')] });
+    const { component, saveProgramGrade } = ctx;
+    await open(ctx, [programRow(1, 'q-sum', 'sum code')]);
+    component.reviewStep = 1;
+
+    component.onSelectedQuestionChange('q-max');
+    expect(await component.saveSubmissionDetails()).toBe(true);
+    await component.checkSubmission(component.selectedSubmission);
+
+    expect(getSubmission).toHaveBeenCalledWith('paper-1');
+    expect(saveProgramGrade).toHaveBeenCalledWith('program-1', 1, 'q-max', 'sum code', [
+      expect.objectContaining({ passed: true, expectedOutput: '2' }),
+    ]);
   });
 });

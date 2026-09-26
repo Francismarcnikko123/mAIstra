@@ -470,8 +470,11 @@ export class FakeBackend {
     // revision matches no row and the app sees null.
     const matched = this.filterSubmissions(url);
     for (const row of matched) {
+      const questionChanged =
+        'question_id' in changes && changes.question_id !== row.question_id;
       Object.assign(row, changes);
       row.grading_revision += 1;
+      if (questionChanged) this.syncProgramOne(row);
     }
     return this.json(
       route,
@@ -542,11 +545,14 @@ export class FakeBackend {
 
     const storable = (entry: (typeof wanted)[number]) =>
       entry.verified_text.trim() !== '' && !!entry.question_id;
+    let changed = 0;
     for (const entry of wanted.filter(storable)) {
       const existing = this.programsOf(page.id).find((program) => program.position === entry.position);
       if (!existing) {
         this.addProgram(page.id, entry.position, entry.question_id!, entry.verified_text);
+        changed += 1;
       } else if (existing.verified_text !== entry.verified_text || existing.question_id !== entry.question_id) {
+        changed += 1;
         Object.assign(existing, {
           question_id: entry.question_id,
           verified_text: entry.verified_text,
@@ -564,10 +570,37 @@ export class FakeBackend {
       const entry = wanted.find((item) => item.position === program.position);
       if ((entry && !storable(entry)) || (!entry && replaceAll)) {
         this.programs.splice(this.programs.indexOf(program), 1);
+        changed += 1;
       }
     }
+    // Any program change moves the page revision (20260926000700).
+    if (changed > 0) page.grading_revision += 1;
     this.syncPageStatus(page);
     return this.json(route, page.grading_revision);
+  }
+
+  // Mirrors public.sync_program_one_with_page: Program 1 follows the page's
+  // question (moved and ungraded, created from saved code, or removed).
+  private syncProgramOne(page: SubmissionRow) {
+    const programOne = this.programsOf(page.id).find((program) => program.position === 1);
+    if (!page.question_id) {
+      if (programOne) this.programs.splice(this.programs.indexOf(programOne), 1);
+    } else if (programOne) {
+      if (programOne.question_id !== page.question_id) {
+        Object.assign(programOne, {
+          question_id: page.question_id,
+          grading_results: [],
+          passed_test_cases: null,
+          total_test_cases: null,
+          score_percent: null,
+          graded_at: null,
+          grading_revision: programOne.grading_revision + 1,
+        });
+      }
+    } else if (page.verified_text?.trim()) {
+      this.addProgram(page.id, 1, page.question_id, page.verified_text);
+    }
+    this.syncPageStatus(page);
   }
 
   // Mirrors public.save_program_grade.
