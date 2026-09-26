@@ -1,6 +1,6 @@
 begin;
 
-select plan(16);
+select plan(18);
 
 -- Two questions and one photographed page with two programs on it.
 insert into public.questions (id, question_name, question_text, model_answer, question_type, test_cases)
@@ -209,6 +209,41 @@ select is(
    where submission_id = '00000000-0000-0000-0000-00000000d001'),
   1::bigint,
   'a removed tab is deleted'
+);
+
+-- A paper with no tabs saves Program 1 alone, without its question id: the
+-- page's question is used and Program 2 (saved earlier) is left alone.
+set local role anon;
+insert into results
+select 'program 2 back', public.save_submission_programs(
+  '00000000-0000-0000-0000-00000000d001',
+  (select grading_revision from public.submissions where id = '00000000-0000-0000-0000-00000000d001'),
+  '[{"verified_text": "program one", "question_id": "00000000-0000-0000-0000-00000000c002"},
+    {"verified_text": "program two again", "question_id": "00000000-0000-0000-0000-00000000c001"}]'::jsonb
+);
+insert into results
+select 'program 1 only', public.save_submission_programs(
+  '00000000-0000-0000-0000-00000000d001',
+  (select grading_revision from public.submissions where id = '00000000-0000-0000-0000-00000000d001'),
+  '[{"verified_text": "program one, edited"}]'::jsonb,
+  null,
+  false
+);
+reset role;
+
+select ok(
+  (select question_id = '00000000-0000-0000-0000-00000000c002'
+     and verified_text = 'program one, edited'
+   from public.submission_programs
+   where submission_id = '00000000-0000-0000-0000-00000000d001' and position = 1),
+  'Program 1 saved without a question id keeps the page''s question'
+);
+
+select is(
+  (select verified_text from public.submission_programs
+   where submission_id = '00000000-0000-0000-0000-00000000d001' and position = 2),
+  'program two again',
+  'saving only Program 1 leaves the other programs as they are'
 );
 
 select throws_ok(

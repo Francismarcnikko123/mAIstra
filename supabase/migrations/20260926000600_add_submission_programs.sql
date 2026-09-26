@@ -193,8 +193,12 @@ $$;
 -- stay in force, and the triggers above still run.
 --
 -- p_programs: [{ "verified_text": text, "question_id": uuid }, ...] in tab
--- order, Program 1 first. An entry without code or without a question is not
--- stored (it can't be graded), but keeps its tab number.
+-- order, Program 1 first. Program 1 without a question_id uses the page's
+-- question (chosen on the Details step). An entry without code or without a
+-- question is not stored (it can't be graded) but keeps its tab number.
+-- p_replace_all: true when p_programs is every tab of the page, so programs
+-- beyond it are deleted; false to save only the programs given (Program 1
+-- alone, when the paper has no tabs) and leave the others as they are.
 -- Writes nothing and returns NULL when the page's grading_revision is no
 -- longer p_grading_revision (someone else saved it meanwhile); otherwise
 -- returns the page's new grading_revision.
@@ -202,7 +206,8 @@ CREATE FUNCTION public.save_submission_programs(
   p_submission_id uuid,
   p_grading_revision bigint,
   p_programs jsonb,
-  p_extracted_text text DEFAULT NULL
+  p_extracted_text text DEFAULT NULL,
+  p_replace_all boolean DEFAULT true
 )
 RETURNS bigint
 LANGUAGE plpgsql
@@ -211,7 +216,10 @@ SET search_path = ''
 AS $$
 DECLARE
   v_revision bigint;
+  v_page_question uuid;
   v_first jsonb;
+  -- p_programs normalised to [{position, question_id, verified_text}].
+  v_wanted jsonb;
 BEGIN
   IF jsonb_typeof(p_programs) IS DISTINCT FROM 'array'
     OR jsonb_array_length(p_programs) = 0 THEN
@@ -231,24 +239,33 @@ BEGIN
     verified_at = now()
   WHERE id = p_submission_id
     AND grading_revision = p_grading_revision
-  RETURNING grading_revision INTO v_revision;
+  RETURNING grading_revision, question_id INTO v_revision, v_page_question;
 
   IF v_revision IS NULL THEN
     RETURN NULL;
   END IF;
 
+  SELECT jsonb_agg(jsonb_build_object(
+    'position', entry.ordinality,
+    'question_id', CASE
+      WHEN entry.ordinality = 1
+        THEN coalesce(nullif(entry.value ->> 'question_id', '')::uuid, v_page_question)
+      ELSE nullif(entry.value ->> 'question_id', '')::uuid
+    END,
+    'verified_text', entry.value ->> 'verified_text'
+  ))
+  INTO v_wanted
+  FROM jsonb_array_elements(p_programs) WITH ORDINALITY AS entry;
+
   -- Update in place rather than delete + insert, so only programs whose code
   -- or question changed lose their grade.
   INSERT INTO public.submission_programs AS program
     (submission_id, position, question_id, verified_text)
-  SELECT
-    p_submission_id,
-    entry.ordinality::smallint,
-    (entry.value ->> 'question_id')::uuid,
-    entry.value ->> 'verified_text'
-  FROM jsonb_array_elements(p_programs) WITH ORDINALITY AS entry
-  WHERE btrim(coalesce(entry.value ->> 'verified_text', '')) <> ''
-    AND nullif(entry.value ->> 'question_id', '') IS NOT NULL
+  SELECT p_submission_id, wanted.position, wanted.question_id, wanted.verified_text
+  FROM jsonb_to_recordset(v_wanted)
+    AS wanted(position smallint, question_id uuid, verified_text text)
+  WHERE btrim(coalesce(wanted.verified_text, '')) <> ''
+    AND wanted.question_id IS NOT NULL
   ON CONFLICT (submission_id, position) DO UPDATE
   SET
     question_id = excluded.question_id,
@@ -256,15 +273,26 @@ BEGIN
   WHERE program.question_id IS DISTINCT FROM excluded.question_id
     OR program.verified_text IS DISTINCT FROM excluded.verified_text;
 
-  -- Tabs the teacher removed or emptied.
+  -- Tabs that were emptied, and (with p_replace_all) tabs that were removed.
   DELETE FROM public.submission_programs AS program
   WHERE program.submission_id = p_submission_id
-    AND NOT EXISTS (
-      SELECT 1
-      FROM jsonb_array_elements(p_programs) WITH ORDINALITY AS entry
-      WHERE entry.ordinality = program.position
-        AND btrim(coalesce(entry.value ->> 'verified_text', '')) <> ''
-        AND nullif(entry.value ->> 'question_id', '') IS NOT NULL
+    AND (
+      EXISTS (
+        SELECT 1
+        FROM jsonb_to_recordset(v_wanted)
+          AS wanted(position smallint, question_id uuid, verified_text text)
+        WHERE wanted.position = program.position
+          AND (btrim(coalesce(wanted.verified_text, '')) = '' OR wanted.question_id IS NULL)
+      )
+      OR (
+        p_replace_all
+        AND NOT EXISTS (
+          SELECT 1
+          FROM jsonb_to_recordset(v_wanted)
+            AS wanted(position smallint, question_id uuid, verified_text text)
+          WHERE wanted.position = program.position
+        )
+      )
     );
 
   PERFORM public.sync_page_graded_status(p_submission_id);
@@ -318,9 +346,9 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.save_submission_programs(uuid, bigint, jsonb, text)
+REVOKE ALL ON FUNCTION public.save_submission_programs(uuid, bigint, jsonb, text, boolean)
   FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.save_submission_programs(uuid, bigint, jsonb, text)
+GRANT EXECUTE ON FUNCTION public.save_submission_programs(uuid, bigint, jsonb, text, boolean)
   TO anon, authenticated;
 REVOKE ALL ON FUNCTION public.save_program_grade(uuid, bigint, uuid, text, jsonb)
   FROM PUBLIC;
