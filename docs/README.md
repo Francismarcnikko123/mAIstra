@@ -22,6 +22,8 @@ and `AGENTS.md` are identical to `feature/pre-extraction`.
   ([test note](changes/2026-09-26-end-to-end-test.md)).
 - **Editing (2026-09-26):** *Edit* on a question opens it in the form; Save is locked until validation passes. Older questions get a
   section and number here to appear on the phone ([note](changes/2026-09-26-edit-questions.md)).
+- **Tested (2026-09-27):** 6 end-to-end browser tests for the question bank and
+  editing; a code review's 8 fixes are in ([review note](changes/2026-09-27-code-review-fixes.md)).
 - **Where to read:** one note per update in [`changes/`](changes/README.md),
   the dated sections in the [overview](PROJECT_OVERVIEW_AND_CHANGES.md), and
   Nikko's section of [TEAM_SYNC.md](TEAM_SYNC.md).

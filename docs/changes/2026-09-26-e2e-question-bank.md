@@ -15,7 +15,7 @@ New `maistra_web/tests/e2e/question-bank.spec.ts`, 6 browser tests against the f
 
 ## Fake backend additions (Jayrald's `tests/e2e/support/fake-backend.ts`, additive only)
 
-`PATCH /questions` (edit), `PATCH /question_section_items` (move), `HEAD /submissions` with a count (graded papers), `addSectionItem()`, optional `can_publish` / `question_text` on questions, `HEAD` and `content-range` in CORS.
+`PATCH /questions` (edit), `PATCH /question_section_items` (move), `GET /submission_programs` (graded-papers count; replaced a `HEAD` count on 2026-09-27), `addSectionItem()`, optional `can_publish` / `question_text` on questions.
 
 ## Verification
 
