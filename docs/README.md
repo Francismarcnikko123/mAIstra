@@ -78,7 +78,7 @@ Nikko's complete new flow against the shared cloud waits for the schema work.
 See [TEAM_SYNC.md](TEAM_SYNC.md) for the handoff and current owner decisions.
 
 This directory contains both current guides and dated design/research records.
-Some files are tracked and pushed even though `docs/` is gitignored by default;
+Since 2026-09-27 only Nombrado's local notes (`docs/ocr/`, `docs/superpowers/`) are gitignored, so new shared docs are added normally; tracked files in those folders stay tracked;
 older status statements remain as historical snapshots. Start with this block,
 the overview and TEAM_SYNC for current state.
 

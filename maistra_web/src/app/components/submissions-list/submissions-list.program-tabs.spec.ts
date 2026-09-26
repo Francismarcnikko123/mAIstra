@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Judge0Service } from '../../services/judge0.service';
 import { SupabaseService } from '../../services/supabase';
 import { SubmissionsListComponent } from './submissions-list';
+import { indexQuestionPlaces } from '../question-bank/question-labels';
 
 function createComponent(options?: {
   getSubmissions?: ReturnType<typeof vi.fn>;
@@ -236,7 +237,7 @@ describe('SubmissionsListComponent program tabs', () => {
     expect(component.ocrPanelOpen).toBe(false);
   });
 
-  it('saves Program 1 and keeps extra programs pending while the programs table is missing', async () => {
+  it('saves Program 1 and says only that while the programs table is missing', async () => {
     const { component, updateSubmissionText, supabase } = createComponent();
     supabase.answersColumnAvailable = false;
     select(component);
@@ -254,15 +255,18 @@ describe('SubmissionsListComponent program tabs', () => {
     );
     expect(component.getExtraAnswers('paper-1')[0].code).toBe('int f(void) { return 1; }');
     expect(component.selectedSubmission?.answers).toBeUndefined();
-    // The label beside Save must not claim the extra tabs were stored.
-    expect(component.saveStatusLabel('paper-1')).toBe('New changes need to be saved.');
-    expect(component.saveStatusTone('paper-1')).toBe('pending');
-    expect(component.hasUnsavedPrograms('paper-1')).toBe(true);
-
-    // With no remaining extra draft, the partial-save confirmation is accurate.
-    component.extraAnswers['paper-1'] = [];
+    // Programs 2+ can't be saved here and the message under the editor says
+    // so; the label beside Save confirms Program 1 only (review 2026-09-27 #4),
+    // and never "All programs saved".
     expect(component.saveStatusLabel('paper-1')).toBe('✓ Program 1 saved');
     expect(component.saveStatusTone('paper-1')).toBe('');
+    // Closing still warns that the extra tabs would be lost.
+    expect(component.hasUnsavedPrograms('paper-1')).toBe(true);
+
+    // A later Program 1 edit is still reported.
+    component.editableText['paper-1'] = 'int main() { return 1; }';
+    expect(component.saveStatusLabel('paper-1')).toBe('New changes need to be saved.');
+    expect(component.saveStatusTone('paper-1')).toBe('pending');
   });
 
   it('the Save label reports a failed save', async () => {
@@ -364,9 +368,13 @@ describe('SubmissionsListComponent program tabs', () => {
     const document = new DOMParser().parseFromString(template, 'text/html');
     expect(document.querySelector('.save-status')).toBeNull();
     const label = document.querySelector('.program-save-status');
-    expect(label?.getAttribute('*ngif')).toBe('saveStatusLabel(selectedSubmission.id) as label');
-    expect(label?.getAttribute('[class.error]')).toBe("saveStatusTone(selectedSubmission.id) === 'error'");
-    expect(label?.getAttribute('[class.pending]')).toBe("saveStatusTone(selectedSubmission.id) === 'pending'");
+    expect(label?.getAttribute('*ngif')).toBe('saveStatusLabel(selectedSubmission.id, saveTone) as label');
+    expect(label?.getAttribute('[class.error]')).toBe("saveTone === 'error'");
+    expect(label?.getAttribute('[class.pending]')).toBe("saveTone === 'pending'");
+    // The tone compares every tab, so it is worked out once per check
+    // (review 2026-09-27 #10).
+    expect(template).toContain('@let saveTone = saveStatusTone(selectedSubmission.id);');
+    expect(template.split('saveStatusTone(').length - 1).toBe(1);
     expect(label?.getAttribute('role')).toBe('status');
     expect(label?.textContent?.trim()).toBe('{{ label }}');
   });
@@ -690,6 +698,26 @@ describe('SubmissionsListComponent program tabs', () => {
     expect(component.activeTab).toBe(0);
     component.moveTab(-1);
     expect(component.activeTab).toBe(1);
+  });
+
+  it('labels questions with section and number in the tab picker and View question', () => {
+    const { component } = createComponent();
+    const sum = { id: 'q-1', question_name: 'Sum of two numbers', question_type: 'program' as const, model_answer: 'm', test_cases: [] };
+    const old = { id: 'q-2', question_name: 'Old question', question_type: 'program' as const, model_answer: 'm', test_cases: [] };
+    component.questionPlaces = indexQuestionPlaces(
+      [{ id: 'basic', name: 'Basic', position: 0 }],
+      [{ section_id: 'basic', question_id: 'q-1', number: 2 }],
+    );
+
+    expect(component.questionOptionLabel(sum)).toBe('Basic · Q2 · Sum of two numbers');
+    // A question with no section yet keeps its plain name.
+    expect(component.questionOptionLabel(old)).toBe('Old question');
+
+    const template = readFileSync('src/app/components/submissions-list/submissions-list.html', 'utf8');
+    expect(template).toContain('<strong>{{ questionOptionLabel(question) }}</strong>');
+    expect(template).toContain('<strong>{{ questionOptionLabel(peek) }}</strong>');
+    expect(template).not.toContain('<strong>{{ question.question_name }}</strong>');
+    expect(template).not.toContain('{{ peek.question_name }}');
   });
 
   it('finds the question for the open tab, for View question', () => {

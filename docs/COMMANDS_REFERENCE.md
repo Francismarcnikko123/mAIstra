@@ -39,7 +39,7 @@ the other docs and are equivalent).
 
 | Command | Directory | One-line explanation |
 |---|---|---|
-| `uvicorn main:app --host 0.0.0.0 --port 8000` | `ocr_feature/` | Starts the OCR backend (PaddleOCR pipeline). |
+| `uvicorn main:app --host 127.0.0.1 --port 8000` | `ocr_feature/` | Starts the OCR backend (PaddleOCR pipeline). Only this machine and the web app on port 4200/4201 may call it (2026-09-27; `OCR_ALLOWED_ORIGINS` in `.env` for other ports). |
 | `uvicorn main:app --host 0.0.0.0 --port 8001` | `judge0_api/` | Starts the Judge0 wrapper API that talks to the remote Judge0 VM. |
 | `npm start` | `maistra_web/` | Starts the Angular dev server on `http://localhost:4200`. |
 | `curl http://localhost:8001/` | anywhere | Health-checks the Judge0 wrapper; expect `{"status":"ok"}`. |
@@ -100,7 +100,7 @@ the other docs and are equivalent).
 | `npm ci` | Clean-installs dependencies exactly as locked (use this, not `npm install`, when switching machines/OS). |
 | `npm start` | Starts the dev server (alias for `ng serve --configuration development`). |
 | `ng serve --configuration production` | Starts the dev server built against the production environment config. |
-| `npx ng test --watch=false` | Runs the unit tests once (Vitest via `@angular/build:unit-test`, not Karma). 309 tests on `judge0-integration` as of 2026-09-27. |
+| `npx ng test --watch=false` | Runs the unit tests once (Vitest via `@angular/build:unit-test`, not Karma). 339 tests on `feature/nombrado-review-followups` as of 2026-09-27. |
 | `npm run e2e` | Runs the Playwright end-to-end tests (fake backend, no cloud writes; own dev server on port 4300). 19 tests as of 2026-09-27. |
 | `npx playwright install chromium` | One-time download of Playwright's test browser (after `npm ci`). |
 | `$env:PW_CHANNEL='chrome'; npm run e2e` (PowerShell) or `PW_CHANNEL=chrome npm run e2e` (bash) | Runs the e2e tests in the installed Google Chrome, for machines where the browser download above times out. |

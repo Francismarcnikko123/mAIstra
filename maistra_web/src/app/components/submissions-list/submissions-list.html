@@ -339,11 +339,13 @@
 
                 <!-- Saves every tab of this paper in one update and stays on this step. -->
                 <div class="program-save">
+                  <!-- Worked out once per check: it compares every tab. -->
+                  @let saveTone = saveStatusTone(selectedSubmission.id);
                   <span
                     class="program-save-status"
-                    *ngIf="saveStatusLabel(selectedSubmission.id) as label"
-                    [class.error]="saveStatusTone(selectedSubmission.id) === 'error'"
-                    [class.pending]="saveStatusTone(selectedSubmission.id) === 'pending'"
+                    *ngIf="saveStatusLabel(selectedSubmission.id, saveTone) as label"
+                    [class.error]="saveTone === 'error'"
+                    [class.pending]="saveTone === 'pending'"
                     role="status"
                   >
                     {{ label }}
@@ -404,7 +406,7 @@
                         (click)="chooseExtraQuestion(activeTab - 1, question.id)"
                       >
                         <span class="question-option-text">
-                          <strong>{{ question.question_name }}</strong>
+                          <strong>{{ questionOptionLabel(question) }}</strong>
                           <small>{{ questionPreview(question) }} · {{ question.test_cases.length }} test cases</small>
                         </span>
                         <span class="question-option-used" *ngIf="questionOwner(question.id, activeTab - 1) as owner">
@@ -439,7 +441,7 @@
 
                 <div class="question-peek" *ngIf="questionPeekOpen && getActiveTabQuestion() as peek">
                   <div class="question-peek-head">
-                    <strong>{{ peek.question_name }}</strong>
+                    <strong>{{ questionOptionLabel(peek) }}</strong>
                     <span>Read-only · {{ peek.test_cases.length }} test case{{ peek.test_cases.length === 1 ? '' : 's' }}</span>
                   </div>
                   <p *ngIf="peek.question_text">{{ peek.question_text }}</p>

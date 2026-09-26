@@ -601,6 +601,18 @@ The review questions are tracked in [the adviser-review task](plans/2026-09-09-a
 - **Not changed:** the OCR pipeline, preprocessing, models, `samples/` (the test set) and `evaluate_cer`, so the recorded accuracy numbers still apply. Writer-batch rows from `import_verified_batch.py` (the bond/yellow datasets) are untouched and don't depend on this.
 - **Verification:** OCR 250/250 (19 new tests: schema, export, block pairing). Read-only check against the cloud with the new fetch: 9 verified/graded pages, 4 with program rows, 0 split, Program 1 copy in sync.
 
+## Review follow-ups and OCR server access (2026-09-27, branch `feature/nombrado-review-followups`)
+
+> **Owner:** Nombrado. Answers the requests to Nombrado in Jayrald's reviews (2026-09-26 #8; 2026-09-27 #4, #10) and Nikko's (web guide, question labels).
+
+- **OCR server access (`ocr_feature/main.py`):** CORS allows only the web app (`localhost` / `127.0.0.1` on ports 4200 and 4201; `OCR_ALLOWED_ORIGINS` in `ocr_feature/.env` replaces the list), still without credentials. Before, any website the teacher had open could make the server download URLs of its choosing. `download_image()` now also accepts only the host of `SUPABASE_URL` (or `OCR_ALLOWED_IMAGE_HOSTS`) and doesn't follow redirects; other URLs get a 400 before any download. All 214 cloud photo URLs are on that host and load without a redirect (checked read-only). Setup docs now start the OCR server with `--host 127.0.0.1`.
+- **Save label (`submissions-list.ts` / `.html`):** on a database without `submission_programs`, the label says "✓ Program 1 saved" instead of a permanent "New changes need to be saved" (only Program 1 can be pending there; the close pop-up still counts every tab). The template computes the tone once per check (`@let saveTone`).
+- **Question labels:** the program-tab picker and View question show `Section · Q# · Name` (`questionOptionLabel()`). The Details dropdown is Jayrald's and is requested in TEAM_SYNC.
+- **`.gitignore`:** only Nombrado's local notes (`docs/ocr/`, `docs/superpowers/`, `docs/web/VERIFICATION_UI.md`) and `.DS_Store` are ignored, instead of all of `docs/`; new shared docs no longer need `git add -f`.
+- **Docs:** `web/WEB_CODEBASE_GUIDE.md` now describes the revision-guarded save through `save_submission_programs`.
+- **Not changed:** the OCR pipeline, models and `evaluate_cer`; save and grading logic; the database.
+- **Verification:** OCR 256/256 (6 new tests; 5 fail on the old `main.py`), web 339/339, both TypeScript checks, `ng build` (existing CSS budget warning), Playwright 19/19 twice. On the real server (auto-extract off): the web app's preflight passes, another site's is refused, an internal address is refused, a cloud photo extracts.
+
 ## Code cleanup completed
 
 > **Owner:** Shared (Jayrald + Nombrado)
@@ -782,6 +794,7 @@ handwriting.
 
 > **Owner:** Shared
 
+- **2026-09-27 review follow-ups (`feature/nombrado-review-followups`, from `judge0-integration` `7335d91`):** web 339/339, OCR 256/256, both TypeScript checks, `ng build` (existing CSS budget warning), Playwright 19/19 twice. Live OCR server check with auto-extract off; nothing written to the cloud.
 - **2026-09-27 `judge0-integration` checkpoint (after the Save-label follow-ups and the OCR export):** web 309/309, OCR 250/250, `evaluate_cer` unchanged (clean_ws CER 0.099, WER 0.328, token accuracy 0.716), Playwright e2e 9/9 on the local machine (fake backend), `ng build` passes with the existing `submissions-list.list.css` budget warning. Only `judge0-integration` should be run against the cloud; older branches are kept for diffs.
 - **2026-09-26 program-tabs Save checkpoint:** web 121/121; Angular application and spec TypeScript checks and `ng build` pass with the existing CSS budget warning. No OCR code changed, so the OCR suite was not re-run (last run 231/231 on 2026-09-24).
 - **2026-09-24 pre-extraction checkpoint:** OCR 231/231, web 114/114; Angular application and spec TypeScript checks pass, and Angular build passes with the existing CSS budget warning. The live phone-photo, server-off and restart catch-up badge checks passed. See the pre-extraction section above for scope.
@@ -807,7 +820,7 @@ Before deploying mAIstra beyond a trusted development environment:
 - Add complete Row Level Security policies for questions, submissions, and storage objects. RLS is enabled on `questions`, `submissions` and the section tables (`20260921000000_lock_down_public_api.sql`, confirmed in the cloud on 2026-09-26), with column-level grants. The policies still allow any caller with the publishable key because there are no logins yet.
 - Restrict access to handwritten submission images or serve them with signed URLs.
 - Authenticate and rate-limit the OCR and Judge0 wrapper APIs.
-- Restrict the OCR URL downloader to trusted storage hosts and enforce download-size limits.
+- ~~Restrict the OCR URL downloader to trusted storage hosts and enforce download-size limits.~~ **Done:** 25 MB cap (2026-09-24); only the project's Supabase storage host, no redirects, and CORS limited to the web app (2026-09-27, `feature/nombrado-review-followups`).
 - Move hardcoded service URLs into Angular environment configuration.
 - Add missing migrations for application columns such as `question_type`, `topic`, and `question_id`.
 

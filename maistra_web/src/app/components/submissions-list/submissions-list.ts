@@ -545,6 +545,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     );
   }
 
+  /** "Basic · Q2 · Sum of two numbers" in the program-tab picker and View question. */
+  questionOptionLabel(question: SubmissionQuestion): string {
+    return questionLabel(question.question_name, this.questionPlaces.get(question.id));
+  }
+
   private isSectionName(topic: string): boolean {
     const name = topic?.trim();
     return !!name && [...this.questionPlaces.values()].some((p) => p.sectionName === name);
@@ -1243,11 +1248,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
    * Reports errors/conflicts and changes since saving beside Save; otherwise
    * confirms Program 1 or all programs saved. No result means no label.
    */
-  saveStatusLabel(id: string): string {
+  saveStatusLabel(id: string, tone = this.saveStatusTone(id)): string {
     if (this.saveStatus[id] === 'error') return 'Save failed, try again';
     if (this.saveStatus[id] === 'conflict') return this.saveStatusMessage(id);
     if (this.saveStatus[id] !== 'saved') return '';
-    if (this.saveStatusTone(id) === 'pending') return 'New changes need to be saved.';
+    if (tone === 'pending') return 'New changes need to be saved.';
     return this.extraAnswersError[id] === EXTRA_PROGRAMS_UNSAVABLE
       ? '✓ Program 1 saved'
       : '✓ All programs saved';
@@ -1256,11 +1261,17 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   saveStatusTone(id: string): 'error' | 'pending' | '' {
     const status = this.saveStatus[id];
     if (status === 'error' || status === 'conflict') return 'error';
+    if (status !== 'saved') return '';
+    // Without the programs table, Programs 2..n can't be saved at all and the
+    // message under the editor says so, so only Program 1 can be pending
+    // (review 2026-09-27 #4). The close pop-up still counts every tab.
+    const programsUnsaved =
+      this.extraAnswersError[id] === EXTRA_PROGRAMS_UNSAVABLE
+        ? this.isProgram1Unsaved(id)
+        : this.hasUnsavedPrograms(id);
     // Snapshots cover all tabs (including removals); stored verified_text also
     // catches Program 1 loaded from OCR but never saved as verified code.
-    return status === 'saved' && (this.hasUnsavedPrograms(id) || this.hasUnsavedCode(id))
-      ? 'pending'
-      : '';
+    return programsUnsaved || this.hasUnsavedCode(id) ? 'pending' : '';
   }
 
   isSaving(id: string): boolean {
