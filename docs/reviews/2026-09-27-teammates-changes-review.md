@@ -14,14 +14,14 @@
 
 | # | Severity | Finding | Where | Who fixes |
 |---|---|---|---|---|
-| 1 | **High** | Saving a question rewrites its test cases even for a rename, so old questions lose their graded papers' grades with no warning | `supabase.ts` `updateQuestion` + `question-form.ts` | Nikko |
+| 1 | ✅ Fixed (Nikko, 2026-09-27) | Saving a question rewrites its test cases even for a rename, so old questions lose their graded papers' grades with no warning | `supabase.ts` `updateQuestion` + `question-form.ts` | Nikko |
 | 2 | **High** | Editing a question has no check for a newer version: a second teacher's edit is overwritten silently | `supabase.ts` `updateQuestion` / `markQuestionValidated` | Nikko (Jayrald can add a revision column if wanted) |
 | 3 | ✅ Fixed `8c11129` | "New changes need to be saved" disappears after 3 s while a program tab is still unsaved | `submissions-list.ts` `saveVerifiedText` timer | **Jayrald** |
 | 4 | Medium (design) | Without the `submission_programs` table, the Save label always says "New changes need to be saved" | `submissions-list.ts` `saveStatusLabel` (merge `fefbf9e`) | Nombrado (decide) |
-| 5 | Medium | If "mark validated" fails, a retry warns about grades that are already cleared | `question-form.ts` `saveEdit` | Nikko |
+| 5 | ✅ Fixed (Nikko, 2026-09-27) | If "mark validated" fails, a retry warns about grades that are already cleared | `question-form.ts` `saveEdit` | Nikko |
 | 6 | Low-Medium | A live photo badge can be wiped by a reload that was already running | `submissions-list.ts` `loadSectionFolders` | Nikko |
 | 7 | Low | A typed topic that matches a section name is silently replaced with "Uncategorized" | `submissions-list.ts` `isSectionName` | Nikko |
-| 8 | Low | The fake backend's question PATCHes don't behave like the database | `tests/e2e/support/fake-backend.ts` | Nikko |
+| 8 | Low (partly fixed 2026-09-27) | The fake backend's question PATCHes don't behave like the database | `tests/e2e/support/fake-backend.ts` | Nikko |
 | 9 | Low | `countGradedPapers` downloads every program row and makes two round trips | `supabase.ts` | Nikko |
 | 10 | Low | Leftover code: most of `saveStatusMessage` is dead, and the label's tone is computed three times per render | `submissions-list.ts` / `.html` | Jayrald + Nombrado |
 
@@ -30,6 +30,8 @@
 ## Findings
 
 ### 1. High — a rename clears grades on older questions
+
+> **Fixed by Nikko (2026-09-27, `a7fcf76`), checked live in `docs/changes/2026-09-27-live-rename-test.md`:** `saveEdit` sends only the columns that differ from what was loaded, so a rename leaves `test_cases` untouched. Changed test cases are still written without `mark`, behind the grade warning. The e2e test "renaming an older question keeps its test cases and its papers' grades" seeds `mark` and a graded paper; it failed before the fix.
 
 **Where:** `supabase.ts:155` (`updateQuestion`) and `question-form.ts` `startEdit`.
 
@@ -84,6 +86,8 @@ The cloud has the table, so only old local databases are affected. Nombrado's te
 
 ### 5. Medium — the retry after a failed "mark validated" is wrong
 
+> **Fixed by Nikko (2026-09-27, `a7fcf76`):** the saved content is recorded right after `updateQuestion` succeeds, so the retry only calls `markQuestionValidated` and shows no grade warning. Unit test in `question-form.sections.spec.ts`.
+
 **Where:** `question-form.ts:687` (`saveEdit`).
 
 **What goes wrong:**
@@ -111,6 +115,8 @@ A teacher who links a paper to an unsectioned question and types the topic "Basi
 **Fix (Nikko):** the root cause is copying the section name into `topic`. Stop doing that, or put a typed topic that equals a section name into that section's folder.
 
 ### 8. Low — the e2e fake doesn't match the database for question edits
+
+> **Partly fixed by Nikko (2026-09-27, `a7fcf76`):** the fake now clears grades like `invalidate_grades_for_question` and compares JSON by value. Still open: the update policy check and `UNIQUE(section_id, number)`. The flaky graded-papers test now waits for the third card and uses `.nth(2)`.
 
 **Where:** `tests/e2e/support/fake-backend.ts:435`.
 

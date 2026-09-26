@@ -32,3 +32,4 @@ One file per update, newest last. Each note says what changed, why, which files,
 | 2026-09-26 | [Page revision from a trigger; leftover page grades cleared](2026-09-26-revision-trigger-and-leftover-page-grade.md) | Jayrald | `4060749` |
 | 2026-09-27 | [Program 1 follows the page's code; a stale tab list can't delete tabs](2026-09-27-mirror-sync-and-stale-tabs.md) | Jayrald | `575474e`, `bcb0fea` |
 | 2026-09-27 | [Review of the pulled changes in Jayrald's files, and the save-reminder fix](2026-09-27-teammates-review.md) | Jayrald | `8c11129` |
+| 2026-09-27 | [Live test: renaming an older question keeps its grades](2026-09-27-live-rename-test.md) | Nikko | `a7fcf76`, `5577a7a`, this commit |

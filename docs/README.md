@@ -41,6 +41,9 @@ Nikko's phone and question-bank work, first built on `feature/question-linking-v
   section and number here to appear on the phone ([note](changes/2026-09-26-edit-questions.md)).
 - **Tested (2026-09-27):** 6 end-to-end browser tests for the question bank and
   editing; a code review's 8 fixes are in ([review note](changes/2026-09-27-code-review-fixes.md)).
+- **Fixed and tested live (2026-09-27):** editing a question saves only the
+  changed columns, so renaming an older question keeps its papers' grades
+  ([live test](changes/2026-09-27-live-rename-test.md)).
 - **Where to read:** one note per update in [`changes/`](changes/README.md),
   the dated sections in the [overview](PROJECT_OVERVIEW_AND_CHANGES.md), and
   Nikko's section of [TEAM_SYNC.md](TEAM_SYNC.md).

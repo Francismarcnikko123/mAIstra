@@ -374,7 +374,16 @@ npx playwright install chromium     # once per machine (about 95 MB browser)
 npm run e2e
 ```
 
-9/9 passed on `judge0-integration` on 2026-09-27.
+If `npx playwright install chromium` times out (it does on Nikko's network),
+run the tests in the installed Google Chrome instead. `PW_CHANNEL` is read by
+`playwright.config.ts`; without it the config uses Playwright's own browser.
+
+```bash
+PW_CHANNEL=chrome npm run e2e          # bash
+$env:PW_CHANNEL='chrome'; npm run e2e  # PowerShell
+```
+
+17/17 passed on `judge0-integration` on 2026-09-27 (local Chrome).
 
 ## Common local mistakes (not VM-related)
 

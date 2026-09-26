@@ -498,6 +498,7 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - **End-to-end test passed (2026-09-26)** against the live database: *Basic · Q1* created and validated on the web, picked and captured on the phone, submitted, filed in the **Basic** folder, linked on the question page; the row has `question_id`, `gate_result = PASS` and a `batch_id`. Not yet covered: a two-page submit, OCR on the new paper, editing older questions (Edit screen not built). [Note](changes/2026-09-26-end-to-end-test.md)
 - **Edit saved questions (2026-09-26):** *Edit* on the question page opens the form pre-filled (validation happens there); Save stays locked until validation passes; changing test cases on a graded question warns before its grades are cleared (Jayrald's trigger); an unsectioned question can be given a section and number, which puts older questions on the phone. Web 309/309; checked in the browser. [Note](changes/2026-09-26-edit-questions.md)
 - **E2E tests and code review (2026-09-26/27):** 6 Playwright tests for the bank, question page, editing and section folders (14/14 with Jayrald's). A code review found 10 issues; 8 fixed (safe upload retry with one `batch_id`, no endless capture spinner, recrop now auto-fixes and re-checks, no duplicate question after a number clash, graded-papers count includes `submission_programs`, save label covers Programs 2..n, live photo badges, no duplicate folder names), 1 passed to Jayrald/Nombrado, 1 deferred. Mobile 60/60, web 314/314. The capture pipeline re-checks an auto-fixed image once. [Review note](changes/2026-09-27-code-review-fixes.md), [e2e note](changes/2026-09-26-e2e-question-bank.md)
+- **Review fixes for question edits (2026-09-27):** the edit form saves only the columns that changed. Before, a plain rename rewrote `test_cases` without the old `mark` field that 20 of the 23 cloud questions still carry, and the database then cleared every linked grade with no warning. A retry after a failed "mark validated" no longer warns about grades already cleared. The e2e fake now clears grades like the database, and the flaky graded-papers test is fixed. A live test on the cloud confirmed both cases (rename keeps the grade; a changed test case warns, then clears it). Details: [review](reviews/2026-09-27-teammates-changes-review.md) #1, #5, #8, [live test](changes/2026-09-27-live-rename-test.md).
 - **Onto `judge0-integration` (2026-09-27):** Nikko's work is merged onto a branch from the team branch (`feature/nikko-edit-and-batch`); the Edit screen marks a question validated in a separate update because of Jayrald's `can_publish` reset trigger; the unused `cunning_document_scanner` package is removed. The landscape two-page check is planned after the Chapter III numbers are final. [Note](changes/2026-09-27-onto-judge0-integration.md)
 
 The Judge0 wrapper now converts outbound Judge0 connectivity failures into a
@@ -649,6 +650,9 @@ Chromium. Run them from `maistra_web`:
 npm run e2e                 # headless, starts its own dev server on port 4300
 npx playwright test --ui    # watch the browser step through each test
 ```
+
+Set `PW_CHANNEL=chrome` to use the installed Google Chrome when Playwright's
+own browser cannot be downloaded (see `docs/setup/RUNNING_LOCALLY.md`).
 
 `teacher-workflow.spec.ts` follows one submission through the whole teacher
 workflow without reloading the page:
