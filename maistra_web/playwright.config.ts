@@ -23,7 +23,9 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      // PW_CHANNEL=chrome runs the tests in the installed Google Chrome when
+      // `npx playwright install chromium` cannot download its own browser.
+      use: { ...devices['Desktop Chrome'], channel: process.env['PW_CHANNEL'] || undefined },
     },
   ],
   webServer: {

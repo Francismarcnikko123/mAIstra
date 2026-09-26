@@ -17,6 +17,7 @@ maistra_mobile/packages/edge_detection/ios/WeScan-3.0.0/Assets/WeScan.gif
 .env
 *.pyc
 __pycache__/
+.venv/
 .pytest_cache/
 
 # Local agent worktrees
