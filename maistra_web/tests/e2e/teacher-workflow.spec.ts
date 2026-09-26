@@ -193,10 +193,18 @@ test('teacher creates a question, then extracts, verifies and grades a new uploa
       // The OCR's own output is kept apart from the teacher's correction.
       extracted_text: program('a - b'),
       verified_text: program('a + b'),
-      passed_test_cases: 2,
-      total_test_cases: 2,
-      score_percent: 100,
     });
+    // The grade is stored on the paper's one program.
+    expect(backend.programsOf(NEW_SUBMISSION_ID)).toEqual([
+      expect.objectContaining({
+        position: 1,
+        question_id: backend.questions[0].id,
+        verified_text: program('a + b'),
+        passed_test_cases: 2,
+        total_test_cases: 2,
+        score_percent: 100,
+      }),
+    ]);
 
     await page.getByLabel('Status').selectOption({ label: 'Graded' });
     await page.getByPlaceholder('Search student, topic, or question').fill('maria');

@@ -42,6 +42,21 @@ export interface SubmissionRow {
   gate_result: string | null;
 }
 
+// One verified program on a paper (20260926000600_add_submission_programs).
+export interface ProgramRow {
+  id: string;
+  submission_id: string;
+  position: number;
+  question_id: string;
+  verified_text: string;
+  grading_results: unknown[];
+  passed_test_cases: number | null;
+  total_test_cases: number | null;
+  score_percent: number | null;
+  graded_at: string | null;
+  grading_revision: number;
+}
+
 export interface SectionRow {
   id: string;
   name: string;
@@ -114,6 +129,7 @@ export const compileError = (message: string): Judge0Result => ({
 export class FakeBackend {
   readonly questions: QuestionRow[] = [];
   readonly submissions = new Map<string, SubmissionRow>();
+  readonly programs: ProgramRow[] = [];
   readonly sections: SectionRow[] = [];
   readonly sectionItems: SectionItemRow[] = [];
   readonly requests: RecordedRequest[] = [];
@@ -128,12 +144,15 @@ export class FakeBackend {
   // Runs just before save_submission_grade, e.g. to simulate another teacher
   // editing the submission while grading is in flight.
   beforeGradeSave?: (submission: SubmissionRow) => void;
+  // Same, for save_program_grade.
+  beforeProgramGradeSave?: (program: ProgramRow) => void;
   ocr: OcrHandler = () => null;
 
   private socket?: WebSocketRoute;
   private realtimeBindings: RealtimeBinding[] = [];
   private nextQuestionNumber = 1;
   private nextSectionNumber = 1;
+  private nextProgramNumber = 1;
 
   // True once the page's submissions channel has joined, so pushed changes
   // will reach it.
@@ -174,6 +193,53 @@ export class FakeBackend {
       ...submission,
     };
     this.submissions.set(row.id, row);
+    // Like the migration's copy step: verified code with a question is
+    // Program 1, keeping any grade the page already has.
+    if (row.question_id && row.verified_text?.trim()) {
+      this.addProgram(row.id, 1, row.question_id, row.verified_text, {
+        grading_results: row.grading_results ?? [],
+        passed_test_cases: row.passed_test_cases,
+        total_test_cases: row.total_test_cases,
+        score_percent: row.score_percent,
+        graded_at: row.graded_at,
+      });
+    }
+    return row;
+  }
+
+  // Program 2+ on a paper, as the review's program tabs save it.
+  addExtraProgram(submissionId: string, position: number, questionId: string, code: string) {
+    return this.addProgram(submissionId, position, questionId, code);
+  }
+
+  programsOf(submissionId: string): ProgramRow[] {
+    return this.programs
+      .filter((program) => program.submission_id === submissionId)
+      .sort((a, b) => a.position - b.position);
+  }
+
+  private addProgram(
+    submissionId: string,
+    position: number,
+    questionId: string,
+    code: string,
+    grade: Partial<ProgramRow> = {},
+  ) {
+    const row: ProgramRow = {
+      id: `00000000-0000-4000-a000-${String(this.nextProgramNumber++).padStart(12, '0')}`,
+      submission_id: submissionId,
+      position,
+      question_id: questionId,
+      verified_text: code,
+      grading_results: [],
+      passed_test_cases: null,
+      total_test_cases: null,
+      score_percent: null,
+      graded_at: null,
+      grading_revision: 0,
+      ...grade,
+    };
+    this.programs.push(row);
     return row;
   }
 
@@ -345,6 +411,12 @@ export class FakeBackend {
     if (method === 'POST' && path === '/rest/v1/rpc/save_submission_grade') {
       return this.saveGrade(route, request.postDataJSON());
     }
+    if (method === 'POST' && path === '/rest/v1/rpc/save_submission_programs') {
+      return this.savePrograms(route, request.postDataJSON());
+    }
+    if (method === 'POST' && path === '/rest/v1/rpc/save_program_grade') {
+      return this.saveProgramGrade(route, request.postDataJSON());
+    }
     if (method === 'GET' && path === '/rest/v1/question_sections') {
       const rows = [...this.sections].sort(
         (a, b) => a.position - b.position || a.name.localeCompare(b.name),
@@ -380,6 +452,7 @@ export class FakeBackend {
     const question = this.questions.find((item) => item.id === row.question_id);
     return {
       ...row,
+      submission_programs: this.programsOf(row.id).map(({ submission_id: _page, ...program }) => program),
       questions: question
         ? {
             id: question.id,
@@ -433,6 +506,99 @@ export class FakeBackend {
     });
     row.grading_revision += 1;
     return this.json(route, row.grading_revision);
+  }
+
+  // Mirrors public.save_submission_programs: guarded by the page's revision;
+  // Program 1 is mirrored to the page row; programs are updated in place (a
+  // changed one loses its grade); removed or emptied ones are deleted; the
+  // page is graded only when every program is.
+  private savePrograms(route: Route, params: Record<string, any>) {
+    const page = this.submissions.get(params['p_submission_id']);
+    if (!page || page.grading_revision !== Number(params['p_grading_revision'])) {
+      return this.json(route, null);
+    }
+    const wanted = (params['p_programs'] as Array<{ verified_text: string; question_id?: string }>).map(
+      (entry, index) => ({
+        position: index + 1,
+        question_id: (index === 0 ? entry.question_id || page.question_id : entry.question_id) ?? null,
+        verified_text: entry.verified_text ?? '',
+      }),
+    );
+
+    // The page row, as the submissions triggers treat it.
+    const first = wanted[0];
+    const inputsChanged =
+      page.verified_text !== first.verified_text || page.question_id !== first.question_id;
+    page.verified_text = first.verified_text;
+    page.question_id = first.question_id;
+    if (params['p_extracted_text'] !== null && params['p_extracted_text'] !== undefined) {
+      page.extracted_text = params['p_extracted_text'];
+    }
+    if (inputsChanged) {
+      page.grading_revision += 1;
+      Object.assign(page, { grading_results: [], passed_test_cases: null, total_test_cases: null, score_percent: null, graded_at: null });
+    }
+    page.status = inputsChanged || page.status !== 'graded' ? 'verified' : page.status;
+
+    const storable = (entry: (typeof wanted)[number]) =>
+      entry.verified_text.trim() !== '' && !!entry.question_id;
+    for (const entry of wanted.filter(storable)) {
+      const existing = this.programsOf(page.id).find((program) => program.position === entry.position);
+      if (!existing) {
+        this.addProgram(page.id, entry.position, entry.question_id!, entry.verified_text);
+      } else if (existing.verified_text !== entry.verified_text || existing.question_id !== entry.question_id) {
+        Object.assign(existing, {
+          question_id: entry.question_id,
+          verified_text: entry.verified_text,
+          grading_results: [],
+          passed_test_cases: null,
+          total_test_cases: null,
+          score_percent: null,
+          graded_at: null,
+          grading_revision: existing.grading_revision + 1,
+        });
+      }
+    }
+    const replaceAll = params['p_replace_all'] !== false;
+    for (const program of this.programsOf(page.id)) {
+      const entry = wanted.find((item) => item.position === program.position);
+      if ((entry && !storable(entry)) || (!entry && replaceAll)) {
+        this.programs.splice(this.programs.indexOf(program), 1);
+      }
+    }
+    this.syncPageStatus(page);
+    return this.json(route, page.grading_revision);
+  }
+
+  // Mirrors public.save_program_grade.
+  private saveProgramGrade(route: Route, params: Record<string, any>) {
+    const program = this.programs.find((item) => item.id === params['p_program_id']);
+    if (program) this.beforeProgramGradeSave?.(program);
+    const matches =
+      !!program &&
+      program.grading_revision === Number(params['p_grading_revision']) &&
+      program.question_id === params['p_question_id'] &&
+      program.verified_text === params['p_graded_code'];
+    if (!program || !matches) return this.json(route, null);
+
+    const results = params['p_grading_results'] as Array<{ passed: boolean }>;
+    const passed = results.filter((result) => result.passed).length;
+    Object.assign(program, {
+      grading_results: results,
+      passed_test_cases: passed,
+      total_test_cases: results.length,
+      score_percent: results.length ? Number(((passed / results.length) * 100).toFixed(2)) : null,
+      graded_at: new Date().toISOString(),
+      grading_revision: program.grading_revision + 1,
+    });
+    this.syncPageStatus(this.submissions.get(program.submission_id)!);
+    return this.json(route, program.grading_revision);
+  }
+
+  private syncPageStatus(page: SubmissionRow) {
+    if (page.status !== 'verified' && page.status !== 'graded') return;
+    const programs = this.programsOf(page.id);
+    page.status = programs.length && programs.every((program) => program.graded_at) ? 'graded' : 'verified';
   }
 
   // ── Judge0 wrapper ───────────────────────────────────────

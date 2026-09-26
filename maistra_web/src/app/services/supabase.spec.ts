@@ -56,7 +56,8 @@ describe('SupabaseService', () => {
     expect(from).toHaveBeenLastCalledWith('submissions');
     expect(query.select).toHaveBeenLastCalledWith(listColumns);
     expect(query.eq).toHaveBeenCalledWith('id', 'submission-1');
-    expect(result.data).toEqual({ id: 'submission-1' });
+    // Programs 2..n are added as `answers` (see supabase.answers.spec.ts).
+    expect(result.data).toMatchObject({ id: 'submission-1', answers: [] });
   });
 
   function updateService(result: { data: unknown; error: unknown }) {
@@ -73,6 +74,10 @@ describe('SupabaseService', () => {
     (service as unknown as { supabase: { from: typeof from } }).supabase = {
       from,
     };
+    // Code saves update the page row directly only before the
+    // submission_programs table exists; with it they go through
+    // save_submission_programs() (supabase.answers.spec.ts).
+    service.answersColumnAvailable = false;
     return { service, query, update, from };
   }
 

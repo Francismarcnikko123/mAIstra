@@ -28,6 +28,65 @@ const SUBMISSION_COLUMNS = `
   )
 `;
 
+// Every verified program on a paper (20260926000600_add_submission_programs).
+const PROGRAM_COLUMNS = `
+  submission_programs (
+    id,
+    position,
+    question_id,
+    verified_text,
+    grading_results,
+    passed_test_cases,
+    total_test_cases,
+    score_percent,
+    graded_at,
+    grading_revision
+  )
+`;
+
+/** One teacher-verified program on a paper, with its own question and grade. */
+export interface SubmissionProgramRow {
+  id: string;
+  position: number;
+  question_id: string;
+  verified_text: string;
+  grading_results: unknown[];
+  passed_test_cases: number | null;
+  total_test_cases: number | null;
+  score_percent: number | null;
+  graded_at: string | null;
+  grading_revision: number;
+}
+
+type WithPrograms = {
+  submission_programs?: Array<
+    Pick<SubmissionProgramRow, 'position' | 'question_id' | 'verified_text'>
+  > | null;
+};
+
+/**
+ * Sorts a paper's programs by tab and adds `answers` (Programs 2..n as
+ * { code, question_id }), the shape the review screen and the question bank
+ * already read, so they need no change for the programs table.
+ */
+function withAnswers<T extends WithPrograms>(row: T): T & { answers: SubmissionAnswer[] } {
+  const programs = [...(row.submission_programs ?? [])].sort(
+    (a, b) => a.position - b.position,
+  );
+  return {
+    ...row,
+    submission_programs: programs,
+    answers: programs
+      .filter((program) => program.position > 1)
+      .map((program) => ({ code: program.verified_text, question_id: program.question_id })),
+  };
+}
+
+/** The error PostgREST returns while the submission_programs table is missing. */
+function isProgramsTableMissing(error: { code?: string; message?: string } | null): boolean {
+  return error?.code === 'PGRST200' && /submission_programs/.test(error.message ?? '');
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -95,16 +154,19 @@ async saveQuestion(question: any) {
 
   /**
    * Which questions each paper is linked to, for the bank's paper counts and
-   * the question page's linked papers. Falls back to Program 1 only while
-   * submissions.answers is missing.
+   * the question page's linked papers. Programs 2..n come back as `answers`;
+   * falls back to Program 1 only while the submission_programs table is
+   * missing. (Jayrald: switched from the answers column on 2026-09-26.)
    */
   async getQuestionPaperLinks() {
     const columns = 'id, image_url, captured_at, status, question_id';
-    const withAnswers = await this.supabase
+    const withPrograms = await this.supabase
       .from('submissions')
-      .select(`${columns}, answers`)
+      .select(`${columns}, submission_programs (position, question_id, verified_text)`)
       .order('captured_at', { ascending: false });
-    if (withAnswers.error?.code !== '42703') return withAnswers;
+    if (!isProgramsTableMissing(withPrograms.error)) {
+      return { ...withPrograms, data: withPrograms.data?.map(withAnswers) ?? null };
+    }
     return await this.supabase
       .from('submissions')
       .select(columns)
@@ -131,21 +193,22 @@ async saveQuestion(question: any) {
 
   // ── SUBMISSIONS ─────────────────────────────────────────
   /**
-   * False once the database reports that submissions.answers doesn't exist,
-   * i.e. the program-tabs migration hasn't been applied to it yet. The list
-   * still loads without the column; Programs 2..n just can't be saved.
+   * False once the database reports that the submission_programs table
+   * doesn't exist, i.e. its migration hasn't been applied there yet. The list
+   * still loads without it; Programs 2..n just can't be saved, and grading
+   * falls back to Program 1 on the page row. (The name is from the earlier
+   * `answers` column; the review screen reads it.)
    */
   answersColumnAvailable = true;
 
   async getSubmissions() {
     if (this.answersColumnAvailable !== false) {
-      const result = await this.querySubmissions(`answers, ${SUBMISSION_COLUMNS}`);
-      // 42703 = undefined column. Only fall back when it's `answers` that is
-      // missing (migration not applied); any other missing column is a real
-      // error and is returned as before.
-      const answersMissing =
-        result.error?.code === '42703' && /\banswers\b/.test(result.error.message ?? '');
-      if (!answersMissing) return result;
+      const result = await this.querySubmissions(`${SUBMISSION_COLUMNS}, ${PROGRAM_COLUMNS}`);
+      // Only fall back when it's the programs table that is missing; any
+      // other error is returned as before.
+      if (!isProgramsTableMissing(result.error)) {
+        return { ...result, data: (result.data as WithPrograms[] | null)?.map(withAnswers) ?? null };
+      }
       this.answersColumnAvailable = false;
     }
     return this.querySubmissions(SUBMISSION_COLUMNS);
@@ -158,9 +221,18 @@ async saveQuestion(question: any) {
    * was loaded.
    */
   async getSubmission(id: string) {
-    const columns: string =
-      this.answersColumnAvailable !== false ? `answers, ${SUBMISSION_COLUMNS}` : SUBMISSION_COLUMNS;
-    return this.supabase.from('submissions').select(columns).eq('id', id).maybeSingle();
+    if (this.answersColumnAvailable !== false) {
+      const result = await this.supabase
+        .from('submissions')
+        .select(`${SUBMISSION_COLUMNS}, ${PROGRAM_COLUMNS}`)
+        .eq('id', id)
+        .maybeSingle();
+      if (!isProgramsTableMissing(result.error)) {
+        return { ...result, data: result.data ? withAnswers(result.data as WithPrograms) : null };
+      }
+      this.answersColumnAvailable = false;
+    }
+    return this.supabase.from('submissions').select(SUBMISSION_COLUMNS).eq('id', id).maybeSingle();
   }
 
   private querySubmissions(columns: string) {
@@ -201,6 +273,29 @@ async saveQuestion(question: any) {
     // extracted_text must keep the OCR's own output (it is the baseline the
     // verified text is compared against), so it is only written when a fresh
     // extraction produced it — never overwritten with the teacher's edits.
+    if (this.answersColumnAvailable !== false) {
+      // Every program of the paper in one call, under the page's revision
+      // guard. Program 1's question comes from the page (Details step).
+      // Without `answers` (a paper with no tabs) only Program 1 is written
+      // and Programs 2..n stay exactly as they were.
+      const { data, error } = await this.supabase.rpc('save_submission_programs', {
+        p_submission_id: submissionId,
+        p_grading_revision: expectedRevision,
+        p_programs: [
+          { verified_text: verifiedText },
+          ...(answers ?? []).map((answer) => ({
+            verified_text: answer.code,
+            question_id: answer.question_id,
+          })),
+        ],
+        p_extracted_text: extractedText ?? null,
+        p_replace_all: answers !== undefined,
+      });
+      if (error) throw error;
+      return data === null || data === undefined ? null : Number(data);
+    }
+
+    // Before the programs table exists: Program 1 on the page row only.
     const update: Record<string, unknown> = {
       verified_text: verifiedText,
       status: 'verified',
@@ -208,11 +303,6 @@ async saveQuestion(question: any) {
     };
     if (extractedText !== undefined) {
       update['extracted_text'] = extractedText;
-    }
-    // Programs 2..n from the review tabs, saved in the same update so they
-    // share Program 1's save guards, including the revision check.
-    if (answers !== undefined && this.answersColumnAvailable !== false) {
-      update['answers'] = answers;
     }
     const { data, error } = await this.supabase
       .from('submissions')
@@ -237,6 +327,29 @@ async saveQuestion(question: any) {
     // the pass counts from the results. Returns null when anything differs.
     const { data, error } = await this.supabase.rpc('save_submission_grade', {
       p_submission_id: submissionId,
+      p_grading_revision: gradingRevision,
+      p_question_id: questionId,
+      p_graded_code: gradedCode,
+      p_grading_results: results,
+    });
+    if (error) throw error;
+    return data === null || data === undefined ? null : Number(data);
+  }
+
+  /**
+   * One program's grade, written by the database only while the program's
+   * revision, question and stored code all still match (same compare-and-set
+   * as updateSubmissionGrade). Returns the program's new revision, or null.
+   */
+  async saveProgramGrade(
+    programId: string,
+    gradingRevision: number,
+    questionId: string,
+    gradedCode: string,
+    results: ReadonlyArray<{ passed: boolean }>,
+  ): Promise<number | null> {
+    const { data, error } = await this.supabase.rpc('save_program_grade', {
+      p_program_id: programId,
       p_grading_revision: gradingRevision,
       p_question_id: questionId,
       p_graded_code: gradedCode,
