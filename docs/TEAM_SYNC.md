@@ -33,6 +33,13 @@ A short, shared record of **what each of us changed that affects the others**, *
 ## Nombrado (OCR, review editor)
 
 ### Status
+- (2026-09-26, evening) **Review/Save work is complete; what happens next, in order:**
+  1. **Nombrado:** merge `feature/review-save-followups` (Save-label follow-ups, `a2d39a3`) into `judge0-integration` and push. Checks: web 306/306, TypeScript clean, `ng build` OK. Playwright not run locally (package not installed here); Jayrald's run was 8/8.
+  2. **Nikko (next):** set `submissions.batch_id` on upload (Jayrald's request, the main open item), answer the `docs/` `.gitignore` question, tick the superseded lines, and answer the landscape two-page question. See Nikko's To do.
+  3. **Nombrado (later, no one waits on it):** the OCR training export (`export_dataset.py`, teacher-verified papers from Supabase) reads every program from `submission_programs`, each block aligned to its own lines; then I note it here. It does **not** need the bond / yellow batch (that comes in through `import_verified_batch.py`); timing is my choice.
+  4. **Jayrald:** after step 3, decide whether to drop the Program 1 mirror on `submissions` (his call). After step 2, anything he wants for grouping pages by `batch_id`.
+  5. **Nombrado (whenever the papers arrive):** import the bond / yellow pad datasets (`NEXT_STEPS.md`).
+  - **Everyone works on `judge0-integration`.** `feature/pre-extraction` is retired.
 - (2026-09-26) **Save next to the program tabs** is done on `feature/program-tabs-save` and merged into `feature/pre-extraction`. Web tests 121/121, TypeScript checks and `ng build` pass (existing CSS budget warning only). No OCR, schema or grading change. Full handoff under **Changed (affects others)** below; what each of you needs to do is in **your own To do**.
 - (2026-09-24) **Integration checkpoint:** `feature/pre-extraction` is pushed and includes `feature/program-tabs` via merge commit `d9df182`. Both remain outside `main`. The worker/list badge live checks passed, including server-off **Needs OCR** and restart catch-up. Nikko owns sending the mobile `question_id` for Program 1; Jayrald owns the cloud schema and migrations needed for the complete new question-linking flow. The OCR worker can be tested independently on new papers.
 - (2026-09-24) **OCR:** waiting on the new bond paper and yellow pad datasets. No OCR code change is pending.
@@ -212,6 +219,7 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 ## Nikko (mobile capture, question bank)
 
 ### To do (requested by teammates; please update this section when done)
+- [ ] (2026-09-26, evening, from Nombrado) **You're next. Suggested order:** (1) Jayrald's `batch_id` line below (the main open item; one uuid per submit, shared by its pages); (2) his `docs/` `.gitignore` question; (3) tick my superseded `answers` lines and the Sep 24 "Make questions identifiable" item if your sections/numbers cover it; (4) **question:** your old `feature/document-scanner` has a landscape two-page check (`e9ac574`, `2e65eff`) that never merged. We agreed two-page spreads should be rejected at the quality gate. Is that check in the current gate on `judge0-integration`? If not, is it planned?
 - [ ] (2026-09-26, from Nombrado) Supersedes my two earlier 2026-09-26 lines below. `answers` is gone and Programs 2+ live in `submission_programs` (Jayrald's migration, live in the cloud). Your phone flow is unchanged, and Jayrald's `getQuestionPaperLinks()` already reads the new table, so there's nothing to do for these; you can tick both.
 - [ ] (2026-09-26, from Jayrald) **Set `submissions.batch_id` on upload** (column live in the cloud since `20260926000500`, on `judge0-integration`). In `SubmissionUploader.submit()`, make one uuid per submit and send it as `batch_id` with every page's insert. Insert only; pages keep one row each.
 - [ ] (2026-09-26, from Jayrald) **`docs/` in `.gitignore`**: intended for everyone? It came in with `feature/question-linking-v2`. Tracked docs are unaffected, but new notes need `git add -f`. If it was meant for personal notes only, a narrower pattern would avoid that.
