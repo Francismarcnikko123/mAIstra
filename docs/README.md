@@ -1,5 +1,27 @@
 # mAIstra — Project docs
 
+## Question linking — 2026-09-26 (Nikko; read with the blocks below)
+
+Branch **`feature/question-linking-v2`** combines the quality gate, the program
+tabs, pre-extraction and the Save button (latest `feature/pre-extraction`),
+Nikko's question linking, and Jayrald's `judge0-integration`. `ocr_feature/`
+and `AGENTS.md` are identical to `feature/pre-extraction`.
+
+- **Phone:** the student picks a validated, sectioned question before capture;
+  every page is uploaded with `question_id` (Program 1's question) and the
+  quality gate's `gate_result`, with `status: 'pending'` and the OCR fields empty.
+- **Web:** top bar with *Question bank* and *Submissions*; questions have a
+  section and a number (`Basic · Q2 · Sum of two numbers`); the form saves only
+  after validation passes; submission folders follow the question's section.
+- **Waiting on Jayrald's schema:** `question_sections` / `question_section_items`
+  (`supabase/migrations/20260926000100_add_question_sections.sql`),
+  `questions.can_publish`, `submissions.gate_result`, UPDATE on `questions`.
+  Until then the phone shows "Could not load questions" and folders stay
+  "Uncategorized".
+- **Where to read:** one note per update in [`changes/`](changes/README.md),
+  the dated sections in the [overview](PROJECT_OVERVIEW_AND_CHANGES.md), and
+  Nikko's section of [TEAM_SYNC.md](TEAM_SYNC.md).
+
 ## Web update — 2026-09-26 (read with the block below)
 
 Review Code (Step 2) has a **Save** button next to the program tabs (and

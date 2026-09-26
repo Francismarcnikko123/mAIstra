@@ -206,6 +206,7 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 - (2026-09-24) **Mobile inserts into `submissions` now always set `question_id` and `gate_result`** (`'PASS' | 'FIXABLE' | 'RETAKE'`; a page the gate auto-corrected is stored as `FIXABLE`). RETAKE pages can't be uploaded. Each page is still one row.
 
 ### Needs from others
+- (2026-09-26) **Nombrado:** your `docs/web/WEB_CODEBASE_GUIDE.md` sections 3.3 (save status) and 4.2 (`updateSubmissionText`) predate the v2 merge: saves now pass Jayrald's `expectedRevision` before `answers` and return the new revision, and `saveStatusLabel()` also shows a conflict. It's your guide, so I haven't edited it.
 - (2026-09-26) **Nombrado:** please OK or redo, your way, the two changes in your code listed under Changed: the `readOnly` input in `code-editor.ts` (Jayrald's Judge0 panel needs it) and the conflict / unsaved cases in `saveStatusLabel()`.
 - (2026-09-26) **Jayrald:** v2 keeps Nombrado's `ocr_feature/main.py` (`allow_origins=["*"]`, `allow_credentials=False`). If you need an origin allowlist, ask Nombrado; it's his folder.
 - (2026-09-26) **Jayrald:** also `can_publish` + INSERT grant on `questions`, and UPDATE on `questions` for editing saved questions (details in your To do).
