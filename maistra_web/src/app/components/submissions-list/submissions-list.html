@@ -254,62 +254,85 @@
             </div>
 
             <ng-container *ngIf="hasExtractedText(selectedSubmission.id)">
-              <div class="program-tabs" role="tablist" aria-label="Programs on this paper" #tabList>
-                <button
-                  type="button"
-                  role="tab"
-                  class="program-tab"
-                  [class.active]="activeTab === 0"
-                  [attr.aria-selected]="activeTab === 0"
-                  (click)="selectTab(0)"
-                  (keydown.arrowright)="moveTab(1, $event)"
-                  (keydown.arrowleft)="moveTab(-1, $event)"
-                >
-                  <span class="program-tab-dot" *ngIf="isProgram1Unsaved(selectedSubmission.id)" title="Unsaved changes" aria-label="Unsaved changes"></span>
-                  <span class="program-tab-label">
-                    <strong>Program 1</strong> · {{ getQuestionName(selectedSubmission) }}
-                  </span>
-                </button>
-
-                <div
-                  *ngFor="let answer of getExtraAnswers(selectedSubmission.id); let i = index; trackBy: trackByIndex"
-                  role="tab"
-                  tabindex="0"
-                  class="program-tab"
-                  [class.active]="activeTab === i + 1"
-                  [attr.aria-selected]="activeTab === i + 1"
-                  (click)="selectTab(i + 1)"
-                  (keydown.enter)="selectTab(i + 1)"
-                  (keydown.arrowright)="moveTab(1, $event)"
-                  (keydown.arrowleft)="moveTab(-1, $event)"
-                >
-                  <span class="program-tab-dot" *ngIf="isExtraAnswerUnsaved(selectedSubmission.id, answer)" title="Unsaved changes" aria-label="Unsaved changes"></span>
-                  <span class="program-tab-label">
-                    <strong>Program {{ i + 2 }}</strong>
-                    <ng-container *ngIf="answer.question_id"> · {{ getQuestionTitle(answer.question_id) }}</ng-container>
-                  </span>
-                  <span class="program-tab-warn" *ngIf="!answer.question_id" title="No question linked yet" aria-label="No question linked yet">!</span>
+              <div class="program-tabs-bar">
+                <div class="program-tabs" role="tablist" aria-label="Programs on this paper" #tabList>
                   <button
                     type="button"
-                    class="program-tab-close"
-                    [class.armed]="removeConfirmIndex === i"
-                    [attr.aria-label]="'Remove program ' + (i + 2)"
-                    title="Remove program"
-                    (click)="$event.stopPropagation(); requestRemoveExtraAnswer(i)"
+                    role="tab"
+                    class="program-tab"
+                    [class.active]="activeTab === 0"
+                    [attr.aria-selected]="activeTab === 0"
+                    (click)="selectTab(0)"
+                    (keydown.arrowright)="moveTab(1, $event)"
+                    (keydown.arrowleft)="moveTab(-1, $event)"
                   >
-                    {{ removeConfirmIndex === i ? 'Remove?' : '×' }}
+                    <span class="program-tab-dot" *ngIf="isProgram1Unsaved(selectedSubmission.id)" title="Unsaved changes" aria-label="Unsaved changes"></span>
+                    <span class="program-tab-label">
+                      <strong>Program 1</strong> · {{ getQuestionName(selectedSubmission) }}
+                    </span>
+                  </button>
+
+                  <div
+                    *ngFor="let answer of getExtraAnswers(selectedSubmission.id); let i = index; trackBy: trackByIndex"
+                    role="tab"
+                    tabindex="0"
+                    class="program-tab"
+                    [class.active]="activeTab === i + 1"
+                    [attr.aria-selected]="activeTab === i + 1"
+                    (click)="selectTab(i + 1)"
+                    (keydown.enter)="selectTab(i + 1)"
+                    (keydown.arrowright)="moveTab(1, $event)"
+                    (keydown.arrowleft)="moveTab(-1, $event)"
+                  >
+                    <span class="program-tab-dot" *ngIf="isExtraAnswerUnsaved(selectedSubmission.id, answer)" title="Unsaved changes" aria-label="Unsaved changes"></span>
+                    <span class="program-tab-label">
+                      <strong>Program {{ i + 2 }}</strong>
+                      <ng-container *ngIf="answer.question_id"> · {{ getQuestionTitle(answer.question_id) }}</ng-container>
+                    </span>
+                    <span class="program-tab-warn" *ngIf="!answer.question_id" title="No question linked yet" aria-label="No question linked yet">!</span>
+                    <button
+                      type="button"
+                      class="program-tab-close"
+                      [class.armed]="removeConfirmIndex === i"
+                      [attr.aria-label]="'Remove program ' + (i + 2)"
+                      title="Remove program"
+                      (click)="$event.stopPropagation(); requestRemoveExtraAnswer(i)"
+                    >
+                      {{ removeConfirmIndex === i ? 'Remove?' : '×' }}
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="program-tab-add"
+                    aria-label="Add program"
+                    title="Add another program from this paper"
+                    (click)="addExtraAnswer()"
+                  >
+                    +
                   </button>
                 </div>
 
-                <button
-                  type="button"
-                  class="program-tab-add"
-                  aria-label="Add program"
-                  title="Add another program from this paper"
-                  (click)="addExtraAnswer()"
-                >
-                  +
-                </button>
+                <!-- Saves every tab of this paper in one update and stays on this step. -->
+                <div class="program-save">
+                  <span
+                    class="program-save-status"
+                    *ngIf="saveStatus[selectedSubmission.id]"
+                    [class.error]="saveStatus[selectedSubmission.id] === 'error'"
+                    role="status"
+                  >
+                    {{ saveStatus[selectedSubmission.id] === 'saved' ? '✓ All programs saved' : 'Save failed, try again' }}
+                  </span>
+                  <button
+                    type="button"
+                    class="program-save-button"
+                    title="Save every program on this paper (Ctrl/Cmd+S)"
+                    [disabled]="isSaving(selectedSubmission.id)"
+                    (click)="saveVerifiedText()"
+                  >
+                    {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save' }}
+                  </button>
+                </div>
               </div>
 
               <div class="program-panel" role="tabpanel">
@@ -435,9 +458,6 @@
             <p class="extract-error" *ngIf="extractionError[selectedSubmission.id]">
               {{ extractionError[selectedSubmission.id] }}
             </p>
-            <p class="save-status" *ngIf="saveStatus[selectedSubmission.id]" [ngClass]="saveStatus[selectedSubmission.id]">
-              {{ saveStatus[selectedSubmission.id] === 'saved' ? '✓ Verified code saved' : '✕ Save failed—please try again' }}
-            </p>
           </div>
         </div>
       </ng-container>
@@ -507,7 +527,7 @@
         (click)="saveCodeAndContinue()"
         [disabled]="!hasExtractedText(selectedSubmission.id) || isSaving(selectedSubmission.id) || !canOpenGradingStep()"
       >
-        {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Save and continue to grading' }}
+        {{ isSaving(selectedSubmission.id) ? 'Saving…' : 'Continue to grading' }}
       </button>
 
       <button *ngIf="reviewStep === 3" type="button" class="btn-primary" (click)="requestCloseModal()">
@@ -559,13 +579,12 @@
   >
     <h3 id="close-confirm-title" class="confirm-title">Some programs aren't saved yet</h3>
     <p class="confirm-body">
-      Changes on this paper aren't in the database. Save them, or discard them
-      and go back to what was last saved.
+      Changes on this paper aren't in the database yet. Go back and press Save
+      next to the tabs, or discard them and return to what was last saved.
     </p>
     <div class="confirm-actions">
-      <button type="button" class="btn-secondary" (click)="keepEditing()">Keep editing</button>
       <button type="button" class="btn-danger" (click)="discardChangesAndClose()">Discard changes</button>
-      <button type="button" class="btn-primary" (click)="saveAndClose()">Save and close</button>
+      <button type="button" class="btn-primary" (click)="keepEditing()">Keep editing</button>
     </div>
   </div>
 </div>

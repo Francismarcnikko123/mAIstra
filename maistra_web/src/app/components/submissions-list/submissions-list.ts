@@ -4,6 +4,7 @@ import {
   OnDestroy,
   ChangeDetectorRef,
   ElementRef,
+  HostListener,
   QueryList,
   ViewChild,
   ViewChildren,
@@ -384,17 +385,20 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.closeModal();
   }
 
-  /** Save with the usual rules; close only if the save went through. */
-  async saveAndClose() {
-    this.closeConfirmOpen = false;
-    const id = this.selectedSubmission?.id;
-    await this.saveVerifiedText();
-    if (id && this.saveStatus[id] === 'saved') {
-      this.closeModal();
-    } else if (this.selectedSubmission) {
-      // Show the reason (a save rule or a failed save) where the tabs are.
-      this.reviewStep = 2;
-    }
+  /**
+   * Cmd/Ctrl+S on the Code step does what the Save button next to the tabs
+   * does (save every program, stay on the step) and keeps the browser's own
+   * "save page" dialog from opening.
+   */
+  @HostListener('document:keydown', ['$event'])
+  onSaveShortcut(event: KeyboardEvent) {
+    if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 's') return;
+    if (!this.selectedSubmission || this.reviewStep !== 2 || this.closeConfirmOpen) return;
+    event.preventDefault();
+    // Same conditions as the Save button: it only exists once there is code
+    // to save, so an unextracted paper is never saved as empty verified code.
+    const id = this.selectedSubmission.id;
+    if (this.hasExtractedText(id) && !this.isSaving(id)) void this.saveVerifiedText();
   }
 
   setReviewStep(step: ReviewStep) {
@@ -406,7 +410,12 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (!this.selectedQuestionId) return;
 
     const saved = await this.saveSubmissionDetails();
-    if (saved) this.reviewStep = 2;
+    if (saved) {
+      this.reviewStep = 2;
+      // Set after an await, so the zoneless app will not re-render on its own
+      // (same fix as Jayrald's 8e20fd5 on judge0-integration).
+      this.cdr.detectChanges();
+    }
   }
 
   async saveCodeAndContinue() {
@@ -415,6 +424,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     await this.saveVerifiedText();
     if (this.selectedSubmission && this.saveStatus[this.selectedSubmission.id] === 'saved') {
       this.reviewStep = 3;
+      this.cdr.detectChanges();
     }
   }
 
