@@ -1,4 +1,5 @@
 import { test as base, expect, type Locator, type Page } from '@playwright/test';
+import { submissionCard } from './support/cards';
 import { FakeBackend } from './support/fake-backend';
 import {
   SUM_TEST_CASES,
@@ -13,6 +14,9 @@ import {
 
 const QUESTION_ID = '11111111-1111-4111-8111-111111111111';
 const SUBMISSION_ID = '22222222-2222-4222-8222-222222222222';
+const CAPTURED_AT = '2026-09-20T08:30:00Z';
+// How the list shows CAPTURED_AT (tests run in UTC).
+const CARD_TIME = 'Sep 20 · 08:30';
 
 const test = base.extend<{ backend: FakeBackend }>({
   backend: async ({ page }, use) => {
@@ -31,9 +35,11 @@ const test = base.extend<{ backend: FakeBackend }>({
   },
 });
 
+// Opens the submission captured at CAPTURED_AT; its dialog is titled with the
+// student's name.
 async function openSubmission(page: Page, studentName: string): Promise<Locator> {
   await page.goto('/');
-  await page.getByRole('button', { name: new RegExp(studentName) }).click();
+  await submissionCard(page, CARD_TIME).click();
   const dialog = page.getByRole('dialog', { name: studentName });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -46,6 +52,7 @@ test('teacher assigns a question, fixes the OCR code and grades it', async ({
   // OCR misread the student's `+` as `-`.
   backend.addSubmission({
     id: SUBMISSION_ID,
+    captured_at: CAPTURED_AT,
     student_name: 'Maria Santos',
     topic: 'Loops',
     status: 'extracted',
@@ -63,7 +70,7 @@ test('teacher assigns a question, fixes the OCR code and grades it', async ({
   // Step 2: the OCR result is editable; fix the misread operator and save.
   await expect(dialog.getByRole('heading', { name: 'Review extracted code' })).toBeVisible();
   await replaceEditorCode(dialog.locator('app-code-editor'), program('a + b'));
-  await dialog.getByRole('button', { name: 'Save and continue to grading' }).click();
+  await dialog.getByRole('button', { name: 'Continue to grading' }).click();
 
   // Step 3: a sample run checks only the first test case.
   await expect(dialog.getByRole('heading', { name: 'Run and grade' })).toBeVisible();
@@ -83,22 +90,29 @@ test('teacher assigns a question, fixes the OCR code and grades it', async ({
     { source_code: `#include <stdio.h>\n\n${program('a + b')}`, stdin: '2 3' },
   ]);
 
-  // The grade was stored against the verified code, and the OCR text was kept.
-  const stored = backend.submissions.get(SUBMISSION_ID)!;
-  expect(stored).toMatchObject({
+  // The grade was stored on the program, against the verified code, and the
+  // OCR text was kept on the page.
+  expect(backend.submissions.get(SUBMISSION_ID)).toMatchObject({
     status: 'graded',
     question_id: QUESTION_ID,
     extracted_text: program('a - b'),
     verified_text: program('a + b'),
-    passed_test_cases: 2,
-    total_test_cases: 2,
-    score_percent: 100,
   });
+  expect(backend.programsOf(SUBMISSION_ID)).toEqual([
+    expect.objectContaining({
+      position: 1,
+      question_id: QUESTION_ID,
+      verified_text: program('a + b'),
+      passed_test_cases: 2,
+      total_test_cases: 2,
+      score_percent: 100,
+    }),
+  ]);
 
   // The list reflects the grade once the review is closed.
   await dialog.getByRole('button', { name: 'Finish review' }).click();
   await expect(dialog).toBeHidden();
-  const card = page.getByRole('button', { name: /Maria Santos/ });
+  const card = submissionCard(page, CARD_TIME);
   await expect(card).toContainText('Graded');
   await expect(card).toContainText('2/2 test cases passed — Score: 100%');
 });
@@ -110,6 +124,7 @@ test('code that passes only some test cases gets partial credit', async ({
   // Already verified and assigned, so the teacher goes straight to grading.
   backend.addSubmission({
     id: SUBMISSION_ID,
+    captured_at: CAPTURED_AT,
     student_name: 'Jose Reyes',
     status: 'verified',
     question_id: QUESTION_ID,
@@ -119,7 +134,7 @@ test('code that passes only some test cases gets partial credit', async ({
 
   const dialog = await openSubmission(page, 'Jose Reyes');
   await dialog.getByRole('button', { name: 'Save and review code' }).click();
-  await dialog.getByRole('button', { name: 'Save and continue to grading' }).click();
+  await dialog.getByRole('button', { name: 'Continue to grading' }).click();
   await dialog.getByRole('button', { name: 'Submit Code' }).click();
 
   // 2*2 happens to equal 2+2, but 2*3 does not.
@@ -133,8 +148,9 @@ test('code that passes only some test cases gets partial credit', async ({
 
   // Nothing needed saving, so the only write is the grade itself.
   expect(backend.requestsTo('PATCH', '/rest/v1/submissions')).toHaveLength(0);
-  expect(backend.submissions.get(SUBMISSION_ID)).toMatchObject({
-    status: 'graded',
+  expect(backend.requestsTo('POST', '/rpc/save_submission_programs')).toHaveLength(0);
+  expect(backend.submissions.get(SUBMISSION_ID)?.status).toBe('graded');
+  expect(backend.programsOf(SUBMISSION_ID)[0]).toMatchObject({
     passed_test_cases: 1,
     total_test_cases: 2,
     score_percent: 50,
@@ -147,28 +163,30 @@ test('a grade is not saved when the submission changed during grading', async ({
 }) => {
   backend.addSubmission({
     id: SUBMISSION_ID,
+    captured_at: CAPTURED_AT,
     student_name: 'Ana Cruz',
     status: 'verified',
     question_id: QUESTION_ID,
     verified_text: program('a + b'),
   });
   // Another teacher saves new code while this page's Judge0 run is in flight.
-  backend.beforeGradeSave = (row) => {
+  backend.beforeProgramGradeSave = (row) => {
     row.verified_text = program('a - b');
     row.grading_revision += 1;
   };
 
   const dialog = await openSubmission(page, 'Ana Cruz');
   await dialog.getByRole('button', { name: 'Save and review code' }).click();
-  await dialog.getByRole('button', { name: 'Save and continue to grading' }).click();
+  await dialog.getByRole('button', { name: 'Continue to grading' }).click();
   await dialog.getByRole('button', { name: 'Submit Code' }).click();
 
   await expect(
     dialog.getByText('Submission inputs changed during grading. Run grading again.'),
   ).toBeVisible();
   await expect(dialog.getByText(/test cases passed/)).toHaveCount(0);
-  expect(backend.submissions.get(SUBMISSION_ID)).toMatchObject({
-    status: 'verified',
+  expect(backend.submissions.get(SUBMISSION_ID)?.status).toBe('verified');
+  expect(backend.programsOf(SUBMISSION_ID)[0]).toMatchObject({
+    graded_at: null,
     passed_test_cases: null,
   });
 });
@@ -179,6 +197,7 @@ test('grading reports a failure and saves nothing when Judge0 is down', async ({
 }) => {
   backend.addSubmission({
     id: SUBMISSION_ID,
+    captured_at: CAPTURED_AT,
     student_name: 'Luis Garcia',
     status: 'verified',
     question_id: QUESTION_ID,
@@ -188,12 +207,89 @@ test('grading reports a failure and saves nothing when Judge0 is down', async ({
 
   const dialog = await openSubmission(page, 'Luis Garcia');
   await dialog.getByRole('button', { name: 'Save and review code' }).click();
-  await dialog.getByRole('button', { name: 'Save and continue to grading' }).click();
+  await dialog.getByRole('button', { name: 'Continue to grading' }).click();
   await dialog.getByRole('button', { name: 'Submit Code' }).click();
 
   await expect(dialog.getByText('Failed to execute test cases.')).toBeVisible();
   // The button is usable again so the teacher can retry once Judge0 is back.
   await expect(dialog.getByRole('button', { name: 'Submit Code' })).toBeEnabled();
-  expect(backend.requestsTo('POST', '/rpc/save_submission_grade')).toHaveLength(0);
+  expect(backend.requestsTo('POST', '/rpc/save_program_grade')).toHaveLength(0);
   expect(backend.submissions.get(SUBMISSION_ID)?.status).toBe('verified');
+});
+
+test('each program on a paper is graded against its own question', async ({
+  page,
+  backend,
+}) => {
+  const PRODUCT_ID = '55555555-5555-4555-8555-555555555555';
+  backend.addQuestion({
+    id: PRODUCT_ID,
+    question_name: 'Product of two numbers',
+    question_type: 'program',
+    model_answer: program('a * b'),
+    test_cases: [
+      { test_code: '', test_input: '2 2', expected_output: '4' },
+      { test_code: '', test_input: '2 3', expected_output: '6' },
+    ],
+  });
+  // One photographed page with two programs, already verified.
+  backend.addSubmission({
+    id: SUBMISSION_ID,
+    captured_at: CAPTURED_AT,
+    student_name: 'Rosa Lim',
+    status: 'verified',
+    question_id: QUESTION_ID,
+    verified_text: program('a + b'),
+  });
+  backend.addExtraProgram(SUBMISSION_ID, 2, PRODUCT_ID, program('a * b'));
+
+  const dialog = await openSubmission(page, 'Rosa Lim');
+  await dialog.getByRole('button', { name: 'Save and review code' }).click();
+  await dialog.getByRole('button', { name: 'Continue to grading' }).click();
+
+  // Step 3 lists both programs; the first ungraded one is selected.
+  const programs = dialog.getByRole('tablist', { name: 'Programs to grade' });
+  const first = programs.getByRole('tab', { name: /Program 1/ });
+  const second = programs.getByRole('tab', { name: /Program 2/ });
+  await expect(first).toHaveAttribute('aria-selected', 'true');
+  await expect(dialog.locator('.grading-context')).toContainText('Sum of two numbers');
+
+  await dialog.getByRole('button', { name: 'Submit Code' }).click();
+  await expect(first).toContainText('✓ 2/2');
+  // One of two programs graded: the paper is not graded yet.
+  expect(backend.submissions.get(SUBMISSION_ID)?.status).toBe('verified');
+
+  await second.click();
+  await expect(dialog.locator('.grading-context')).toContainText('Product of two numbers');
+  await dialog.getByRole('button', { name: 'Submit Code' }).click();
+  await expect(second).toContainText('✓ 2/2');
+
+  // Judge0 ran each program with its own question's inputs.
+  const batches = backend.requestsTo('POST', '/run-batch').map((request) => request.body.runs);
+  expect(batches).toEqual([
+    [
+      { source_code: `#include <stdio.h>
+
+${program('a + b')}`, stdin: '2 2' },
+      { source_code: `#include <stdio.h>
+
+${program('a + b')}`, stdin: '2 3' },
+    ],
+    [
+      { source_code: `#include <stdio.h>
+
+${program('a * b')}`, stdin: '2 2' },
+      { source_code: `#include <stdio.h>
+
+${program('a * b')}`, stdin: '2 3' },
+    ],
+  ]);
+  expect(backend.submissions.get(SUBMISSION_ID)?.status).toBe('graded');
+  expect(backend.programsOf(SUBMISSION_ID).map((row) => row.passed_test_cases)).toEqual([2, 2]);
+
+  // The card shows one score per program.
+  await dialog.getByRole('button', { name: 'Finish review' }).click();
+  const card = submissionCard(page, CARD_TIME);
+  await expect(card).toContainText('Graded');
+  await expect(card).toContainText('Program 1 2/2 · Program 2 2/2');
 });

@@ -514,8 +514,7 @@ describe('SubmissionsListComponent program tabs', () => {
     expect(press()).not.toHaveBeenCalled();
 
     component.closeConfirmOpen = false;
-    // A save is running (Jayrald's per-paper tracking replaced savingId).
-    vi.spyOn(component, 'isSaving').mockReturnValue(true);
+    vi.spyOn(component, 'isSaving').mockReturnValue(true); // a save is already running
     expect(press()).toHaveBeenCalled(); // still blocks the browser dialog…
     expect(updateSubmissionText).not.toHaveBeenCalled(); // …but does not start a second save
 

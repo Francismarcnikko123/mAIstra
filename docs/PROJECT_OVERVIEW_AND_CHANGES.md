@@ -63,6 +63,23 @@ The Angular submission review uses one existing `SubmissionsListComponent`; no a
    - Run all configured test cases.
    - Display output comparison and equal-weight test-case results.
 
+### Review workflow fixes (September 26, 2026)
+
+Both bugs were found by the new Playwright end-to-end tests.
+
+- **Steps now advance after saving.** The Angular app runs without zone.js, so
+  it only re-renders when told to. "Save and review code" and "Save and
+  continue to grading" changed the step after the save's `await` without
+  re-rendering, which left the dialog on the old step until the teacher
+  clicked something else. Both now run change detection after the step
+  changes.
+- **New questions appear without a reload.** `SubmissionsListComponent` loaded
+  questions only when the page opened, so a question saved in the question
+  form was missing from the review dialog's question picker until the page was
+  refreshed. The form now emits `questionSaved`, and `app.html` uses it to
+  reload the list's questions. A question created in another tab or by
+  another teacher still needs a page refresh.
+
 ### Re-extraction: detailed ownership split
 
 The "Re-extract code" flow was built in two clearly separated parts. All paths
@@ -456,27 +473,6 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - **Not yet:** provenance columns.
 - **Verification:** OCR 231/231 tests and web 114/114 tests pass; TypeScript checks and Angular build pass with the existing CSS budget warning. The unchanged 20-sample evaluator still reports clean_ws CER **0.099**, clean WER **0.328**, and clean token accuracy **0.716**.
 
-## Save next to the program tabs (2026-09-26, branch `feature/program-tabs-save`, merged into `feature/pre-extraction`)
-
-> **Owner:** Nombrado (review editor). One label change in Jayrald's Step 2 footer, announced in `docs/TEAM_SYNC.md`.
-
-**Why:** Step 2 had no plain Save. A teacher could only save by going to grading ("Save and continue to grading") or by leaving (✕ → "Save and close", which closed the paper, so reaching grading meant reopening it). Nikko's first review screen (`da00269`) had a plain Save; the 3-step redesign (`aca278e`) replaced it.
-
-**What changed (teacher's view):**
-- A **Save** button at the right end of the program tab bar saves **every tab of the paper** in one update and keeps the teacher on Step 2. The unsaved dots clear and "✓ All programs saved" shows next to it. While the cloud database has no `answers` column, only Program 1 is stored: the label then says "✓ Program 1 saved", the extra tabs keep their dots, and the existing message explains why (fixed the same day; the first version claimed "All programs saved"). **Cmd/Ctrl+S** does the same on Step 2 (and no longer opens the browser's "save page" dialog there).
-- The footer button is now **"Continue to grading"**. Its logic is unchanged: it still saves first, and moves to Step 3 only when the save succeeds, so grading always runs on code that is in the database.
-- The **✕ / overlay / Cancel / Finish** prompt for unsaved changes now offers **Keep editing** (primary) and **Discard changes**. "Save and close" is removed; saving lives next to the tabs.
-
-**What did not change:**
-- One save function for everything: the Save button, the shortcut and "Continue to grading" all call the existing `saveVerifiedText()`. The save rules (a tab with code needs a question, no duplicate questions), the save-generation/timer/destroy guards, and the columns written (`verified_text`, `answers`, `status = 'verified'`, `verified_at`) are unchanged. `extracted_text` is still only ever written with OCR output, never with the teacher's edits.
-- Save stays clickable when nothing looks changed, because an untouched pre-extracted paper looks saved but is still `pending` with no `verified_text`; Save must still verify it. The shortcut does nothing on a paper with no extracted code yet (the button is hidden there too).
-- No schema, OCR or grading change.
-
-**Fix included:** the app is zoneless, so setting `reviewStep` after an `await` did not re-render. "Save and review code" and "Continue to grading" could leave the dialog on the old step until the next click. `continueFromDetails()` and `saveCodeAndContinue()` now call `detectChanges()` after the step changes, the same two-line fix Jayrald made on `judge0-integration` (`8e20fd5`).
-
-**Code:** `submissions-list.html` (tab bar wrapper `program-tabs-bar` with the Save area outside `role="tablist"`; footer label; two-button prompt), `submissions-list.ts` (`onSaveShortcut()` `@HostListener`; `saveAndClose()` removed; the two `detectChanges()` calls), `program-tabs.css` (bar and Save styles), `submissions-list.css` (unused `.save-status` removed).
-
-**Verification:** web 121/121 tests (7 new program-tab tests replace the one Save-and-close test; the continue-to-grading test now checks the step is rendered); application and spec TypeScript checks and `ng build` pass with the existing CSS budget warning. Viewed in the running app without saving: the Save button in the tab bar (pinned right while many tabs scroll), the "Continue to grading" label, and the two-button prompt.
 ## Question sections and mobile question linking (2026-09-24)
 
 > **Owner:** Nikko. Spec: `IMPLEMENTATION_SPEC_question_linking.md`. Change notes in [`docs/changes/`](changes/README.md).
@@ -497,6 +493,7 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - **Follow-ups:** the sections migration was renamed because its version clashed with `20260924000000_save_grade_for_stored_code.sql` ([note](changes/2026-09-26-migration-rename.md)); the question page no longer shows marks, which `judge0-integration` removed from test cases ([note](changes/2026-09-26-question-page-drop-marks.md)).
 - **Verification:** web 281/281, mobile 53/53, OCR tests pass; `ng build` passes with a stylesheet size warning. Checked in the browser: program tabs, question lock, remove arming and re-extract prompt. `judge0_api` tests not run locally.
 - **Second pass (2026-09-26), after Nombrado's review:** merged his latest `feature/pre-extraction` (`0f87354`: Save next to the program tabs, handoff); restored `AGENTS.md` (deleted by `judge0-integration`); `ocr_feature/` is identical to his branch again (Jayrald's CORS change and `test_api.py` not included). His `saveStatusLabel()` now also shows Jayrald's save conflict, and `code-editor.ts` keeps Jayrald's `readOnly` input; both await his OK. Web 289/289, OCR tests pass. Not pushed: Nombrado asked to wait. [Note](changes/2026-09-26-merge-latest-pre-extraction.md)
+- **Third pass (2026-09-26):** merged Jayrald's `judge0-integration` at `268eb54`, which already contained the pushed v2 and adds the live schema (`gate_result`, `can_publish`, question UPDATE, `batch_id`, `submission_programs`, per-program grading). v2 keeps Nombrado's Save layout with the conflict-aware label. Web 300/300. [Note](changes/2026-09-26-merge-judge0-schema.md)
 
 The Judge0 wrapper now converts outbound Judge0 connectivity failures into a
 clear HTTP `502` response that identifies the configured `JUDGE0_BASE_URL`,
@@ -561,6 +558,28 @@ The review questions are tracked in [the adviser-review task](plans/2026-09-09-a
 - `judge0-integration` intentionally contains no structural-analysis implementation and uses Judge0 test cases as its only automatic correctness mechanism.
 - Additional parser-based scoring should be developed and reviewed on the feature branch before integration.
 
+## Save next to the program tabs (2026-09-26, branch `feature/program-tabs-save`, merged into `feature/pre-extraction`)
+
+> **Owner:** Nombrado (review editor). One label change in Jayrald's Step 2 footer, announced in `docs/TEAM_SYNC.md`.
+
+**Why:** Step 2 had no plain Save. A teacher could only save by going to grading ("Save and continue to grading") or by leaving (✕ → "Save and close", which closed the paper, so reaching grading meant reopening it). Nikko's first review screen (`da00269`) had a plain Save; the 3-step redesign (`aca278e`) replaced it.
+
+**What changed (teacher's view):**
+- A **Save** button at the right end of the program tab bar saves **every tab of the paper** in one update and keeps the teacher on Step 2. The unsaved dots clear and "✓ All programs saved" shows next to it. While the cloud database has no `answers` column, only Program 1 is stored: the label then says "✓ Program 1 saved", the extra tabs keep their dots, and the existing message explains why (fixed the same day; the first version claimed "All programs saved"). **Cmd/Ctrl+S** does the same on Step 2 (and no longer opens the browser's "save page" dialog there).
+- The footer button is now **"Continue to grading"**. Its logic is unchanged: it still saves first, and moves to Step 3 only when the save succeeds, so grading always runs on code that is in the database.
+- The **✕ / overlay / Cancel / Finish** prompt for unsaved changes now offers **Keep editing** (primary) and **Discard changes**. "Save and close" is removed; saving lives next to the tabs.
+
+**What did not change:**
+- One save function for everything: the Save button, the shortcut and "Continue to grading" all call the existing `saveVerifiedText()`. The save rules (a tab with code needs a question, no duplicate questions), the save-generation/timer/destroy guards, and the columns written (`verified_text`, `answers`, `status = 'verified'`, `verified_at`) are unchanged. `extracted_text` is still only ever written with OCR output, never with the teacher's edits.
+- Save stays clickable when nothing looks changed, because an untouched pre-extracted paper looks saved but is still `pending` with no `verified_text`; Save must still verify it. The shortcut does nothing on a paper with no extracted code yet (the button is hidden there too).
+- No schema, OCR or grading change.
+
+**Fix included:** the app is zoneless, so setting `reviewStep` after an `await` did not re-render. "Save and review code" and "Continue to grading" could leave the dialog on the old step until the next click. `continueFromDetails()` and `saveCodeAndContinue()` now call `detectChanges()` after the step changes, the same two-line fix Jayrald made on `judge0-integration` (`8e20fd5`).
+
+**Code:** `submissions-list.html` (tab bar wrapper `program-tabs-bar` with the Save area outside `role="tablist"`; footer label; two-button prompt), `submissions-list.ts` (`onSaveShortcut()` `@HostListener`; `saveAndClose()` removed; the two `detectChanges()` calls), `program-tabs.css` (bar and Save styles), `submissions-list.css` (unused `.save-status` removed).
+
+**Verification:** web 121/121 tests (7 new program-tab tests replace the one Save-and-close test; the continue-to-grading test now checks the step is rendered); application and spec TypeScript checks and `ng build` pass with the existing CSS budget warning. Viewed in the running app without saving: the Save button in the tab bar (pinned right while many tabs scroll), the "Continue to grading" label, and the two-button prompt.
+
 ## Code cleanup completed
 
 > **Owner:** Shared (Jayrald + Nombrado)
@@ -602,6 +621,103 @@ Focused tests now cover:
 - Advancing after a successful verified-code save.
 - Remaining in Review Code after a failed save.
 
+## End-to-end tests (September 26, 2026)
+
+Playwright tests in `maistra_web/tests/e2e` drive the real Angular app in
+Chromium. Run them from `maistra_web`:
+
+```bash
+npm run e2e                 # headless, starts its own dev server on port 4300
+npx playwright test --ui    # watch the browser step through each test
+```
+
+`teacher-workflow.spec.ts` follows one submission through the whole teacher
+workflow without reloading the page:
+
+1. Create a program question, validate its test cases against Judge0, and save it.
+2. Receive a new upload over Supabase Realtime, as the mobile app would send
+   it, and find it with the Needs OCR filter.
+3. Assign the new question, extract the code with OCR, correct an OCR mistake,
+   and save the verified code.
+4. Run the sample, submit against every test case, and check that the grade,
+   the OCR text and the verified text are stored separately.
+
+`submission-grading.spec.ts` and the rest of `teacher-workflow.spec.ts` cover
+the other paths: partial credit (1/2, 50%), a question whose expected output
+disagrees with its model answer, an OCR failure, Judge0 being unavailable, and
+a submission that changes while it is being graded.
+
+**Faked services.** `environment.ts` points the web app at the hosted Supabase
+project, and the teacher pages have no login, so a live run would write grades
+into production rows. The tests therefore fake Supabase (REST, the
+`save_submission_grade` RPC and Realtime), the Judge0 wrapper and the OCR
+service inside the browser (`tests/e2e/support/fake-backend.ts`). The fake
+grade save follows the same match rules as the real RPC, and any request the
+fake does not recognise fails the test.
+
+**Not covered:** the mobile capture app, real OCR accuracy, the real Judge0
+instance, and the hosted database's RLS policies. The tests confirm the
+workflow behaves correctly; they do not measure grading accuracy on real
+handwriting.
+
+## Database changes (September 26, 2026)
+
+- `20260926000000_repair_realtime_publication.sql` adds `public.submissions`
+  and `public.questions` to the `supabase_realtime` publication only when they
+  are missing. A migration can stay marked as applied after the publication
+  is changed by hand, which silently stops live updates; this repair is safe
+  to run on a database that is already correct.
+- `supabase/tests/database/security_contract.test.sql` now checks that both
+  tables are published.
+- `20260926000200_add_submission_gate_result.sql` adds `submissions.gate_result`
+  (the phone's photo verdict: `PASS`, `FIXABLE`, `RETAKE` or NULL). The browser
+  can set it only on insert, and the insert policy refuses `RETAKE` pages.
+  [Note](changes/2026-09-26-gate-result-can-publish-and-cloud-migrations.md)
+- `20260926000300_restore_question_can_publish.sql` brings back
+  `questions.can_publish`, the "model answer validated" flag the phone's
+  question picker filters on. Existing questions with test cases were marked
+  validated.
+- `20260926000400_allow_question_updates.sql` lets the question page edit a
+  saved question (validated like a new one, no delete). Changing a question's
+  test cases or type clears the grades of its linked papers and advances their
+  `grading_revision`, so a grade computed against the old test cases can't be
+  saved. [Note](changes/2026-09-26-question-updates.md)
+- `20260926000500_add_submission_batch_id.sql` adds `submissions.batch_id`, set
+  by the phone on every page of one answer (insert only).
+  [Note](changes/2026-09-26-batch-id.md)
+- `20260926000600_add_submission_programs.sql` stores every program on a paper
+  as its own row, Program 1 included, with its own question and grade, and
+  drops the empty `answers` column. See "Grading every program on a paper"
+  below. [Note](changes/2026-09-26-submission-programs-and-per-program-grading.md)
+- **Cloud project is at `20260926000600`.** Nombrado's `answers` migration and
+  Nikko's sections migration were applied along with these.
+- **Branches (decided in `TEAM_SYNC.md`):** everyone builds on
+  `judge0-integration`, which now contains `feature/question-linking-v2` and
+  `feature/pre-extraction` ([note](changes/2026-09-26-merges-into-judge0-integration.md)).
+  `code-similarity/duplicate` is parked and will be rebuilt on top of
+  `submission_programs`.
+
+## Grading every program on a paper (2026-09-26, branch `judge0-integration`)
+
+> **Owner:** Jayrald. Commits `f85d99e`, `f3138c6`, `96eda09`.
+
+- **Storage:** `submission_programs` has one row per verified program (tab
+  order = `position`), each linked to the question it answers and carrying its
+  own grade and `grading_revision`. `submissions` stays the page: photo, raw
+  OCR, status. Program 1 is also mirrored to `submissions.verified_text` /
+  `question_id`.
+- **Saving the review:** `supabase.ts` calls `save_submission_programs()`,
+  which saves every tab in one step, guarded by the page's revision. The review
+  screen still receives Programs 2..n as `answers`, so the program-tab code is
+  unchanged.
+- **Grading:** Step 3 shows a chip per program when a paper has more than one.
+  Each program is graded against its own question's test cases and saved with
+  `save_program_grade()`. A page is Graded only when every program is. Cards
+  show `Q1 3/4 · Q2 not graded`; a single-program paper looks as before.
+- **Stale grades:** editing a program's code or question clears that program's
+  grade; editing a question's test cases or type clears the grades of every
+  program linked to it.
+
 ## Setup documentation
 
 > **Owner:** Jayrald
@@ -617,16 +733,15 @@ Focused tests now cover:
 - **2026-09-26 program-tabs Save checkpoint:** web 121/121; Angular application and spec TypeScript checks and `ng build` pass with the existing CSS budget warning. No OCR code changed, so the OCR suite was not re-run (last run 231/231 on 2026-09-24).
 - **2026-09-24 pre-extraction checkpoint:** OCR 231/231, web 114/114; Angular application and spec TypeScript checks pass, and Angular build passes with the existing CSS budget warning. The live phone-photo, server-off and restart catch-up badge checks passed. See the pre-extraction section above for scope.
 - **Earlier environment limitation (historical):** Vitest was blocked in WSL when `node_modules` held Windows-native Rollup/esbuild packages; this did not apply to the later macOS verification above.
-- Angular application TypeScript compilation passes.
-- The focused submission-list test file passes isolated TypeScript validation.
-- Angular template compilation passed after the submission workflow changes, and after the Judge0 output-verification changes (`ng build --configuration development` succeeds).
 - The earlier automatic Expected Output synchronization was verified live before being superseded by the September 8 manual-output workflow.
 - The current `judge0_api` suite covers health/execution behavior and confirms the feature-only logic endpoint is unavailable on this branch.
-- Running Vitest from the current WSL environment is blocked because `node_modules` contains Windows-native Rollup/esbuild packages. Run `npm ci` and the tests in the same operating system environment, or run them directly from Windows where the dependencies were installed.
 - Question-validation follow-up (September 6): 71 focused Vitest tests pass across question-form, C structure checks, submissions-list, and Judge0 runner; `tsc --noEmit -p tsconfig.spec.json` and the Angular development build pass. Updated older fixtures to include real Judge0 status IDs and the test cases required by the existing submission workflow. Removed the redundant filesystem-based template string assertion; the changed UI was checked in the browser.
 - Live browser/Judge0 checks confirmed immediate function-format errors, successful function output, successful programs both with and without an explicit stdio header using Standard Input, and an explicit No output failure with Save disabled. No test questions were saved to Supabase during verification.
 - Manual-output and function-input update (September 8): 79 focused Vitest tests pass across question-form, C structure checks, submissions-list, and Judge0 runner; `tsc --noEmit -p tsconfig.spec.json` and the Angular development build pass. Live Judge0 verification was not run for this update.
 - Equal-weight scoring prototype (September 9): all 85 frontend Vitest tests pass; `tsc --noEmit -p tsconfig.spec.json` and the Angular development build pass. Adviser approval and live Judge0 verification remain pending.
+- End-to-end tests and review workflow fixes (September 26): all 7 Playwright tests pass, and they passed 35 of 35 runs with `--repeat-each=5`; all 164 frontend Vitest tests still pass. The tests run against faked services, so the real OCR, Judge0 and Supabase were not exercised.
+- Database migrations (September 26): `supabase test db` passes 58/58 on local Supabase and the Python migration contract tests pass 18/18. After the cloud push, the new columns, grants, policies and trigger were checked by querying the cloud project directly. The phone and the question page were not tried against them yet.
+- Per-program grading and the two merges (September 26, `judge0-integration`): `supabase test db` 80/80, `npx ng test` 299/299, both TypeScript checks, `npx ng build` (existing CSS budget warning), `npx playwright test` 8/8 run twice each. The save and grade functions were also called as the browser role through the local Supabase REST API. Not yet tried by a teacher on real papers.
 
 ## Important security work
 
@@ -636,7 +751,7 @@ Before deploying mAIstra beyond a trusted development environment:
 
 - ~~Rotate the Supabase `service_role` key exposed in Angular configuration.~~ **Done 2026-09-23 (`a448198`):** Supabase disabled the project's legacy keys on 2026-09-21. `maistra_web/src/environment.ts` now uses a publishable key. The legacy `service_role` JWT must stay disabled and must not be re-enabled.
 - Never place a Supabase service-role key in browser or mobile code.
-- Add complete Row Level Security policies for questions, submissions, and storage objects. RLS is currently enabled on `questions` only. `submissions` has a permissive policy but RLS is **not enabled**, so the publishable key does not restrict access to it.
+- Add complete Row Level Security policies for questions, submissions, and storage objects. RLS is enabled on `questions`, `submissions` and the section tables (`20260921000000_lock_down_public_api.sql`, confirmed in the cloud on 2026-09-26), with column-level grants. The policies still allow any caller with the publishable key because there are no logins yet.
 - Restrict access to handwritten submission images or serve them with signed URLs.
 - Authenticate and rate-limit the OCR and Judge0 wrapper APIs.
 - Restrict the OCR URL downloader to trusted storage hosts and enforce download-size limits.
@@ -648,7 +763,7 @@ Before deploying mAIstra beyond a trusted development environment:
 > **Owner:** Shared
 
 1. **OCR:** import the incoming bond paper and yellow pad datasets, which are the current blocker for OCR work. They should add new writers, give both paper types a writer-disjoint holdout, and support a retrain and re-evaluation on the same test set.
-2. Add and verify Supabase migrations and RLS policies, starting with enabling RLS on `submissions`. (The frontend key was corrected in `a448198`.)
+2. Tighten the RLS policies once teachers log in: they are enabled on every table but still allow any caller with the publishable key. (The frontend key was corrected in `a448198`.)
 3. Keep the Angular dependency install matched to the operating system used for testing; the complete frontend suite passed at the 2026-09-24 checkpoint.
 4. Add authentication and rate limiting to the OCR and Judge0 wrapper services.
 5. Move API endpoints and mobile Supabase configuration into environment-specific configuration.

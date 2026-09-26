@@ -12,6 +12,13 @@ mAIstra captures handwritten C programming submissions, extracts code through OC
 - `judge0_api` — Python FastAPI wrapper around Judge0
 - `supabase` — Local configuration, migrations, and seed data
 
+## Testing
+
+From `maistra_web`:
+
+- `npm test` runs the Vitest unit tests.
+- `npm run e2e` runs the Playwright end-to-end tests for the teacher workflow. They fake Supabase, Judge0 and OCR, so they need none of those services running. See [End-to-end tests](docs/PROJECT_OVERVIEW_AND_CHANGES.md#end-to-end-tests-september-26-2026).
+
 ## Documentation
 
 - [Project overview and changes](docs/PROJECT_OVERVIEW_AND_CHANGES.md)

@@ -15,6 +15,8 @@ export default defineConfig({
   reporter: process.env['CI'] ? 'html' : [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: `http://localhost:${PORT}`,
+    // Submission cards show their capture time; a fixed zone keeps it stable.
+    timezoneId: 'UTC',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },

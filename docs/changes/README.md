@@ -13,4 +13,10 @@ One file per update, newest last. Each note says what changed, why, which files,
 | 2026-09-26 | [Rename the question sections migration](2026-09-26-migration-rename.md) | Nikko | `246cb7e` |
 | 2026-09-26 | [Question page: drop marks](2026-09-26-question-page-drop-marks.md) | Nikko | `c6178c6` |
 | 2026-09-26 | [Merge Nombrado's latest pre-extraction; restore `AGENTS.md` and `ocr_feature/`](2026-09-26-merge-latest-pre-extraction.md) | Nikko (merge), Nombrado (review) | `60db6ed` |
-| 2026-09-26 | Shared docs: `docs/README.md` gets a question-linking block; TEAM_SYNC asks Nombrado about his web guide (docs only, no code) | Nikko | this commit |
+| 2026-09-26 | Shared docs: `docs/README.md` gets a question-linking block; TEAM_SYNC asks Nombrado about his web guide (docs only, no code) | Nikko | `5d17dff` |
+| 2026-09-26 | [Gate verdicts, the validated flag, and catching the cloud up](2026-09-26-gate-result-can-publish-and-cloud-migrations.md) | Jayrald | `018fe7d` |
+| 2026-09-26 | [Questions can be edited; edited test cases clear stale grades](2026-09-26-question-updates.md) | Jayrald | `018fe7d` |
+| 2026-09-26 | [Nikko's and Nombrado's branches merged into `judge0-integration`](2026-09-26-merges-into-judge0-integration.md) | Jayrald | `138ef02`, `046b88c`, `c893b85` |
+| 2026-09-26 | [Pages of one answer share `submissions.batch_id`](2026-09-26-batch-id.md) | Jayrald | `ec5c910` |
+| 2026-09-26 | [Every program on a paper is its own row, graded on its own](2026-09-26-submission-programs-and-per-program-grading.md) | Jayrald | `f85d99e`, `f3138c6`, `96eda09` |
+| 2026-09-26 | [Merge Jayrald's schema work (`268eb54`) into v2](2026-09-26-merge-judge0-schema.md) | Nikko (merge) | this merge commit |

@@ -12,7 +12,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { SupabaseService } from '../../services/supabase';
+import { SubmissionProgramRow, SupabaseService } from '../../services/supabase';
 import { CodeEditorComponent } from '../code-editor/code-editor';
 import { Judge0, TestCaseResult } from '../judge0/judge0';
 import { Judge0Service } from '../../services/judge0.service';
@@ -69,6 +69,10 @@ interface Submission {
   graded_at?: string;
   grading_revision?: number;
   questions?: SubmissionQuestion | SubmissionQuestion[];
+  // Every verified program on the paper, Program 1 included, each with its
+  // own question and grade (submission_programs). Absent before that table
+  // exists; grading then uses Program 1 on the page row.
+  submission_programs?: SubmissionProgramRow[];
 }
 
 interface TopicGroup {
@@ -95,7 +99,7 @@ type SubmissionFilter = 'all' | 'new' | 'extracted' | 'verified' | 'graded';
   standalone: true,
   imports: [CommonModule, FormsModule, CodeEditorComponent, Judge0],
   templateUrl: './submissions-list.html',
-  styleUrls: ['./submissions-list.css', './program-tabs.css'],
+  styleUrls: ['./submissions-list.css', './program-tabs.css', './program-grading.css'],
 })
 export class SubmissionsListComponent implements OnInit, OnDestroy {
   @ViewChild('codeEditor') codeEditor?: CodeEditorComponent;
@@ -108,6 +112,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   collapsedFolders: Record<string, boolean> = {};
   // Folders come from each paper's question section (Nikko).
   questionPlaces = new Map<string, QuestionPlace>();
+  // Step 3: the program row being graded on each paper.
+  gradingProgramIds: Record<string, string> = {};
+  // Papers saved this session whose program rows (ids, revisions) haven't
+  // been re-read yet; grading re-reads them first.
+  private staleProgramIds = new Set<string>();
   gateResults = new Map<string, string>();
   readonly gateBadge = gateBadge;
   searchQuery = '';
@@ -665,6 +674,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     // Going back is always allowed; going forward needs the earlier steps saved.
     if (step > this.reviewStep && this.stepBlocker(step)) return;
     this.reviewStep = step;
+    if (step === 3 && this.selectedSubmission) {
+      void this.prepareGradingStep(this.selectedSubmission.id);
+    }
   }
 
   // Why a step cannot be opened yet, or '' when it can. Every edit has to be
@@ -764,7 +776,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       !this.hasUnsavedExtras(submissionId) &&
       this.extractedText[submissionId] === undefined
     ) {
-      if (!this.stepBlocker(3)) this.reviewStep = 3;
+      if (!this.stepBlocker(3)) this.setReviewStep(3);
       return;
     }
 
@@ -775,7 +787,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       this.saveStatus[submissionId] === 'saved' &&
       !this.stepBlocker(3)
     ) {
-      this.reviewStep = 3;
+      this.setReviewStep(3);
       this.cdr.detectChanges();
     }
   }
@@ -1030,6 +1042,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       if (savedLatest) this.dirtyCodeIds.delete(id);
       const persisted = this.submissions.find((item) => item.id === id);
       if (persisted) this.rememberPersistedSubmission(persisted);
+      // The save may have added, changed or removed program rows.
+      this.staleProgramIds.add(id);
       this.saveStatus[id] = 'saved';
       // If newer edits are still open, keep the reminder until they are saved.
       // A save that finishes after this submission was closed gets the normal
@@ -1076,11 +1090,15 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   ): Exclude<SubmissionFilter, 'all'> {
     const persistedStatus = submission.status?.trim().toLowerCase();
     const checkStatus = this.submissionCheckStatus[submission.id];
+    // With several programs, results on screen are one program's; the page
+    // is graded only once every program is (the database sets the status).
+    const hasPrograms = !!submission.submission_programs?.length;
     if (
       persistedStatus === 'graded' ||
-      this.submissionTestResults[submission.id]?.length ||
-      checkStatus === 'Accepted' ||
-      checkStatus === 'Wrong Answer'
+      (!hasPrograms &&
+        (this.submissionTestResults[submission.id]?.length ||
+          checkStatus === 'Accepted' ||
+          checkStatus === 'Wrong Answer'))
     ) {
       return 'graded';
     }
@@ -1121,6 +1139,25 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
 
   getSubmissionGradeSummary(submission: Submission | null): string {
+    const programs = submission?.submission_programs ?? [];
+    if (programs.length > 1) {
+      // e.g. "Q1 3/4 · Q2 not graded"
+      return [...programs]
+        .sort((a, b) => a.position - b.position)
+        .map((program) => `${this.programShortLabel(program)} ${this.programGradeLabel(program)}`)
+        .join(' · ');
+    }
+    if (programs.length === 1) {
+      const [program] = programs;
+      if (!program.total_test_cases || program.passed_test_cases === null) return '';
+      const score = Number(
+        (
+          program.score_percent ??
+          (program.passed_test_cases / program.total_test_cases) * 100
+        ).toFixed(2),
+      );
+      return `${program.passed_test_cases}/${program.total_test_cases} test cases passed — Score: ${score}%`;
+    }
     if (
       !submission ||
       submission.passed_test_cases === undefined ||
@@ -1410,6 +1447,18 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.submissionTestResults[submission.id] = [];
 
     try {
+      // A save made this session may have changed the program rows.
+      if (this.staleProgramIds.has(submissionId)) {
+        await this.ensureFreshPrograms(submissionId);
+        if (!this.isCurrentGrading(submissionId, generation)) return;
+      }
+      if (this.selectedGradingProgram(submission)) {
+        await this.gradeSelectedProgram(submission, generation);
+        return;
+      }
+
+      // No program rows (the table isn't there yet): grade Program 1 on the
+      // page row.
       const question = this.getSubmissionQuestion(submission);
 
       if (!question) {
@@ -1444,60 +1493,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         return;
       }
 
-      const testResults: TestCaseResult[] = [];
-      const runResults = await firstValueFrom(
-        this.judge0Service.runCCodeBatch(
-          testCases.map((testCase) => ({
-            sourceCode: buildCQuestionSource(
-              question.question_type,
-              studentCode,
-              testCase.test_code,
-            ),
-            stdin: this.stdinFor(
-              question.question_type,
-              testCase.test_input,
-            ),
-          })),
-        ),
-      );
-
-      if (!this.isCurrentGrading(submissionId, generation)) return;
-
-      for (const [index, testCase] of testCases.entries()) {
-        const runResult = runResults[index];
-        const stdin = this.stdinFor(
-          question.question_type,
-          testCase.test_input,
-        );
-
-        const actualOutput = (runResult.stdout || '').trim();
-        const expectedOutput = (testCase.expected_output || '').trim();
-
-        // status.id === 3 ("Accepted") already means Judge0 compiled and ran
-        // the code without a compile error (status 6) or runtime crash
-        // (status 7-12). Don't additionally require stderr/compile_output to
-        // be empty — a program can compile with only warnings (e.g. a
-        // missing #include) and still run correctly.
-        const compilationPassed = runResult.status?.id === 3;
-
-        const normalizedExpected = normalizeOutput(expectedOutput);
-        const normalizedActual = normalizeOutput(actualOutput);
-        const outputPassed = normalizedExpected === normalizedActual;
-        const passed = outputPassed && compilationPassed;
-
-        testResults.push({
-          caseNumber: index + 1,
-          stdin,
-          expectedOutput: normalizedExpected,
-          actualOutput: normalizedActual || actualOutput,
-          status: passed
-            ? 'Accepted'
-            : compilationPassed
-              ? 'Wrong Answer'
-              : runResult.status?.description || 'Error',
-          passed,
-        });
-      }
+      const testResults = await this.runTestCases(question, studentCode);
 
       if (!this.isCurrentGrading(submissionId, generation)) return;
 
@@ -1591,15 +1587,260 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.questions = data ?? [];
   }
 
+  /**
+   * Called after the question form saves a question on this page. Reloads the
+   * questions and their sections, so the review's picker, the card labels
+   * and the folders include it without a page reload.
+   */
+  async refreshQuestions() {
+    await this.loadQuestions();
+    await this.loadSectionFolders();
+    if (this.destroyed) return;
+    this.groupSubmissions();
+    this.cdr.detectChanges();
+  }
+
   getSelectedQuestion() {
     return this.questions.find((q) => q.id === this.selectedQuestionId) || null;
+  }
+
+  /** Runs the code against every test case of the question on Judge0. */
+  private async runTestCases(
+    question: SubmissionQuestion,
+    studentCode: string,
+  ): Promise<TestCaseResult[]> {
+    const testCases = question.test_cases || [];
+    const runResults = await firstValueFrom(
+      this.judge0Service.runCCodeBatch(
+        testCases.map((testCase) => ({
+          sourceCode: buildCQuestionSource(
+            question.question_type,
+            studentCode,
+            testCase.test_code,
+          ),
+          stdin: this.stdinFor(question.question_type, testCase.test_input),
+        })),
+      ),
+    );
+
+    return testCases.map((testCase, index) => {
+      const runResult = runResults[index];
+      const stdin = this.stdinFor(question.question_type, testCase.test_input);
+      const actualOutput = (runResult.stdout || '').trim();
+      const expectedOutput = (testCase.expected_output || '').trim();
+
+      // status.id === 3 ("Accepted") already means Judge0 compiled and ran
+      // the code without a compile error (status 6) or runtime crash
+      // (status 7-12). Don't additionally require stderr/compile_output to
+      // be empty — a program can compile with only warnings (e.g. a
+      // missing #include) and still run correctly.
+      const compilationPassed = runResult.status?.id === 3;
+
+      const normalizedExpected = normalizeOutput(expectedOutput);
+      const normalizedActual = normalizeOutput(actualOutput);
+      const outputPassed = normalizedExpected === normalizedActual;
+      const passed = outputPassed && compilationPassed;
+
+      return {
+        caseNumber: index + 1,
+        stdin,
+        expectedOutput: normalizedExpected,
+        actualOutput: normalizedActual || actualOutput,
+        status: passed
+          ? 'Accepted'
+          : compilationPassed
+            ? 'Wrong Answer'
+            : runResult.status?.description || 'Error',
+        passed,
+      };
+    });
+  }
+
+  // ── Programs on a paper (Step 3) ──────────────────────────────────
+
+  /** The paper's saved programs, in tab order. Empty before the table exists. */
+  gradingPrograms(submission: Submission | null): SubmissionProgramRow[] {
+    if (!submission) return [];
+    const saved = this.savedSubmission(submission.id) ?? submission;
+    return [...(saved.submission_programs ?? [])].sort((a, b) => a.position - b.position);
+  }
+
+  /** The program being graded: the teacher's pick, else the first ungraded. */
+  selectedGradingProgram(submission: Submission | null): SubmissionProgramRow | null {
+    const programs = this.gradingPrograms(submission);
+    if (!submission || !programs.length) return null;
+    return (
+      programs.find((program) => program.id === this.gradingProgramIds[submission.id]) ??
+      programs.find((program) => !program.graded_at) ??
+      programs[0]
+    );
+  }
+
+  selectGradingProgram(submission: Submission, programId: string) {
+    if (this.isChecking) return;
+    this.gradingProgramIds[submission.id] = programId;
+    this.checkError = '';
+    this.restorePersistedGrade(submission);
+  }
+
+  /** "Basic · Q2 · Sum of two numbers" for a program's question. */
+  programQuestionLabel(program: SubmissionProgramRow): string {
+    const question = this.questions.find((item) => item.id === program.question_id);
+    return questionLabel(
+      question?.question_name ?? 'Unknown question',
+      this.questionPlaces.get(program.question_id),
+    );
+  }
+
+  /** "Q2" when the question has a number in its section, else "Program 2". */
+  programShortLabel(program: SubmissionProgramRow): string {
+    const place = this.questionPlaces.get(program.question_id);
+    return place ? `Q${place.number}` : `Program ${program.position}`;
+  }
+
+  programGradeLabel(program: SubmissionProgramRow): string {
+    return program.total_test_cases && program.passed_test_cases !== null
+      ? `${program.passed_test_cases}/${program.total_test_cases}`
+      : 'not graded';
+  }
+
+  /** Question label shown above the grader in Step 3. */
+  gradingQuestionLabel(submission: Submission): string {
+    const program = this.selectedGradingProgram(submission);
+    if (program) return this.programQuestionLabel(program);
+    return this.getSelectedQuestion()?.question_name || this.getQuestionName(submission);
+  }
+
+  /** The code shown in the grader: the selected program's saved code. */
+  gradingCode(submission: Submission): string {
+    return this.selectedGradingProgram(submission)?.verified_text ?? this.editableText[submission.id] ?? '';
+  }
+
+  /** Recreates the grader when the program changes, clearing its sample run. */
+  gradingKey(submission: Submission): string {
+    return this.selectedGradingProgram(submission)?.id ?? submission.id;
+  }
+
+  private gradingTarget(
+    submission: Submission,
+  ): { question: SubmissionQuestion | null; code: string } {
+    const program = this.selectedGradingProgram(submission);
+    if (program) {
+      return {
+        question: this.questions.find((item) => item.id === program.question_id) ?? null,
+        code: program.verified_text,
+      };
+    }
+    return {
+      question: this.getSubmissionQuestion(submission),
+      code: this.getStudentCode(submission),
+    };
+  }
+
+  /** Re-reads a paper saved this session so its program rows are current. */
+  private async ensureFreshPrograms(id: string) {
+    if (!this.staleProgramIds.has(id)) return;
+    this.staleProgramIds.delete(id);
+    try {
+      await this.refreshSubmission(id);
+    } catch (err) {
+      console.error('Could not re-read the programs of this paper:', err);
+    }
+  }
+
+  /** Opens Step 3 on current program rows, with the selected program's grade. */
+  private async prepareGradingStep(id: string) {
+    await this.ensureFreshPrograms(id);
+    if (this.destroyed || this.selectedSubmission?.id !== id || this.isChecking) return;
+    this.restorePersistedGrade(this.selectedSubmission);
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Grades the selected program against its own question and saves the
+   * result on its row. The database marks the page graded once every
+   * program is; the same rule is applied to the local copies.
+   */
+  private async gradeSelectedProgram(submission: Submission, generation: number) {
+    const id = submission.id;
+    const program = this.selectedGradingProgram(submission);
+    if (!program) return;
+
+    const question = this.questions.find((item) => item.id === program.question_id);
+    if (!question) {
+      this.checkError = 'The question linked to this program was not found.';
+      return;
+    }
+    if (this.hasUnsavedPrograms(id)) {
+      this.checkError = 'Save the edited code before grading.';
+      return;
+    }
+    if (!(question.test_cases || []).length) {
+      this.checkError = 'No test case found for this question.';
+      return;
+    }
+
+    const testResults = await this.runTestCases(question, program.verified_text);
+    if (!this.isCurrentGrading(id, generation)) return;
+
+    let newRevision: number | null;
+    try {
+      newRevision = await this.supabase.saveProgramGrade(
+        program.id,
+        program.grading_revision,
+        question.id,
+        program.verified_text,
+        testResults,
+      );
+    } catch {
+      if (!this.isCurrentGrading(id, generation)) return;
+      this.checkError = 'Test cases completed, but the grade could not be saved.';
+      this.submissionCheckStatus[id] = 'Error';
+      return;
+    }
+    if (!this.isCurrentGrading(id, generation)) return;
+    if (newRevision === null) {
+      this.checkError = 'Submission inputs changed during grading. Run grading again.';
+      this.submissionCheckStatus[id] = 'Error';
+      this.staleProgramIds.add(id);
+      return;
+    }
+
+    this.submissionTestResults[id] = testResults;
+    this.submissionRunOutput[id] = testResults.at(-1)?.actualOutput || '';
+    this.submissionCheckStatus[id] = testResults.every((result) => result.passed)
+      ? 'Accepted'
+      : 'Wrong Answer';
+
+    const passed = testResults.filter((result) => result.passed).length;
+    const graded: Partial<SubmissionProgramRow> = {
+      grading_results: testResults.map((result) => ({ ...result })),
+      passed_test_cases: passed,
+      total_test_cases: testResults.length,
+      score_percent: Number(((passed / testResults.length) * 100).toFixed(2)),
+      graded_at: new Date().toISOString(),
+      grading_revision: newRevision,
+    };
+    const stored = this.submissions.find((item) => item.id === id);
+    const open = this.selectedSubmission?.id === id ? this.selectedSubmission : undefined;
+    const persisted = this.persistedSubmissions.get(id);
+    for (const copy of new Set([submission, stored, open, persisted])) {
+      if (!copy?.submission_programs) continue;
+      const row = copy.submission_programs.find((item) => item.id === program.id);
+      if (row) Object.assign(row, graded);
+      if (copy.status === 'verified' || copy.status === 'graded') {
+        copy.status = copy.submission_programs.every((item) => item.graded_at)
+          ? 'graded'
+          : 'verified';
+      }
+    }
+    this.groupSubmissions();
   }
 
   getExecutionSourceCode(submission: Submission | null): string {
     if (!submission) return '';
 
-    const question = this.getSubmissionQuestion(submission);
-    const studentCode = this.getStudentCode(submission);
+    const { question, code: studentCode } = this.gradingTarget(submission);
     const firstTestCase = question?.test_cases?.[0];
 
     if (
@@ -1617,7 +1858,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   }
 
   getExecutionStdin(submission: Submission | null): string {
-    const question = submission ? this.getSubmissionQuestion(submission) : null;
+    const question = submission ? this.gradingTarget(submission).question : null;
     const firstTestCase = question?.test_cases?.[0];
 
     return question
@@ -1626,13 +1867,13 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   }
 
   getExecutionExpectedOutput(submission: Submission | null): string {
-    const question = submission ? this.getSubmissionQuestion(submission) : null;
+    const question = submission ? this.gradingTarget(submission).question : null;
 
     return question?.test_cases?.[0]?.expected_output || '';
   }
 
   hasExecutionQuestion(submission: Submission | null): boolean {
-    return !!(submission && this.getSubmissionQuestion(submission));
+    return !!(submission && this.gradingTarget(submission).question);
   }
 
   private stdinFor(
@@ -1654,6 +1895,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       ...submission,
       grading_results: submission.grading_results?.map((result) => ({
         ...result,
+      })),
+      submission_programs: submission.submission_programs?.map((program) => ({
+        ...program,
+        grading_results: [...(program.grading_results ?? [])],
       })),
     };
   }
@@ -1707,8 +1952,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   }
 
   private restorePersistedGrade(submission: Submission): void {
-    const persistedResults = Array.isArray(submission.grading_results)
-      ? submission.grading_results.map((result) => ({ ...result }))
+    const program = this.selectedGradingProgram(submission);
+    const stored = program ? program.grading_results : submission.grading_results;
+    const persistedResults = Array.isArray(stored)
+      ? (stored as TestCaseResult[]).map((result) => ({ ...result }))
       : [];
     this.submissionTestResults[submission.id] = persistedResults;
     this.submissionCheckStatus[submission.id] = persistedResults.length

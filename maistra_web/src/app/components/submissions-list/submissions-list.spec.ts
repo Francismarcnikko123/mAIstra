@@ -2612,8 +2612,7 @@ describe('SubmissionsListComponent save feedback', () => {
     ];
     component.openModal(component.submissions[0]);
     component.setReviewStep(2);
-    // The app is zoneless: the step change must be rendered explicitly
-    // (Nombrado's check, kept alongside Jayrald's revision check).
+    // The app is zoneless: the step change must be rendered explicitly.
     let stepWhenRendered: number | undefined;
     (cdr.detectChanges as ReturnType<typeof vi.fn>).mockImplementation(() => {
       stepWhenRendered = component.reviewStep;
@@ -2651,5 +2650,45 @@ describe('SubmissionsListComponent save feedback', () => {
 
     expect(component.saveStatus['submission-1']).toBe('error');
     expect(component.reviewStep).toBe(2);
+  });
+
+  it('refreshQuestions shows a question saved on the question page with its section label', async () => {
+    // What the question form just saved: a new question placed as Basic Q3.
+    const cdr = { detectChanges: vi.fn() } as unknown as ChangeDetectorRef;
+    const supabase = {
+      getQuestions: vi.fn().mockResolvedValue({
+        data: [{ id: 'q-new', question_name: 'Sum', question_type: 'program', test_cases: [] }],
+        error: null,
+      }),
+      getQuestionSections: vi.fn().mockResolvedValue({
+        data: [{ id: 'section-1', name: 'Basic', position: 0 }],
+        error: null,
+      }),
+      getSectionItems: vi.fn().mockResolvedValue({
+        data: [{ section_id: 'section-1', question_id: 'q-new', number: 3 }],
+        error: null,
+      }),
+      getGateResults: vi.fn().mockResolvedValue(new Map()),
+    } as unknown as SupabaseService;
+    const component = new SubmissionsListComponent(
+      supabase,
+      {} as HttpClient,
+      cdr,
+      {} as Judge0Service,
+    );
+    component.submissions = [
+      {
+        id: 'paper-1',
+        image_url: 'https://example.test/paper.png',
+        captured_at: '2026-09-26T09:30:00.000Z',
+        question_id: 'q-new',
+      },
+    ];
+
+    await component.refreshQuestions();
+
+    expect(component.getQuestionLabel(component.submissions[0])).toBe('Basic · Q3 · Sum');
+    expect(component.groupedSubmissions.map((group) => group.topic)).toEqual(['Basic']);
+    expect(cdr.detectChanges).toHaveBeenCalled();
   });
 });

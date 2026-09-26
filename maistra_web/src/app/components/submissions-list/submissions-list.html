@@ -497,25 +497,53 @@
           </p>
         </div>
 
-        <div class="grading-context">
-          <span>Question</span>
-          <strong>{{ getSelectedQuestion()?.question_name || getQuestionName(selectedSubmission) }}</strong>
+        <!-- A paper with several programs grades them one at a time, each
+             against its own question (Jayrald). -->
+        <div
+          class="grading-programs"
+          role="tablist"
+          aria-label="Programs to grade"
+          *ngIf="gradingPrograms(selectedSubmission).length > 1"
+        >
+          <button
+            type="button"
+            role="tab"
+            class="grading-program"
+            *ngFor="let program of gradingPrograms(selectedSubmission)"
+            [class.active]="program.id === selectedGradingProgram(selectedSubmission)?.id"
+            [class.graded]="!!program.graded_at"
+            [attr.aria-selected]="program.id === selectedGradingProgram(selectedSubmission)?.id"
+            [disabled]="isChecking"
+            (click)="selectGradingProgram(selectedSubmission, program.id)"
+          >
+            <strong>Program {{ program.position }}</strong>
+            <span>{{ programQuestionLabel(program) }}</span>
+            <small>{{ program.graded_at ? '✓ ' + programGradeLabel(program) : 'Not graded' }}</small>
+          </button>
         </div>
 
-        <app-judge0
-          [initialCode]="editableText[selectedSubmission.id]"
-          [runCode]="getExecutionSourceCode(selectedSubmission)"
-          [stdin]="getExecutionStdin(selectedSubmission)"
-          [expectedOutput]="getExecutionExpectedOutput(selectedSubmission)"
-          [hasQuestion]="hasExecutionQuestion(selectedSubmission)"
-          [requiresQuestion]="true"
-          [submittedOutput]="submissionRunOutput[selectedSubmission.id] || ''"
-          [submitStatus]="submissionCheckStatus[selectedSubmission.id] || ''"
-          [isSubmitting]="isChecking"
-          [testCaseResults]="submissionTestResults[selectedSubmission.id] || []"
-          [codeReadOnly]="true"
-          (submitCode)="checkSubmission(selectedSubmission)"
-        ></app-judge0>
+        <div class="grading-context">
+          <span>Question</span>
+          <strong>{{ gradingQuestionLabel(selectedSubmission) }}</strong>
+        </div>
+
+        <!-- Recreated per program so a sample run never shows another program's output. -->
+        <ng-container *ngFor="let key of [gradingKey(selectedSubmission)]">
+          <app-judge0
+            [initialCode]="gradingCode(selectedSubmission)"
+            [runCode]="getExecutionSourceCode(selectedSubmission)"
+            [stdin]="getExecutionStdin(selectedSubmission)"
+            [expectedOutput]="getExecutionExpectedOutput(selectedSubmission)"
+            [hasQuestion]="hasExecutionQuestion(selectedSubmission)"
+            [requiresQuestion]="true"
+            [submittedOutput]="submissionRunOutput[selectedSubmission.id] || ''"
+            [submitStatus]="submissionCheckStatus[selectedSubmission.id] || ''"
+            [isSubmitting]="isChecking"
+            [testCaseResults]="submissionTestResults[selectedSubmission.id] || []"
+            [codeReadOnly]="true"
+            (submitCode)="checkSubmission(selectedSubmission)"
+          ></app-judge0>
+        </ng-container>
 
         <div class="grading-error" *ngIf="checkError">{{ checkError }}</div>
       </ng-container>
