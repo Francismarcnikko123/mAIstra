@@ -722,7 +722,9 @@ handwriting.
   advances the page's revision, so a save from an older view of the tabs is
   refused as a conflict instead of overwriting.
 - **Code review:** [`reviews/2026-09-26-judge0-integration-code-review.md`](reviews/2026-09-26-judge0-integration-code-review.md)
-  lists nine findings; #1 and #2 are fixed, the rest are open there.
+  lists nine findings; #1, #2, #3 and #6 are fixed (#3 and #6 in `f3c3a69`: Step 3
+  stays on the program just graded, and grading waits for a re-read in
+  progress), the rest are open there.
 
 ## Setup documentation
 

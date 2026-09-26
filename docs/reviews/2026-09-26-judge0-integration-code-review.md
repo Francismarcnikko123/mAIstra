@@ -11,10 +11,10 @@
 |---|---|---|---|---|
 | 1 | ✅ Fixed `446b05c` | Web + DB | Changing Program 1's question on Details doesn't update its `submission_programs` row, so it is graded against the old question | Jayrald |
 | 2 | ✅ Fixed `446b05c` | DB | The save guard (page `grading_revision`) doesn't move when only Programs 2+ change, so two teachers can overwrite each other's tabs | Jayrald |
-| 3 | **Medium** | Web | After grading, Step 3 jumps to the next ungraded program but still shows the previous program's results | Jayrald |
+| 3 | ✅ Fixed `f3c3a69` | Web | After grading, Step 3 jumps to the next ungraded program but still shows the previous program's results | Jayrald |
 | 4 | Medium | DB | `save_program_grade()` marks the page graded but never updates the page row's grade columns | Jayrald |
 | 5 | Medium | DB + Web | A question edit that clears a Program 2+ grade sends no realtime event for pages that weren't `graded`, so the old grade stays on screen | Jayrald |
-| 6 | Medium | Web | A fast Submit right after "Continue to grading" can grade stale program rows | Jayrald |
+| 6 | ✅ Fixed `f3c3a69` | Web | A fast Submit right after "Continue to grading" can grade stale program rows | Jayrald |
 | 7 | Low | DB | Nothing on the server resets `can_publish` when a question's answer or test cases change | Jayrald (+ Nikko's edit form) |
 | 8 | Low | OCR | `ocr_feature/main.py` is back to `allow_origins=["*"]` (Nombrado's version, as they asked) | Nombrado |
 | 9 | Low | Web + DB | Clearing a middle tab renumbers the later tabs, which wipes their grades | Jayrald (+ Nombrado's `answersToSave`) |
@@ -53,6 +53,8 @@ The only guard is the page's `grading_revision`. It advances only when Program 1
 
 ### 3. Medium — Step 3 shows the previous program's results after grading
 
+> **Fixed in `f3c3a69`:** the program just graded stays selected until the teacher picks another chip; a reopened paper starts on its first ungraded program. Tests: a unit test and the two-program Playwright test.
+
 **Where:** `submissions-list.ts:1667` (`selectedGradingProgram`).
 
 With no chip picked by the teacher, the selection is "first ungraded". Once a program is graded, the selection moves to the next program. But `submissionTestResults` and `submissionCheckStatus` are stored per paper, not per program, so they still hold the program just graded.
@@ -82,6 +84,8 @@ When a question's test cases change, the trigger clears the grades of the progra
 **Fix:** in that function, touch every page with an affected program (for example, advance its `grading_revision`), so a realtime UPDATE always fires.
 
 ### 6. Medium — grading can use stale program rows
+
+> **Fixed in `f3c3a69`:** the re-read is kept as a promise per paper and grading waits for it; a save during the re-read marks the paper stale again. Test: a unit test that clicks Submit while the re-read is still running.
 
 **Where:** `submissions-list.ts:1736` (`ensureFreshPrograms`).
 
@@ -135,7 +139,7 @@ The `046b88c` merge restored Nombrado's `allow_origins=["*"]`, as they asked; th
 ## Suggested order
 
 1. ~~**#1 and #2.**~~ Fixed in `446b05c`.
-2. **#3 and #6.** Small web fixes that prevent misleading results.
+2. ~~**#3 and #6.**~~ Fixed in `f3c3a69`.
 3. **#4 and #5.** Consistency of the page row and live updates.
 4. **#7.** Before Nikko turns on question editing.
 5. **#9.** Grade preservation.
