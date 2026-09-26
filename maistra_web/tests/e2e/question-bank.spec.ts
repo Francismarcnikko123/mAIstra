@@ -26,6 +26,23 @@ const HELLO_ID = '22222222-2222-4222-8222-222222222222';
 const OLD_ID = '33333333-3333-4333-8333-333333333333';
 const PHONE_PAPER_ID = '44444444-4444-4444-8444-444444444444';
 const PHONE_CARD_TIME = 'Sep 26 · 11:24';
+const GRADED_PAPER_ID = '55555555-5555-4555-8555-555555555555';
+
+/** A paper graded 2/2 against a question, as Program 1. */
+function addGradedPaper(backend: FakeBackend, questionId: string) {
+  backend.addSubmission({
+    id: GRADED_PAPER_ID,
+    captured_at: '2026-09-25T08:00:00Z',
+    question_id: questionId,
+    status: 'graded',
+    verified_text: program('a + b'),
+    grading_results: [{ passed: true }, { passed: true }],
+    passed_test_cases: 2,
+    total_test_cases: 2,
+    score_percent: 100,
+    graded_at: '2026-09-25T08:05:00Z',
+  });
+}
 
 /** Basic (Q1 Hello, Q2 Sum), an empty Loops section, one unsectioned question. */
 function seedBank(backend: FakeBackend) {
@@ -198,19 +215,15 @@ test('editing a validated question: renaming saves at once, changing a test case
 
 test('changing test cases on a question with graded papers warns before saving', async ({ page, backend }) => {
   seedBank(backend);
-  backend.addSubmission({
-    id: '55555555-5555-4555-8555-555555555555',
-    captured_at: '2026-09-25T08:00:00Z',
-    question_id: SUM_ID,
-    status: 'graded',
-    verified_text: program('a + b'),
-  });
+  addGradedPaper(backend, SUM_ID);
   await openBank(page);
   const form = await openEdit(page, 'Sum of Two Integers');
 
-  // A new test case the model answer passes: 3 + 4 = 7.
+  // A new test case the model answer passes: 3 + 4 = 7. Wait for the third
+  // card: .last() could still match the second one right after the click.
   await form.getByRole('button', { name: '+ Add' }).click();
-  const added = form.locator('.test-case-card').last();
+  await expect(form.locator('.test-case-card')).toHaveCount(3);
+  const added = form.locator('.test-case-card').nth(2);
   await added.locator('textarea').first().fill('7');
   await added.getByPlaceholder('Input passed to scanf').fill('3 4');
   await form.getByRole('button', { name: 'Validate Test Cases' }).click();
@@ -224,4 +237,38 @@ test('changing test cases on a question with graded papers warns before saving',
   expect(backend.questions.find((q) => q.id === SUM_ID)?.test_cases).toHaveLength(3);
   // Test cases changed, and the question is still validated afterwards.
   expect(backend.questions.find((q) => q.id === SUM_ID)?.can_publish).toBe(true);
+  // The warning was true: the paper's grade is gone.
+  expect(backend.submissions.get(GRADED_PAPER_ID)?.status).toBe('verified');
+  expect(backend.programsOf(GRADED_PAPER_ID)[0].graded_at).toBeNull();
+});
+
+// Review 2026-09-27 #1: 20 of the 23 cloud questions still have a `mark` on
+// their test cases. Renaming one must not rewrite its test cases, or the
+// database clears every linked grade without the teacher being warned.
+test('renaming an older question keeps its test cases and its papers’ grades', async ({ page, backend }) => {
+  seedBank(backend);
+  const sum = backend.questions.find((q) => q.id === SUM_ID)!;
+  sum.test_cases = sum.test_cases.map((testCase) => ({ ...testCase, mark: 5 }));
+  const storedCases = structuredClone(sum.test_cases);
+  addGradedPaper(backend, SUM_ID);
+  await openBank(page);
+
+  const form = await openEdit(page, 'Sum of Two Integers');
+  await form.getByLabel('Question Name').fill('Sum of Two Numbers');
+  await form.getByRole('button', { name: 'Save changes' }).click();
+
+  await expect(row(page, 'Sum of Two Numbers')).toBeVisible();
+  await expect(form.locator('.grade-warning')).toHaveCount(0);
+  expect(backend.questions.find((q) => q.id === SUM_ID)?.test_cases).toEqual(storedCases);
+  // Only what the teacher changed is sent.
+  const [content] = backend.requestsTo('PATCH', '/rest/v1/questions');
+  expect(Object.keys(content.body)).toEqual(['question_name']);
+  // The graded paper keeps its grade.
+  expect(backend.submissions.get(GRADED_PAPER_ID)?.status).toBe('graded');
+  expect(backend.programsOf(GRADED_PAPER_ID)[0]).toMatchObject({
+    passed_test_cases: 2,
+    total_test_cases: 2,
+    graded_at: '2026-09-25T08:05:00Z',
+  });
+  await expect(row(page, 'Sum of Two Numbers')).toContainText('✓ Validated');
 });

@@ -87,6 +87,15 @@ function isProgramsTableMissing(error: { code?: string; message?: string } | nul
   return error?.code === 'PGRST200' && /submission_programs/.test(error.message ?? '');
 }
 
+/** The question columns the edit form can change. */
+export interface QuestionUpdate {
+  question_name: string;
+  question_text: string;
+  question_type: string;
+  model_answer: string;
+  test_cases: unknown[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -150,18 +159,10 @@ async saveQuestion(question: any) {
    * allows these columns; changing test_cases or question_type clears the
    * grades of papers linked to the question, and since 20260926000800 a
    * change to model_answer, test_cases or question_type also resets
-   * can_publish to false (see markQuestionValidated).
+   * can_publish to false (see markQuestionValidated). Pass only the columns
+   * that changed: rewriting unchanged test cases can still clear grades.
    */
-  async updateQuestion(
-    id: string,
-    fields: {
-      question_name: string;
-      question_text: string;
-      question_type: string;
-      model_answer: string;
-      test_cases: unknown[];
-    },
-  ) {
+  async updateQuestion(id: string, fields: Partial<QuestionUpdate>) {
     return await this.supabase
       .from('questions')
       .update(fields)

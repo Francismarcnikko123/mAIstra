@@ -9,6 +9,9 @@ export interface TestCaseRow {
   test_code: string;
   test_input: string;
   expected_output: string;
+  // Older cloud questions still carry a per-test mark from before marks
+  // were removed; the app must not drop it on a plain rename.
+  mark?: number;
 }
 
 export interface QuestionRow {
@@ -436,13 +439,16 @@ export class FakeBackend {
       const changes = request.postDataJSON() as Partial<QuestionRow>;
       const matched = filterRows(this.questions, url);
       for (const row of matched) {
+        // Postgres compares the JSONB by value, so key order doesn't count.
+        const changed = (key: 'model_answer' | 'test_cases' | 'question_type') =>
+          key in changes && !sameValue(changes[key], row[key]);
         // Mirrors 20260926000800: changing what runs clears can_publish,
         // even when the same update sends true.
-        const contentChanged = (['model_answer', 'test_cases', 'question_type'] as const).some(
-          (key) => key in changes && JSON.stringify(changes[key]) !== JSON.stringify(row[key]),
-        );
+        const contentChanged = changed('model_answer') || changed('test_cases') || changed('question_type');
+        const testsChanged = changed('test_cases') || changed('question_type');
         Object.assign(row, changes);
         if (contentChanged) row.can_publish = false;
+        if (testsChanged) this.invalidateGradesFor(row.id);
       }
       const body = this.wantsObject(request) ? (matched[0] ?? null) : matched;
       return this.json(route, body);
@@ -749,6 +755,48 @@ export class FakeBackend {
     return this.reject(route, `Unhandled Judge0 request ${url.pathname}`);
   }
 
+  // Mirrors invalidate_grades_for_question (20260926001000): pages linked as
+  // Program 1 lose their grade, every program graded against the question
+  // is cleared, and other pages holding such a program leave 'graded'.
+  private invalidateGradesFor(questionId: string) {
+    for (const page of this.submissions.values()) {
+      if (page.question_id !== questionId) continue;
+      Object.assign(page, {
+        grading_revision: page.grading_revision + 1,
+        grading_results: [],
+        passed_test_cases: null,
+        total_test_cases: null,
+        graded_at: null,
+        status:
+          page.status !== 'graded'
+            ? page.status
+            : page.verified_text !== null
+              ? 'verified'
+              : page.extracted_text !== null
+                ? 'extracted'
+                : 'pending',
+      });
+    }
+    const pages = new Set<string>();
+    for (const program of this.programs) {
+      if (program.question_id !== questionId) continue;
+      Object.assign(program, {
+        grading_revision: program.grading_revision + 1,
+        grading_results: [],
+        passed_test_cases: null,
+        total_test_cases: null,
+        graded_at: null,
+      });
+      pages.add(program.submission_id);
+    }
+    for (const id of pages) {
+      const page = this.submissions.get(id);
+      if (!page || page.question_id === questionId) continue;
+      page.grading_revision += 1;
+      if (page.status === 'graded') page.status = 'verified';
+    }
+  }
+
   // ── helpers ──────────────────────────────────────────────
 
   private record(request: Request, url: URL) {
@@ -790,6 +838,30 @@ function filterRows<T extends object>(rows: T[], url: URL): T[] {
       ([column, value]) => String(row[column as keyof T]) === value.slice(3),
     ),
   );
+}
+
+// JSONB equality: objects compare by keys and values, not key order.
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((item, i) => sameValue(item, b[i]))
+    );
+  }
+  if (a && b && typeof a === 'object' && typeof b === 'object') {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    return (
+      aKeys.length === bKeys.length &&
+      aKeys.every((key) =>
+        sameValue((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]),
+      )
+    );
+  }
+  return false;
 }
 
 function cors() {

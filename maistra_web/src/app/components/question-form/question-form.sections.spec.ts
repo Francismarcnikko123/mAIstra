@@ -333,7 +333,10 @@ describe('QuestionFormComponent sections', () => {
       await component.save();
 
       expect(supabase.saveQuestion).toHaveBeenCalledTimes(1); // no second copy
-      expect(supabase.updateQuestion).toHaveBeenCalledWith('q-new', expect.anything());
+      // The content was saved on create and hasn't changed, so only the
+      // section link is retried.
+      expect(supabase.updateQuestion).not.toHaveBeenCalled();
+      expect(supabase.markQuestionValidated).toHaveBeenCalledWith('q-new');
       expect(supabase.addQuestionToSection).toHaveBeenLastCalledWith('q-new', 'sec-basic', 4);
     });
 
@@ -360,6 +363,57 @@ describe('QuestionFormComponent sections', () => {
 
       expect(supabase.updateQuestion).not.toHaveBeenCalled();
       expect(component.gradeWarning).toContain("Couldn't check whether papers graded");
+    });
+  });
+
+  describe('teammates review fixes (2026-09-27)', () => {
+    const sumQuestion = {
+      id: 'q-sum',
+      question_name: 'Sum',
+      question_text: 'Add.',
+      question_type: 'program',
+      model_answer: 'int main(void) { printf("5"); return 0; }',
+      // `mark` is left over on most cloud questions; the form doesn't show it.
+      test_cases: [{ test_code: '', test_input: 'hello', expected_output: '5', mark: 5 }],
+      can_publish: true,
+    };
+
+    it('#1: a rename sends only the name, never the unchanged test cases', async () => {
+      const supabase = createSupabase({ countGradedPapers: vi.fn().mockResolvedValue(3) });
+      const { component } = await readyComponent(supabase, false);
+      await component.startEdit({ question: sumQuestion, place: { sectionId: 'sec-basic', number: 1 } });
+
+      component.questionName = 'Sum of two';
+      await component.save();
+
+      expect(component.gradeWarning).toBe('');
+      expect(supabase.updateQuestion).toHaveBeenCalledWith('q-sum', { question_name: 'Sum of two' });
+    });
+
+    it('#5: after "mark validated" fails, the retry neither resaves nor warns about cleared grades', async () => {
+      const supabase = createSupabase({
+        countGradedPapers: vi.fn().mockResolvedValue(2),
+        markQuestionValidated: vi
+          .fn()
+          .mockResolvedValueOnce({ data: null, error: { message: 'network down' } })
+          .mockResolvedValueOnce({ data: { id: 'q-sum' }, error: null }),
+      });
+      const { component } = await readyComponent(supabase, false);
+      await component.startEdit({ question: sumQuestion, place: { sectionId: 'sec-basic', number: 1 } });
+      component.testCases = [{ test_code: '', test_input: 'other', expected_output: '5' }];
+      component.clearValidationResults();
+      await component.validateModelAnswer();
+
+      await component.confirmGradeReset();
+      expect(supabase.updateQuestion).toHaveBeenCalledTimes(1);
+      expect(component.errorMessage).toContain('Save again to retry');
+
+      await component.save();
+
+      expect(component.gradeWarning).toBe('');
+      expect(supabase.updateQuestion).toHaveBeenCalledTimes(1);
+      expect(supabase.markQuestionValidated).toHaveBeenCalledTimes(2);
+      expect(component.isEditing).toBe(false);
     });
   });
 });

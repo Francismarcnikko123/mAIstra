@@ -11,6 +11,7 @@ import {
   getProgramCodeError,
 } from '../../utils/c-question';
 import { normalizeOutput } from '../../utils/normalize-output';
+import type { QuestionUpdate } from '../../services/supabase';
 
 interface TestCase {
   test_code: string;
@@ -19,6 +20,15 @@ interface TestCase {
 }
 
 type TestRunStatus = 'idle' | 'running' | 'passed' | 'failed';
+
+/** An edited question's saved content, compared field by field on Save. */
+interface EditSnapshot {
+  question_name: string;
+  question_text: string;
+  model_answer: string;
+  question_type: string;
+  cases: string;
+}
 
 interface QuestionSection {
   id: string;
@@ -107,6 +117,7 @@ export class QuestionFormComponent implements OnInit {
   private editOriginal: {
     place: { sectionId: string; number: number } | null;
     testsKey: string;
+    content: EditSnapshot;
   } | null = null;
   /** Graded papers an edit to the test cases would clear; null = unknown. */
   gradedPaperCount: number | null = 0;
@@ -418,7 +429,7 @@ export class QuestionFormComponent implements OnInit {
         // to editing it, so saving again updates this question and adds its
         // section instead of inserting a second copy.
         this.editingId = data.id;
-        this.editOriginal = { place: null, testsKey: this.testsKey() };
+        this.editOriginal = this.editSnapshot(null);
         this.gradedPaperCount = 0;
         this.errorMessage =
           link.error.code === UNIQUE_VIOLATION
@@ -623,7 +634,7 @@ export class QuestionFormComponent implements OnInit {
     this.clearValidationResults();
     this.successMessage = '';
     this.gradedPaperCount = 0;
-    this.editOriginal = { place: request.place, testsKey: this.testsKey() };
+    this.editOriginal = this.editSnapshot(request.place);
     this.sectionId = request.place?.sectionId ?? '';
     this.questionNumber = request.place?.number ?? null;
     // A question that already passed keeps counting as validated until its
@@ -661,19 +672,20 @@ export class QuestionFormComponent implements OnInit {
     const label = this.labelPreview;
     const number = this.questionNumber!;
 
-    const { error } = await this.supabase.updateQuestion(id, {
-      question_name: this.questionName.trim(),
-      question_text: this.questionText,
-      question_type: this.questionType,
-      model_answer: this.modelAnswer,
-      test_cases: this.testCases.map((testCase) => ({
-        ...testCase,
-        test_input: this.stdinFor(this.questionType, testCase.test_input),
-      })),
-    });
-    if (error) {
-      this.errorMessage = 'Error: ' + error.message;
-      return;
+    // Only the columns the teacher changed: rewriting unchanged test cases
+    // would drop keys the form doesn't show (the old `mark` on most cloud
+    // questions), and the database would then clear every linked grade.
+    const fields = this.changedFields();
+    if (Object.keys(fields).length > 0) {
+      const { error } = await this.supabase.updateQuestion(id, fields);
+      if (error) {
+        this.errorMessage = 'Error: ' + error.message;
+        return;
+      }
+      // Saved: a retry after a later failure doesn't resend this or warn
+      // about grades that are already cleared (review 2026-09-27 #5).
+      this.editOriginal = this.editSnapshot(this.editOriginal?.place ?? null);
+      if ('test_cases' in fields || 'question_type' in fields) this.gradedPaperCount = 0;
     }
     // Second update: the database resets can_publish when the content
     // changes, so validation (which passed before Save was allowed) is
@@ -689,10 +701,7 @@ export class QuestionFormComponent implements OnInit {
     }
     this.questionSaved.emit();
     // The question is saved; later failures only concern its section.
-    this.editOriginal = { place: this.editOriginal?.place ?? null, testsKey: this.testsKey() };
-    this.gradedPaperCount = await this.supabase.countGradedPapers(id);
-
-    const before = this.editOriginal.place;
+    const before = this.editOriginal?.place ?? null;
     if (!before || before.sectionId !== sectionId || before.number !== number) {
       const link = before
         ? await this.supabase.moveQuestionToSection(id, sectionId, number)
@@ -715,14 +724,48 @@ export class QuestionFormComponent implements OnInit {
 
   /** Test cases and type as saved; a change clears linked grades. */
   private testsKey(): string {
-    return JSON.stringify({
-      type: this.questionType,
-      cases: this.testCases.map(({ test_code, test_input, expected_output }) => ({
+    return JSON.stringify({ type: this.questionType, cases: this.casesKey() });
+  }
+
+  private casesKey(): string {
+    return JSON.stringify(
+      this.testCases.map(({ test_code, test_input, expected_output }) => ({
         test_code,
         test_input: this.stdinFor(this.questionType, test_input),
         expected_output,
       })),
-    });
+    );
+  }
+
+  private editSnapshot(place: { sectionId: string; number: number } | null) {
+    const content: EditSnapshot = {
+      question_name: this.questionName.trim(),
+      question_text: this.questionText,
+      model_answer: this.modelAnswer,
+      question_type: this.questionType,
+      cases: this.casesKey(),
+    };
+    return { place, testsKey: this.testsKey(), content };
+  }
+
+  /** The question's columns that differ from what was loaded or last saved. */
+  private changedFields(): Partial<QuestionUpdate> {
+    const before = this.editOriginal?.content;
+    const now = this.editSnapshot(null).content;
+    const fields: Partial<QuestionUpdate> = {};
+    if (now.question_name !== before?.question_name) fields.question_name = now.question_name;
+    if (now.question_text !== before?.question_text) fields.question_text = now.question_text;
+    if (now.model_answer !== before?.model_answer) fields.model_answer = now.model_answer;
+    if (now.question_type !== before?.question_type) fields.question_type = now.question_type;
+    // Changed test cases are written without keys the form doesn't show;
+    // Save already warned that this clears the linked grades.
+    if (now.cases !== before?.cases) {
+      fields.test_cases = this.testCases.map((testCase) => ({
+        ...testCase,
+        test_input: this.stdinFor(this.questionType, testCase.test_input),
+      }));
+    }
+    return fields;
   }
 
   private testsChanged(): boolean {
