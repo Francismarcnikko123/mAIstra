@@ -240,12 +240,14 @@ describe('QuestionFormComponent sections', () => {
       expect(supabase.updateQuestion).toHaveBeenCalledWith(
         'q-sum',
         expect.not.objectContaining({ can_publish: expect.anything() }),
+        expect.anything(),
       );
       expect(supabase.updateQuestion).toHaveBeenCalledWith(
         'q-sum',
         expect.objectContaining({ question_name: 'Sum of two integers' }),
+        expect.anything(),
       );
-      expect(supabase.markQuestionValidated).toHaveBeenCalledWith('q-sum');
+      expect(supabase.markQuestionValidated).toHaveBeenCalledWith('q-sum', expect.anything());
       expect(supabase.saveQuestion).not.toHaveBeenCalled();
       expect(supabase.moveQuestionToSection).not.toHaveBeenCalled();
       expect(supabase.addQuestionToSection).not.toHaveBeenCalled();
@@ -336,7 +338,7 @@ describe('QuestionFormComponent sections', () => {
       // The content was saved on create and hasn't changed, so only the
       // section link is retried.
       expect(supabase.updateQuestion).not.toHaveBeenCalled();
-      expect(supabase.markQuestionValidated).toHaveBeenCalledWith('q-new');
+      expect(supabase.markQuestionValidated).toHaveBeenCalledWith('q-new', expect.anything());
       expect(supabase.addQuestionToSection).toHaveBeenLastCalledWith('q-new', 'sec-basic', 4);
     });
 
@@ -387,7 +389,46 @@ describe('QuestionFormComponent sections', () => {
       await component.save();
 
       expect(component.gradeWarning).toBe('');
-      expect(supabase.updateQuestion).toHaveBeenCalledWith('q-sum', { question_name: 'Sum of two' });
+      // Guarded by the row as it was loaded, `mark` included (#2).
+      expect(supabase.updateQuestion).toHaveBeenCalledWith(
+        'q-sum',
+        { question_name: 'Sum of two' },
+        expect.objectContaining({ question_name: 'Sum', test_cases: sumQuestion.test_cases }),
+      );
+      expect(supabase.markQuestionValidated).toHaveBeenCalledWith('q-sum', {
+        model_answer: sumQuestion.model_answer,
+        test_cases: sumQuestion.test_cases,
+        question_type: 'program',
+      });
+    });
+
+    it('#2: a save refused because someone else changed the question saves nothing more', async () => {
+      const supabase = createSupabase({
+        updateQuestion: vi.fn().mockResolvedValue({ error: null, conflict: true }),
+      });
+      const { component } = await readyComponent(supabase, false);
+      await component.startEdit({ question: sumQuestion, place: { sectionId: 'sec-basic', number: 1 } });
+
+      component.questionName = 'Sum of two';
+      await component.save();
+
+      expect(component.errorMessage).toContain('Someone else changed this question after you opened it');
+      expect(supabase.markQuestionValidated).not.toHaveBeenCalled();
+      expect(component.isEditing).toBe(true);
+    });
+
+    it('#2: validation is not recorded on content someone else changed in between', async () => {
+      const supabase = createSupabase({
+        markQuestionValidated: vi.fn().mockResolvedValue({ error: null, conflict: true }),
+      });
+      const { component } = await readyComponent(supabase, false);
+      await component.startEdit({ question: sumQuestion, place: { sectionId: 'sec-basic', number: 1 } });
+
+      component.questionName = 'Sum of two';
+      await component.save();
+
+      expect(component.errorMessage).toContain('Your changes were saved, but someone else changed');
+      expect(component.isEditing).toBe(true);
     });
 
     it('#5: after "mark validated" fails, the retry neither resaves nor warns about cleared grades', async () => {

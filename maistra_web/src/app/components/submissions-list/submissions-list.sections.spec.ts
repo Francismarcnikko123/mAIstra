@@ -132,6 +132,23 @@ describe('SubmissionsListComponent section folders', () => {
     component.ngOnDestroy();
   });
 
+  it('keeps a live photo badge that arrives while the folders are reloading (#6)', async () => {
+    let finishGateResults!: (results: Map<string, string>) => void;
+    const { component } = createComponent({
+      getGateResults: vi.fn().mockReturnValue(
+        new Promise<Map<string, string>>((resolve) => (finishGateResults = resolve)),
+      ),
+    });
+    const reload = component.loadSectionFolders();
+    // The phone's upload arrives over realtime before the reload finishes.
+    component.gateResults.set('phone-1', 'PASS');
+    finishGateResults(new Map([['s2', 'FIXABLE']]));
+    await reload;
+
+    expect(component.gateResults.get('phone-1')).toBe('PASS');
+    expect(component.gateResults.get('s2')).toBe('FIXABLE');
+  });
+
   it('re-linking a paper to an unsectioned question drops the old section name', async () => {
     const { component, supabase } = createComponent();
     await component.loadSubmissions();

@@ -2,6 +2,91 @@ import { describe, expect, it, vi } from 'vitest';
 import { SupabaseService } from './supabase';
 
 describe('SupabaseService', () => {
+  /** A PostgREST query builder that records every filter. */
+  function recordingQuery(result: unknown) {
+    const calls: Array<[string, ...unknown[]]> = [];
+    const query: any = {};
+    for (const method of ['update', 'eq', 'is', 'not', 'select']) {
+      query[method] = (...args: unknown[]) => {
+        calls.push([method, ...args]);
+        return method === 'select' ? Promise.resolve(result) : query;
+      };
+    }
+    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+    (service as unknown as { supabase: unknown }).supabase = { from: vi.fn().mockReturnValue(query) };
+    return { service, calls };
+  }
+
+  const stored = {
+    question_name: 'Sum',
+    question_text: 'Add.',
+    question_type: 'program',
+    model_answer: 'int main(void) { return 0; }',
+    test_cases: [{ test_input: '2 3', expected_output: '5', mark: 5 }],
+  };
+
+  it('updates a question only while it still holds what the form loaded (#2)', async () => {
+    const { service, calls } = recordingQuery({ data: [{ id: 'q1' }], error: null });
+
+    const result = await service.updateQuestion('q1', { question_name: 'Sum 2' }, stored);
+
+    expect(result).toEqual({ error: null, conflict: false });
+    expect(calls).toContainEqual(['update', { question_name: 'Sum 2' }]);
+    expect(calls).toContainEqual(['eq', 'id', 'q1']);
+    expect(calls).toContainEqual(['eq', 'question_name', 'Sum']);
+    expect(calls).toContainEqual(['eq', 'test_cases', JSON.stringify(stored.test_cases)]);
+  });
+
+  it('reports a question update that matched no row as a conflict (#2)', async () => {
+    const { service } = recordingQuery({ data: [], error: null });
+
+    const result = await service.updateQuestion('q1', { question_name: 'Sum 2' }, stored);
+
+    expect(result.conflict).toBe(true);
+  });
+
+  it('marks validated only the content that was validated (#2)', async () => {
+    const { service, calls } = recordingQuery({ data: [{ id: 'q1' }], error: null });
+
+    await service.markQuestionValidated('q1', {
+      model_answer: stored.model_answer,
+      test_cases: stored.test_cases,
+      question_type: 'program',
+    });
+
+    expect(calls).toContainEqual(['update', { can_publish: true }]);
+    expect(calls).toContainEqual(['eq', 'model_answer', stored.model_answer]);
+    expect(calls).toContainEqual(['eq', 'question_type', 'program']);
+  });
+
+  it('counts graded papers with both queries at once, asking only for graded programs (#9)', async () => {
+    const pages = { data: [{ id: 'p1' }], error: null };
+    const programs = { data: [{ submission_id: 'p1' }, { submission_id: 'p2' }], error: null };
+    const order: string[] = [];
+    const query = (table: string, result: unknown) => {
+      const q: any = {};
+      q.select = () => q;
+      q.not = (...args: unknown[]) => {
+        order.push(`not ${args.join(' ')}`);
+        return q;
+      };
+      q.eq = () => q;
+      q.then = (resolve: (value: unknown) => void) => {
+        order.push(`resolved ${table}`);
+        return Promise.resolve(result).then(resolve);
+      };
+      order.push(`started ${table}`);
+      return q;
+    };
+    const from = vi.fn((table: string) => query(table, table === 'submissions' ? pages : programs));
+    const service = Object.create(SupabaseService.prototype) as SupabaseService;
+    (service as unknown as { supabase: unknown }).supabase = { from };
+
+    expect(await service.countGradedPapers('q1')).toBe(2);
+    expect(order.indexOf('started submission_programs')).toBeLessThan(order.indexOf('resolved submissions'));
+    expect(order).toContain('not graded_at is ');
+  });
+
   it('subscribes to both inserted and updated submissions', () => {
     const subscription = { unsubscribe: vi.fn() };
     const channel = {

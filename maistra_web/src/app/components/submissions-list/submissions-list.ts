@@ -522,12 +522,14 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         sections.error || items.error
           ? new Map()
           : indexQuestionPlaces(sections.data ?? [], items.data ?? []);
-      this.gateResults = gateResults;
+      // Merge: a live upload's badge that arrived while this was loading
+      // must survive (review 2026-09-27 #6). A photo verdict never changes
+      // after upload, so keeping known ones can't show a stale badge.
+      this.gateResults = new Map([...gateResults, ...this.gateResults]);
     } catch (err) {
       // Never let folders or badges stop the submissions list loading.
       console.error('Failed to load question sections:', err);
       this.questionPlaces = new Map();
-      this.gateResults = new Map();
     }
   }
 

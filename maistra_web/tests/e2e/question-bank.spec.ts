@@ -272,3 +272,45 @@ test('renaming an older question keeps its test cases and its papers’ grades',
   });
   await expect(row(page, 'Sum of Two Numbers')).toContainText('✓ Validated');
 });
+
+// Review 2026-09-27 #2: two teachers editing the same question.
+test('a save made from an outdated copy is refused instead of overwriting the other teacher', async ({ page, backend }) => {
+  seedBank(backend);
+  await openBank(page);
+  const form = await openEdit(page, 'Sum of Two Integers');
+  await form.getByLabel('Question Name').fill('Sum, renamed by teacher A');
+
+  // Teacher B saves new test cases after A opened the form.
+  const teacherB = [{ test_code: '', test_input: '1 1', expected_output: '2' }];
+  backend.beforeQuestionUpdate = (question) => {
+    question.test_cases = teacherB;
+  };
+  await form.getByRole('button', { name: 'Save changes' }).click();
+
+  await expect(form.locator('.error-message')).toContainText(
+    'Someone else changed this question after you opened it',
+  );
+  const stored = backend.questions.find((q) => q.id === SUM_ID)!;
+  expect(stored.question_name).toBe('Sum of Two Integers');
+  expect(stored.test_cases).toEqual(teacherB);
+  // Nothing marked validated on top of B's version.
+  expect(backend.requestsTo('PATCH', '/rest/v1/questions')).toHaveLength(1);
+});
+
+// Review 2026-09-27 #8: the database's UNIQUE (section_id, number).
+test('a number taken by someone else while editing is reported, not saved twice', async ({ page, backend }) => {
+  const { basic } = seedBank(backend);
+  await openBank(page);
+  const form = await openEdit(page, 'adds two integer');
+  await form.getByLabel('Section *', { exact: true }).selectOption({ label: 'Basic' });
+  await form.getByLabel('Question No.').fill('3');
+  await form.getByRole('button', { name: 'Validate Test Cases' }).click();
+
+  // Another teacher files a question as Basic · Q3 first.
+  backend.addSectionItem(basic.id, '99999999-9999-4999-8999-999999999999', 3);
+  await form.getByRole('button', { name: 'Save changes' }).click();
+
+  await expect(form).toContainText('Q3 is already used in Basic. Pick another number and save again.');
+  expect(backend.sectionItems.filter((item) => item.question_id === OLD_ID)).toHaveLength(0);
+  expect(backend.questions.find((q) => q.id === OLD_ID)?.can_publish).toBe(true);
+});

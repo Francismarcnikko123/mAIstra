@@ -144,6 +144,9 @@ export class FakeBackend {
   // How the fake Judge0 "executes" one run. Tests replace it to decide the
   // output for each test case.
   judge0: Judge0Handler = () => accepted('');
+  // Runs when the edit form's content update arrives, before it is applied,
+  // e.g. to simulate another teacher saving the same question first.
+  beforeQuestionUpdate?: (question: QuestionRow) => void;
   // Makes the whole Judge0 wrapper answer with this HTTP status, e.g. 502
   // when the VM is down.
   judge0FailureStatus: number | null = null;
@@ -437,7 +440,18 @@ export class FakeBackend {
     // Editing a question (Nikko, 20260926000400_allow_question_updates.sql).
     if (method === 'PATCH' && path === '/rest/v1/questions') {
       const changes = request.postDataJSON() as Partial<QuestionRow>;
+      if (!('can_publish' in changes)) {
+        for (const row of filterRows(this.questions, url, ['id'])) this.beforeQuestionUpdate?.(row);
+      }
       const matched = filterRows(this.questions, url);
+      // questions_public_update's WITH CHECK (20260926000400).
+      if (matched.some((row) => !passesQuestionPolicy({ ...row, ...changes }))) {
+        return this.json(
+          route,
+          { code: '42501', message: 'new row violates row-level security policy for table "questions"' },
+          403,
+        );
+      }
       for (const row of matched) {
         // Postgres compares the JSONB by value, so key order doesn't count.
         const changed = (key: 'model_answer' | 'test_cases' | 'question_type') =>
@@ -492,11 +506,15 @@ export class FakeBackend {
     // Moving a question to another section or number (edit form).
     if (method === 'PATCH' && path === '/rest/v1/question_section_items') {
       const changes = request.postDataJSON() as Partial<SectionItemRow>;
-      for (const row of filterRows(this.sectionItems, url)) Object.assign(row, changes);
+      const matched = filterRows(this.sectionItems, url);
+      const moved = matched.map((row) => ({ ...row, ...changes }));
+      if (moved.some((row) => this.numberTaken(row, matched))) return this.uniqueViolation(route);
+      matched.forEach((row, i) => Object.assign(row, moved[i]));
       return this.json(route, null);
     }
     if (method === 'POST' && path === '/rest/v1/question_section_items') {
       const rows = request.postDataJSON() as SectionItemRow[];
+      if (rows.some((row) => this.numberTaken(row, []))) return this.uniqueViolation(route);
       this.sectionItems.push(...rows);
       return this.json(route, null, 201);
     }
@@ -797,6 +815,22 @@ export class FakeBackend {
     }
   }
 
+  // UNIQUE (section_id, number) on question_section_items.
+  private numberTaken(row: SectionItemRow, ignore: SectionItemRow[]): boolean {
+    return this.sectionItems.some(
+      (other) =>
+        !ignore.includes(other) && other.section_id === row.section_id && other.number === row.number,
+    );
+  }
+
+  private uniqueViolation(route: Route) {
+    return this.json(
+      route,
+      { code: '23505', message: 'duplicate key value violates unique constraint' },
+      409,
+    );
+  }
+
   // ── helpers ──────────────────────────────────────────────
 
   private record(request: Request, url: URL) {
@@ -828,15 +862,35 @@ export class FakeBackend {
   }
 }
 
-// Applies the PostgREST `column=eq.value` filters the app uses.
-function filterRows<T extends object>(rows: T[], url: URL): T[] {
-  const filters = [...url.searchParams.entries()].filter(([, value]) =>
-    value.startsWith('eq.'),
+// Applies the PostgREST filters the app uses: `eq.` (JSONB columns by
+// value), `is.null` and `not.is.null`. `only` limits it to those columns.
+function filterRows<T extends object>(rows: T[], url: URL, only?: string[]): T[] {
+  const filters = [...url.searchParams.entries()].filter(
+    ([column, value]) =>
+      (!only || only.includes(column)) &&
+      (value.startsWith('eq.') || value === 'is.null' || value === 'not.is.null'),
   );
   return rows.filter((row) =>
-    filters.every(
-      ([column, value]) => String(row[column as keyof T]) === value.slice(3),
-    ),
+    filters.every(([column, value]) => {
+      const cell = row[column as keyof T] as unknown;
+      if (value === 'is.null') return cell === null || cell === undefined;
+      if (value === 'not.is.null') return cell !== null && cell !== undefined;
+      const wanted = value.slice(3);
+      if (cell !== null && typeof cell === 'object') return sameValue(JSON.parse(wanted), cell);
+      return String(cell) === wanted;
+    }),
+  );
+}
+
+function passesQuestionPolicy(row: Partial<QuestionRow>): boolean {
+  const length = (text: unknown, max: number) =>
+    typeof text === 'string' && text.length >= 1 && text.length <= max;
+  return (
+    (row.question_type === 'function' || row.question_type === 'program') &&
+    length(row.question_name, 200) &&
+    length(row.question_text, 10000) &&
+    length(row.model_answer, 50000) &&
+    Array.isArray(row.test_cases)
   );
 }
 

@@ -11,7 +11,7 @@ import {
   getProgramCodeError,
 } from '../../utils/c-question';
 import { normalizeOutput } from '../../utils/normalize-output';
-import type { QuestionUpdate } from '../../services/supabase';
+import type { QuestionUpdate, StoredQuestion } from '../../services/supabase';
 
 interface TestCase {
   test_code: string;
@@ -118,6 +118,8 @@ export class QuestionFormComponent implements OnInit {
     place: { sectionId: string; number: number } | null;
     testsKey: string;
     content: EditSnapshot;
+    /** The row as stored; saves only land while it still matches. */
+    stored: StoredQuestion;
   } | null = null;
   /** Graded papers an edit to the test cases would clear; null = unknown. */
   gradedPaperCount: number | null = 0;
@@ -399,7 +401,7 @@ export class QuestionFormComponent implements OnInit {
       if (!sectionId) return;
       const label = this.labelPreview;
 
-      const { data, error } = await this.saveQuestionWithTimeout({
+      const content = {
         question_name: this.questionName.trim(),
         question_text: this.questionText,
         question_type: this.questionType,
@@ -408,9 +410,9 @@ export class QuestionFormComponent implements OnInit {
           ...testCase,
           test_input: this.stdinFor(this.questionType, testCase.test_input),
         })),
-        // save() only gets here after every test case passed.
-        can_publish: true,
-      });
+      };
+      // save() only gets here after every test case passed.
+      const { data, error } = await this.saveQuestionWithTimeout({ ...content, can_publish: true });
       if (error) {
         this.errorMessage = 'Error: ' + error.message;
         return;
@@ -429,7 +431,7 @@ export class QuestionFormComponent implements OnInit {
         // to editing it, so saving again updates this question and adds its
         // section instead of inserting a second copy.
         this.editingId = data.id;
-        this.editOriginal = this.editSnapshot(null);
+        this.editOriginal = this.editSnapshot(null, content);
         this.gradedPaperCount = 0;
         this.errorMessage =
           link.error.code === UNIQUE_VIOLATION
@@ -634,7 +636,13 @@ export class QuestionFormComponent implements OnInit {
     this.clearValidationResults();
     this.successMessage = '';
     this.gradedPaperCount = 0;
-    this.editOriginal = this.editSnapshot(request.place);
+    this.editOriginal = this.editSnapshot(request.place, {
+      question_name: q.question_name ?? null,
+      question_text: q.question_text ?? null,
+      question_type: q.question_type ?? null,
+      model_answer: q.model_answer ?? null,
+      test_cases: q.test_cases ?? null,
+    });
     this.sectionId = request.place?.sectionId ?? '';
     this.questionNumber = request.place?.number ?? null;
     // A question that already passed keeps counting as validated until its
@@ -676,21 +684,41 @@ export class QuestionFormComponent implements OnInit {
     // would drop keys the form doesn't show (the old `mark` on most cloud
     // questions), and the database would then clear every linked grade.
     const fields = this.changedFields();
+    let stored = this.editOriginal!.stored;
     if (Object.keys(fields).length > 0) {
-      const { error } = await this.supabase.updateQuestion(id, fields);
+      const { error, conflict } = await this.supabase.updateQuestion(id, fields, stored);
       if (error) {
         this.errorMessage = 'Error: ' + error.message;
         return;
       }
+      if (conflict) {
+        this.errorMessage =
+          'Someone else changed this question after you opened it, so nothing was saved. ' +
+          'Cancel and open it again to see their version.';
+        return;
+      }
       // Saved: a retry after a later failure doesn't resend this or warn
       // about grades that are already cleared (review 2026-09-27 #5).
-      this.editOriginal = this.editSnapshot(this.editOriginal?.place ?? null);
+      stored = { ...stored, ...fields };
+      this.editOriginal = this.editSnapshot(this.editOriginal?.place ?? null, stored);
       if ('test_cases' in fields || 'question_type' in fields) this.gradedPaperCount = 0;
     }
     // Second update: the database resets can_publish when the content
     // changes, so validation (which passed before Save was allowed) is
-    // recorded on its own.
-    const validated = await this.supabase.markQuestionValidated(id);
+    // recorded on its own, for exactly the content that was validated.
+    const validated = await this.supabase.markQuestionValidated(id, {
+      model_answer: stored.model_answer,
+      test_cases: stored.test_cases,
+      question_type: stored.question_type,
+    });
+    if (validated.conflict) {
+      this.errorMessage =
+        (Object.keys(fields).length > 0 ? 'Your changes were saved, but s' : 'S') +
+        'omeone else changed the model answer or test cases meanwhile, so it was not marked validated. ' +
+        'Cancel and open it again to check their version.';
+      this.questionSaved.emit();
+      return;
+    }
     if (validated.error) {
       this.errorMessage =
         'The changes were saved, but the question could not be marked validated: ' +
@@ -737,21 +765,27 @@ export class QuestionFormComponent implements OnInit {
     );
   }
 
-  private editSnapshot(place: { sectionId: string; number: number } | null) {
-    const content: EditSnapshot = {
+  private editSnapshot(
+    place: { sectionId: string; number: number } | null,
+    stored: StoredQuestion,
+  ) {
+    return { place, testsKey: this.testsKey(), content: this.formContent(), stored };
+  }
+
+  private formContent(): EditSnapshot {
+    return {
       question_name: this.questionName.trim(),
       question_text: this.questionText,
       model_answer: this.modelAnswer,
       question_type: this.questionType,
       cases: this.casesKey(),
     };
-    return { place, testsKey: this.testsKey(), content };
   }
 
   /** The question's columns that differ from what was loaded or last saved. */
   private changedFields(): Partial<QuestionUpdate> {
     const before = this.editOriginal?.content;
-    const now = this.editSnapshot(null).content;
+    const now = this.formContent();
     const fields: Partial<QuestionUpdate> = {};
     if (now.question_name !== before?.question_name) fields.question_name = now.question_name;
     if (now.question_text !== before?.question_text) fields.question_text = now.question_text;

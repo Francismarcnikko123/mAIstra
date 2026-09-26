@@ -96,6 +96,32 @@ export interface QuestionUpdate {
   test_cases: unknown[];
 }
 
+/** Those columns as stored when the edit form opened them. */
+export type StoredQuestion = { [K in keyof QuestionUpdate]: QuestionUpdate[K] | null };
+
+/** A guarded question update: `conflict` when the row no longer matched. */
+export interface GuardedResult {
+  error: { message: string; code?: string } | null;
+  conflict: boolean;
+}
+
+/**
+ * Adds `column = stored value` filters, so an update only lands while the
+ * row still holds what the form loaded. PostgREST compares JSONB by value
+ * (key order doesn't matter).
+ */
+function whereStill<Q extends { eq(column: string, value: unknown): Q; is(column: string, value: null): Q }>(
+  query: Q,
+  stored: Partial<StoredQuestion>,
+): Q {
+  for (const [column, value] of Object.entries(stored)) {
+    if (value === null || value === undefined) query = query.is(column, null);
+    else if (typeof value === 'object') query = query.eq(column, JSON.stringify(value));
+    else query = query.eq(column, value);
+  }
+  return query;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -161,28 +187,38 @@ async saveQuestion(question: any) {
    * change to model_answer, test_cases or question_type also resets
    * can_publish to false (see markQuestionValidated). Pass only the columns
    * that changed: rewriting unchanged test cases can still clear grades.
+   * Compare-and-set: nothing is written, and `conflict` is true, when
+   * someone else changed any of the question's content since `stored` was
+   * read (review 2026-09-27 #2).
    */
-  async updateQuestion(id: string, fields: Partial<QuestionUpdate>) {
-    return await this.supabase
-      .from('questions')
-      .update(fields)
-      .eq('id', id)
-      .select('id')
-      .single();
+  async updateQuestion(
+    id: string,
+    fields: Partial<QuestionUpdate>,
+    stored: StoredQuestion,
+  ): Promise<GuardedResult> {
+    const { data, error } = await whereStill(
+      this.supabase.from('questions').update(fields).eq('id', id),
+      stored,
+    ).select('id');
+    return { error, conflict: !error && (data ?? []).length === 0 };
   }
 
   /**
    * Marks a question validated. Must be its own update, after the content is
    * saved: Jayrald's reset trigger (20260926000800) clears can_publish on
    * any update that also changes the model answer, test cases or type.
+   * Only marks the content that was validated: `conflict` when another
+   * save changed what runs in between.
    */
-  async markQuestionValidated(id: string) {
-    return await this.supabase
-      .from('questions')
-      .update({ can_publish: true })
-      .eq('id', id)
-      .select('id')
-      .single();
+  async markQuestionValidated(
+    id: string,
+    validated: Pick<StoredQuestion, 'model_answer' | 'test_cases' | 'question_type'>,
+  ): Promise<GuardedResult> {
+    const { data, error } = await whereStill(
+      this.supabase.from('questions').update({ can_publish: true }).eq('id', id),
+      validated,
+    ).select('id');
+    return { error, conflict: !error && (data ?? []).length === 0 };
   }
 
   /** Moves an already-sectioned question to another section and/or number. */
@@ -200,27 +236,25 @@ async saveQuestion(question: any) {
    * the count can't be read, so the caller warns instead of assuming none.
    */
   async countGradedPapers(questionId: string): Promise<number | null> {
-    const papers = new Set<string>();
-    const pages = await this.supabase
-      .from('submissions')
-      .select('id')
-      .eq('question_id', questionId)
-      .eq('status', 'graded');
+    // Both at once, and only graded programs come back (review #9).
+    const [pages, programs] = await Promise.all([
+      this.supabase
+        .from('submissions')
+        .select('id')
+        .eq('question_id', questionId)
+        .eq('status', 'graded'),
+      this.supabase
+        .from('submission_programs')
+        .select('submission_id')
+        .eq('question_id', questionId)
+        .not('graded_at', 'is', null),
+    ]);
     if (pages.error) return null;
+    // PGRST205: the table doesn't exist yet (older database).
+    if (programs.error && programs.error.code !== 'PGRST205') return null;
+    const papers = new Set<string>();
     for (const row of (pages.data ?? []) as { id: string }[]) papers.add(row.id);
-
-    const programs = await this.supabase
-      .from('submission_programs')
-      .select('submission_id, graded_at')
-      .eq('question_id', questionId);
-    if (programs.error) {
-      // PGRST205: the table doesn't exist yet (older database).
-      if (programs.error.code !== 'PGRST205') return null;
-    } else {
-      for (const row of (programs.data ?? []) as { submission_id: string; graded_at: string | null }[]) {
-        if (row.graded_at) papers.add(row.submission_id);
-      }
-    }
+    for (const row of (programs.data ?? []) as { submission_id: string }[]) papers.add(row.submission_id);
     return papers.size;
   }
 
