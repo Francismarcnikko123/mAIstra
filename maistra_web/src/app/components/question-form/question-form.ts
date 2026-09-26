@@ -1,4 +1,4 @@
-import { Component, ChangeDetectorRef } from '@angular/core';
+import { Component, ChangeDetectorRef, EventEmitter, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
@@ -61,6 +61,9 @@ export class QuestionFormComponent {
   isSaving = false;
   successMessage = '';
   errorMessage = '';
+  // Lets the page refresh lists that show questions, such as the review
+  // dialog's question picker.
+  @Output() questionSaved = new EventEmitter<void>();
 
   readonly PROGRAM_TEMPLATE = `int main(void) {\n  return 0;\n}`;
 
@@ -241,6 +244,7 @@ export class QuestionFormComponent {
         this.collapsedTestCases = {};
         this.hasAttemptedValidation = false;
         this.clearValidationResults();
+        this.questionSaved.emit();
       }
     } catch (error) {
       const message =

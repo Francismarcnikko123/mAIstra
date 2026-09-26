@@ -505,6 +505,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       !this.hasUnsavedDetails()
     ) {
       this.reviewStep = 2;
+      // Set after an await, so the zoneless app will not re-render on its own.
+      this.cdr.detectChanges();
     }
   }
 
@@ -529,6 +531,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       !this.stepBlocker(3)
     ) {
       this.reviewStep = 3;
+      this.cdr.detectChanges();
     }
   }
 
