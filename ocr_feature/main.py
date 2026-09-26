@@ -34,12 +34,27 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MaestrAI OCR Backend", lifespan=lifespan)
 
+# Only the web app may call this server from a browser. With "*", any website
+# the teacher had open could make it download URLs of that site's choosing
+# (review 2026-09-26 #8). The ng serve ports by default; OCR_ALLOWED_ORIGINS
+# in .env (comma-separated) replaces the list, e.g. for another port.
+DEFAULT_ALLOWED_ORIGINS = (
+    "http://localhost:4200,http://127.0.0.1:4200,"
+    "http://localhost:4201,http://127.0.0.1:4201"
+)
+
+
+def allowed_origins(env=os.environ) -> list[str]:
+    raw = env.get("OCR_ALLOWED_ORIGINS") or DEFAULT_ALLOWED_ORIGINS
+    return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins(),
     # No cookies or auth headers are used, so never let other sites send them.
     allow_credentials=False,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -96,11 +111,32 @@ DOWNLOAD_RETRIES = 3
 DOWNLOAD_MAX_BYTES = 25 * 1024 * 1024
 
 
+def allowed_image_hosts(env=os.environ) -> set[str]:
+    """Hosts an image URL may point to: OCR_ALLOWED_IMAGE_HOSTS if set
+    (comma-separated host[:port]), else the host of SUPABASE_URL, where every
+    paper's photo is stored. Empty (no .env yet) accepts any host."""
+    raw = env.get("OCR_ALLOWED_IMAGE_HOSTS", "")
+    hosts = {host.strip().lower() for host in raw.split(",") if host.strip()}
+    if not hosts and env.get("SUPABASE_URL"):
+        hosts.add(urlparse(env["SUPABASE_URL"]).netloc.lower())
+    return hosts
+
+
 def download_image(url: str, dest: Path) -> None:
     """Download an image to `dest`, retrying on network errors. Raises
     HTTPException(400) if all attempts fail."""
-    if urlparse(url).scheme not in ("http", "https"):
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
         raise HTTPException(status_code=400, detail="Image URL must be http or https.")
+    # Other devices on the network may reach this server, so it must not
+    # download internal addresses for whoever asks.
+    hosts = allowed_image_hosts()
+    if hosts and parsed.netloc.lower() not in hosts:
+        raise HTTPException(
+            status_code=400,
+            detail="Image URL must point to this project's Supabase storage "
+                   "(SUPABASE_URL or OCR_ALLOWED_IMAGE_HOSTS in ocr_feature/.env).",
+        )
     last_error = None
     for attempt in range(1, DOWNLOAD_RETRIES + 1):
         try:
@@ -108,6 +144,9 @@ def download_image(url: str, dest: Path) -> None:
                 url,
                 timeout=(DOWNLOAD_CONNECT_TIMEOUT, DOWNLOAD_READ_TIMEOUT),
                 stream=True,
+                # Supabase storage serves photos directly; a redirect could
+                # lead past the host check above.
+                allow_redirects=False,
             ) as response:
                 if response.status_code != 200:
                     raise HTTPException(
