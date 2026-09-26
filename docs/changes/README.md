@@ -17,3 +17,4 @@ One file per update, newest last. Each note says what changed, why, which files,
 | 2026-09-26 | [Nikko's and Nombrado's branches merged into `judge0-integration`](2026-09-26-merges-into-judge0-integration.md) | Jayrald | `138ef02`, `046b88c`, `c893b85` |
 | 2026-09-26 | [Pages of one answer share `submissions.batch_id`](2026-09-26-batch-id.md) | Jayrald | `ec5c910` |
 | 2026-09-26 | [Every program on a paper is its own row, graded on its own](2026-09-26-submission-programs-and-per-program-grading.md) | Jayrald | `f85d99e`, `f3138c6`, `96eda09` |
+| 2026-09-26 | [Review fixes: Program 1 follows the page's question; tab-only saves are guarded](2026-09-26-review-fixes-program-one-and-tab-saves.md) | Jayrald | `446b05c` |

@@ -148,6 +148,9 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 - (2026-09-26, `judge0-integration`) **Working branch: `judge0-integration`** (pushed). Everything of mine lands here. It contains `feature/question-linking-v2` (Nikko, merged in `138ef02`) and `feature/pre-extraction` up to `0f87354` (Nombrado, merged in `046b88c`). `code-similarity/duplicate` is parked. Cloud Supabase is at `20260926000600`.
 
 ### Changed (affects others)
+- (2026-09-26, `judge0-integration`) **Review fixes #1 and #2** (`446b05c`, migration `20260926000700`; code review in `docs/reviews/2026-09-26-judge0-integration-code-review.md`).
+  - **For everyone:** changing a paper's question on Details now moves Program 1 to that question and clears its grade, so it is graded against the right question.
+  - **For Nombrado:** a save that only changes tabs now advances the page's revision, so a second teacher saving from an older view gets the normal conflict instead of deleting your tabs. Nothing to change in the review code.
 - (2026-09-26, `judge0-integration`) **For everyone: which branch to use.** Build on `judge0-integration`; it now holds all three of our lines of work. Pull it before your next change. `main` and `develop` are still the July versions. `code-similarity/duplicate` is parked, not merged.
 - (2026-09-26, `judge0-integration`) **For Nombrado: every program on a paper is now its own row** (`20260926000600_add_submission_programs`, applied to the cloud; web `96eda09`).
   - Table `submission_programs(submission_id, position, question_id, verified_text, grade columns, grading_revision)`; Program 1 is position 1 and is still mirrored to `submissions.verified_text` / `question_id` for the list and the OCR export. `submissions.answers` is **dropped** (it was empty).

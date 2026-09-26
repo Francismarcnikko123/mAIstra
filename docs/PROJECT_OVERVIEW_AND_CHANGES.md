@@ -715,6 +715,14 @@ handwriting.
 - **Stale grades:** editing a program's code or question clears that program's
   grade; editing a question's test cases or type clears the grades of every
   program linked to it.
+- **Program 1 and the Details step** (fix `446b05c`): choosing another question
+  on Details moves Program 1 to it and clears its grade; the page gets a
+  Program 1 row when it first gets a question.
+- **Two teachers on one paper** (fix `446b05c`): any change to the programs
+  advances the page's revision, so a save from an older view of the tabs is
+  refused as a conflict instead of overwriting.
+- **Code review:** [`reviews/2026-09-26-judge0-integration-code-review.md`](reviews/2026-09-26-judge0-integration-code-review.md)
+  lists nine findings; #1 and #2 are fixed, the rest are open there.
 
 ## Setup documentation
 
