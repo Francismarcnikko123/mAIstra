@@ -211,8 +211,13 @@ photo (mobile, quality-gated)
   retries — but **only network errors are retried**. A non-200 HTTP
   status raises immediately: it is not transient (the URL is wrong or
   access is denied; retrying can't fix that).
-- **CORS `allow_origins=["*"]`**: development convenience. If asked:
-  "in production this would be restricted to the web app's origin."
+- **Who may call the server** (changed 2026-09-27; it used to be CORS
+  `allow_origins=["*"]`): browsers may call it only from the web app's
+  origins (ports 4200/4201, `OCR_ALLOWED_ORIGINS` to change), credentials
+  are never allowed, and `image_url` must be on the project's Supabase
+  storage host with redirects not followed. If asked: "a website the teacher
+  has open can't make the OCR server fetch anything, and nobody can make it
+  download from an internal address."
 
 **Likely question:** *"Why does the endpoint return `saved_to_db:
 false`?"* → The backend does not write results to the database; the web

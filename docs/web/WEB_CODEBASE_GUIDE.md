@@ -1,6 +1,22 @@
 # Web Frontend Guide — Nombrado's Work in `maistra_web/`
 
-## Current addition — 2026-09-24
+## Current state — 2026-09-27 (branch `judge0-integration`)
+
+- **Saving goes through the database.** `updateSubmissionText(id, text,
+  ocrText, expectedRevision, answers?)` calls `save_submission_programs`
+  (Jayrald's function): every program of the paper in one call, guarded by
+  the page's `grading_revision`. It returns the new revision, or `null` when
+  another teacher changed the paper first (the "conflict" case). §3.2 and §4.2.
+- **Programs 2..n live in `submission_programs`**, one row per program. The
+  service still hands the component `answers: [{ code, question_id }]`, built
+  from those rows (`withAnswers()` in `supabase.ts`), so the tab code is the
+  same as before. The `answers` column itself is gone.
+- **The Save label** beside the tabs is the only save feedback (§3.3).
+- **Question labels:** the program-tab picker and View question show
+  `Section · Q# · Name` (`questionOptionLabel()`); unsectioned questions keep
+  their plain name.
+
+## Addition — 2026-09-24
 
 On pushed `feature/pre-extraction`, `subscribeToSubmissions(onInsert,
 onUpdate?)` also listens for UPDATEs. The optional callback preserves existing
@@ -46,8 +62,10 @@ file.
         |
         v
  saveVerifiedText() ---> supabase.ts: updateSubmissionText()
-                          writes verified_text (+ extracted_text, once)
-                          to the `submissions` table
+                          rpc save_submission_programs(): every program
+                          (submission_programs), Program 1 mirrored on
+                          submissions.verified_text, + extracted_text once,
+                          only while grading_revision still matches
 ```
 
 The teacher never edits `extracted_text` directly — they edit
@@ -324,11 +342,15 @@ measuring teacher-correction rate and building fine-tuning training pairs;
 the teacher's edits must only ever land in `verified_text`. So:
 ```ts
 const ocrText = this.extractedText[id];   // undefined if no extraction ran this session
-await this.supabase.updateSubmissionText(id, text, ocrText);
+const expectedRevision = this.baseRevision(this.codeBaseRevisions, id);
+const gradingRevision = await this.supabase.updateSubmissionText(
+  id, text, ocrText, expectedRevision, ...(sendExtras ? [extras] : []),
+);   // null = someone else changed the paper: saveStatus 'conflict'
 ```
 `ocrText` is `undefined` unless an extraction actually ran in this browser
 session — `updateSubmissionText` (in `supabase.ts`, below) only writes
-`extracted_text` when a real value is passed, so re-saving edits to an
+`extracted_text` when a real value is passed (`p_extracted_text` is `null`
+otherwise, and the database keeps the stored value), so re-saving edits to an
 already-extracted submission never overwrites its baseline with the
 teacher's text (see `VERIFICATION_UI.md` Bug 5 — this whole split exists
 because the previous version wrote the same string into both columns,
@@ -354,13 +376,30 @@ away doesn't throw or silently mutate a torn-down component's fields.
 
 ### 3.3 Save-status feedback (`saveStatus[id]`)
 
-`'saved'` or `'error'`, rendered inline next to the Save button
-(`✓ Saved successfully` / `✕ Save failed — please try again`), auto-clearing
+`'saved'`, `'error'` or `'conflict'`, shown as one label beside the Save button
+next to the program tabs (current text below; the original 2026-07 version
+said `✓ Saved successfully` under the editor). A confirmation auto-clears
 after 3 seconds via a tracked `setTimeout` (cleared/replaced correctly if a
-new save starts before the old timeout fires — see `clearSaveStatusTimer()`).
-Exists because the pre-fix version gave zero feedback on save success *or*
-failure — a failed save was indistinguishable from a successful one from the
-teacher's point of view (`VERIFICATION_UI.md` Bug 4).
+new save starts before the old timeout fires — see `clearSaveStatusTimer()`),
+and stays while an edit made during the save is still unsaved. Exists because
+the pre-fix version gave zero feedback on save success *or* failure — a failed
+save was indistinguishable from a successful one from the teacher's point of
+view (`VERIFICATION_UI.md` Bug 4).
+
+| State | Label (`saveStatusLabel`) | Tone (`saveStatusTone`) |
+|---|---|---|
+| save failed | Save failed, try again | `error` (red) |
+| conflict (another teacher saved first) | Jayrald's `saveStatusMessage()` conflict text | `error` |
+| saved, something changed since | New changes need to be saved. | `pending` (amber) |
+| saved, no `submission_programs` table | ✓ Program 1 saved | none (green) |
+| saved | ✓ All programs saved | none |
+
+Since 2026-09-27 (Jayrald's review #4): on a database without
+`submission_programs`, Programs 2..n can't be saved at all, so only Program 1
+decides `pending`; the message under the editor explains the rest, and the
+close pop-up still counts every tab. The template works the tone out once per
+check (`@let saveTone = saveStatusTone(id)`) and passes it to
+`saveStatusLabel(id, saveTone)` (review #10), because it compares every tab.
 
 ---
 
@@ -374,10 +413,19 @@ Only the submission-related methods are Nombrado's; `saveQuestion`/
 ```ts
 const SUBMISSION_COLUMNS = `id, image_url, captured_at, status, topic, student_name,
   extracted_text, verified_text, question_id,
+  grading_results, passed_test_cases, total_test_cases, score_percent,
+  graded_at, grading_revision,
   questions (id, question_name, question_type, model_answer, test_cases)`;
-// getSubmissions() first tries `answers, ${SUBMISSION_COLUMNS}`
+const PROGRAM_COLUMNS = `submission_programs (id, position, question_id, verified_text, …)`;
+// getSubmissions() first tries `${SUBMISSION_COLUMNS}, ${PROGRAM_COLUMNS}`
 ```
-**Missing-column fallback (2026-09-24, program tabs):** if Postgres returns
+**Current (2026-09-26):** the programs are embedded from `submission_programs`
+and turned into `answers` by `withAnswers()`. If PostgREST reports that the
+table doesn't exist (`PGRST200` naming `submission_programs`), the service
+sets `answersColumnAvailable = false` (old name kept) and re-queries without
+the embed.
+
+**Original missing-column fallback (2026-09-24, program tabs):** if Postgres returns
 `42703` (undefined column) and the message names `answers`, the service sets
 `answersColumnAvailable = false` and re-queries with `SUBMISSION_COLUMNS` alone.
 The list still loads before the `answers` migration is applied. Any other
@@ -398,32 +446,37 @@ being reproducible/verifiable in the first place.
 async updateSubmissionText(
   submissionId: string,
   verifiedText: string,
-  extractedText?: string,
-  answers?: SubmissionAnswer[],   // 2026-09-24: Programs 2..n
-): Promise<void> {
-  const update: Record<string, unknown> = {
-    verified_text: verifiedText,
-    status: 'verified',
-    verified_at: new Date().toISOString(),
-  };
-  if (extractedText !== undefined) {
-    update['extracted_text'] = extractedText;
+  extractedText: string | undefined,
+  expectedRevision: number,          // the page's grading_revision when editing began
+  answers?: SubmissionAnswer[],      // Programs 2..n; omitted = leave them as they are
+): Promise<number | null> {          // new revision, or null on a conflict
+  if (this.answersColumnAvailable !== false) {
+    const { data, error } = await this.supabase.rpc('save_submission_programs', {
+      p_submission_id: submissionId,
+      p_grading_revision: expectedRevision,
+      p_programs: [{ verified_text: verifiedText }, ...answers → { verified_text, question_id }],
+      p_extracted_text: extractedText ?? null,
+      p_replace_all: answers !== undefined,
+    });
+    ...
   }
-  ...
+  // No submission_programs table: Program 1 only, a PATCH guarded by
+  // .eq('grading_revision', expectedRevision), extracted_text only when given.
 }
 ```
-`extracted_text` is conditionally included in the update payload — omitted
-entirely (not set to `undefined` or `null` inside the object, which
-Supabase would still send) when the caller didn't pass a fresh OCR result.
-This is the actual mechanism behind the `extracted_text`/`verified_text`
-separation described in §3.2(a). A spec (`supabase.spec.ts`) asserts this
-field is absent from the update payload when no OCR text is given, so a
-regression here would fail a test, not just get caught by inspection.
+`extracted_text` is written only when the caller passes a fresh OCR result:
+`p_extracted_text` is `null` otherwise and the function keeps the stored
+value (in the fallback PATCH the key is left out of the payload). This is the
+actual mechanism behind the `extracted_text`/`verified_text` separation
+described in §3.2(a), and `supabase.spec.ts` asserts it.
 
-`answers` follows the same rule: it's only in the payload when the caller
-passes it **and** `answersColumnAvailable` is not false. The component never
-calls this with extra programs while the column is missing; it blocks the save
-with a message first (see "Program tabs" below).
+The function also sets `status = 'verified'` and `verified_at`, mirrors
+Program 1 on `submissions.verified_text` / `question_id`, and returns `null`
+when `expectedRevision` no longer matches, so a stale screen can never
+overwrite another teacher's save. Programs 2..n are matched to their stored
+rows by question, so reordering or clearing a tab keeps the other programs'
+grades. Before 2026-09-26 this method wrote `answers` (a jsonb column) in a
+plain update; that column is dropped.
 
 ### 4.3 `subscribeToSubmissions()`
 
@@ -473,7 +526,7 @@ The program-tab tests are listed at the end of this guide.
 One paper can hold several programs. Step 2 shows browser-style tabs above the editor.
 
 - **Program 1** is the existing editor (`editableText`). Its question comes from Details.
-- **Programs 2..n** live in `extraAnswers[submissionId]` as `{ code, question_id }` and are saved to `submissions.answers` (jsonb) under the same submission id.
+- **Programs 2..n** live in `extraAnswers[submissionId]` as `{ code, question_id }`. Since 2026-09-26 they are saved as rows of `submission_programs` (one per program, Program 1 included) through `save_submission_programs`; until then they were a `submissions.answers` jsonb column, now dropped.
 - **`extra-answers.ts`** holds the pure rules:
   - `parseAnswers` reads the column defensively.
   - `answersToSave` drops fully blank tabs and keeps code verbatim.
@@ -483,7 +536,7 @@ One paper can hold several programs. Step 2 shows browser-style tabs above the e
 - **Component state:**
   - `activeTab` is 0 for Program 1 and n for `extraAnswers[n-1]`.
   - `removeConfirmIndex` backs the two-click ×. `cancelPendingRemove()`, bound to a click anywhere in the workspace, disarms a pending "Remove?".
-  - `questionPickerOpen` controls the custom picker menu.
+  - `questionPickerOpen` controls the custom picker menu. Its options and View question show `questionOptionLabel(question)`: `Section · Q# · Name` from Nikko's `questionLabel()` and `questionPlaces`, or the plain name for an unsectioned question (2026-09-27).
   - `extraAnswersError` holds the save-rule message.
 - **Tab marks:** an orange `!` means no question is linked yet. Dots mark tabs with unsaved changes.
 - **Save path:** `saveVerifiedText()` checks `answerProblems` before the save generation starts. A blocked save makes no DB call and shows the first message. The extras go in the same `updateSubmissionText(id, text, ocrText, answersToSave(extras))` update, and on success both the list row and the open `selectedSubmission` get the saved `answers`. If the `answers` column is missing (`extraProgramsSavable` false), Program 1 still saves (the service drops `answers`), the tabs stay on screen unsaved, and `EXTRA_PROGRAMS_UNSAVABLE` says "Program 1 was saved. Programs 2 and up can't be saved yet…" (changed 2026-09-24; it used to block the whole save).
@@ -514,7 +567,7 @@ One paper can hold several programs. Step 2 shows browser-style tabs above the e
   - **Why:** Step 2 had no plain Save. Saving meant going to grading or closing the paper (✕ → "Save and close"), so a teacher who saved and closed had to reopen the paper to grade.
   - **Markup:** the tab row is wrapped in `.program-tabs-bar`. Inside it, `.program-tabs` (`role="tablist"`, `#tabList`) keeps the tabs and **+**, takes the free width (`flex: 1; min-width: 0`) and scrolls sideways; `.program-save` sits after it, *outside* the tablist so screen readers still see only tabs there, and stays pinned right (`flex: none`).
   - **Save button (follow-up 2026-09-26, `feature/review-save-followups`):** `(click)="saveVerifiedText()"`, `[disabled]="isSaving(id)"` (no double saves), label “Saving…” while the request runs. `.program-save-status` uses `*ngIf="saveStatusLabel(id) as label"` and `role="status"`. Errors show “Save failed, try again”; conflicts reuse `saveStatusMessage(id)` exactly. After a successful save, any pending program shows “New changes need to be saved.” Otherwise the label confirms “✓ Program 1 saved” when `EXTRA_PROGRAMS_UNSAVABLE` remains, or “✓ All programs saved”. Other statuses show nothing.
-  - **Tone and comparisons:** `saveStatusTone(id): 'error' | 'pending' | ''` drives red errors/conflicts, amber pending edits and default green confirmations. `hasUnsavedPrograms()` compares all tabs with loaded/saved snapshots, including removed tabs; `hasUnsavedCode()` additionally checks Program 1 against stored `verified_text`, so OCR-only text never counts as verified. Typing the stored text back restores the confirmation without new tracking state. Pending changes take priority over a partial-save confirmation.
+  - **Tone and comparisons:** `saveStatusTone(id): 'error' | 'pending' | ''` drives red errors/conflicts, amber pending edits and default green confirmations. `hasUnsavedPrograms()` compares all tabs with loaded/saved snapshots, including removed tabs; `hasUnsavedCode()` additionally checks Program 1 against stored `verified_text`, so OCR-only text never counts as verified. Typing the stored text back restores the confirmation without new tracking state. Pending changes take priority over a partial-save confirmation. *Since 2026-09-27 (review #4):* with `EXTRA_PROGRAMS_UNSAVABLE` set, only Program 1 decides `pending`, so the label reads "✓ Program 1 saved" instead of a permanent amber reminder; the close pop-up still uses `hasUnsavedPrograms()`. The template computes the tone once (`@let saveTone`) and passes it to `saveStatusLabel(id, saveTone)` (review #10).
   - **One feedback location:** the old `.save-status` paragraph and its `.saved` CSS were removed with Jayrald's OK. `saveStatusMessage()` and its tests remain untouched, as do the save/conflict/generation/timer/destruction protections. `extraAnswersError` and `extractionError` remain below the editor. `EXTRA_PROGRAMS_UNSAVABLE` now names the missing `submission_programs` table and asks Jayrald to apply the migrations.
   - **Layout:** error/pending labels wrap within 360px and align right; short green confirmations stay on one line. At viewport widths up to 600px, Save and its label occupy a second row while tabs keep scrolling sideways.
   - **Shortcut:** `onSaveShortcut(event)` is a `@HostListener('document:keydown')`. It acts only on Cmd/Ctrl+S, only with a paper open on Step 2 and the close prompt shut; it then always calls `preventDefault()`, and saves only if `hasExtractedText(id)` (same condition as the button being shown) and no save is running.

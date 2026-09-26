@@ -6,6 +6,12 @@
 
 ## Current integration state — 2026-09-24
 
+**Update 2026-09-27, later:** Nombrado's review requests are done on
+`feature/nombrado-review-followups` (OCR server limited to the web app's
+origins and the Supabase storage host; Save label on old databases; picker
+labels; `.gitignore` ignores only `docs/ocr/` and `docs/superpowers/`). See
+the top block of `CODEX_HANDOFF.md`.
+
 **Update 2026-09-27:** Nombrado's web + OCR-export work is merged into
 `judge0-integration` (`4bf44f6`, `b62bb0a`). Old branches are kept for diffs
 only and must never be run against the cloud. Next Nombrado step: the

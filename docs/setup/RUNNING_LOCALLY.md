@@ -64,8 +64,25 @@ curl http://localhost:8001/
 ```bash
 cd ocr_feature
 source .venv/bin/activate
-uvicorn main:app --host 0.0.0.0 --port 8000
+uvicorn main:app --host 127.0.0.1 --port 8000
 ```
+
+**Who may call it (2026-09-27).** The web app calls `http://localhost:8000`, so
+`--host 127.0.0.1` is enough; it keeps other devices on the network out
+(earlier versions of this guide used `0.0.0.0`). In the browser, only the web
+app on port 4200 or 4201 (`localhost` or `127.0.0.1`) may call the server. If
+you serve the web on another port, add its origin to `ocr_feature/.env`:
+
+```
+OCR_ALLOWED_ORIGINS=http://localhost:4200,http://localhost:4300
+```
+
+Photos are downloaded only from the host of `SUPABASE_URL` in
+`ocr_feature/.env`, so it must be the same Supabase project the web app uses.
+Otherwise **Extract** fails with "Image URL must point to this project's
+Supabase storage". To allow another storage host (for example local Supabase),
+list it: `OCR_ALLOWED_IMAGE_HOSTS=127.0.0.1:54321`. With no `SUPABASE_URL` set,
+any host is still accepted.
 
 **Pre-extraction on arrival (optional, 2026-09-24, branch `feature/pre-extraction`).**
 The same server can read new papers by itself, so teachers open them already
@@ -389,16 +406,19 @@ $env:PW_CHANNEL='chrome'; npm run e2e  # PowerShell
 
 - **Running an old branch against the cloud (2026-09-27).** Only run the web
   app from `judge0-integration` (or a branch made from it). Older branches are
-  kept for diffs only; their Save writes `submissions.verified_text` directly
-  and leaves Program 1 in `submission_programs` stale.
+  kept for diffs only: they don't know about Programs 2+ in
+  `submission_programs`. (Their Save writes `submissions.verified_text`
+  directly; since Jayrald's `575474e` the database copies that into Program 1,
+  so it no longer goes stale.)
 - **Committing local lockfile changes.** `npm install` or Flutter commands can
   rewrite `maistra_web/package-lock.json` or `maistra_mobile/pubspec.lock` for
   your local tool versions. Don't commit those; restore with
   `git checkout -- <file>`. Prefer `npm ci`, which never edits the lockfile.
-- **Mobile analyzer errors in `maistra_mobile/packages/`.** The bundled scanner
-  plugins (`cunning_document_scanner`, `edge_detection`) show
-  `permission_handler` errors until `flutter pub get` is run inside them. They
-  are unused (Nikko is removing them); the app in `lib/` is unaffected.
+- **Mobile analyzer errors in `maistra_mobile/packages/`.** `flutter analyze`
+  reports `permission_handler` errors in `packages/edge_detection/example/`
+  (the plugin's own demo app) until `flutter pub get` is run there. The app
+  uses the plugin itself, not the example, so `lib/` is unaffected. The
+  unused `cunning_document_scanner` plugin was removed by Nikko (`ca8ad3d`).
 
 - **Wrong working directory.** `pip install -r judge0_api/requirements.txt`
   fails silently-ish ("No such file or directory") if you're not in the
