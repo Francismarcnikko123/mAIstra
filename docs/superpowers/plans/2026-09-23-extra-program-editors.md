@@ -1696,6 +1696,7 @@ Decisions for you:
   - **Clarity:** tooltips, guide text in an empty tab, arrow keys
   - **Question check:** read-only "View question" (prompt and test cases, no model answer); "Change" on Program 1 goes to Details
   - **Don't lose work:** unsaved dots, and a close prompt with Keep editing / Discard changes / Save and close. Program 1 counts as unsaved too.
+    *Update 2026-09-26: "Save and close" was removed. Saving now uses a Save button next to the tabs (and Cmd/Ctrl+S); the prompt is Discard changes / Keep editing, and the footer reads "Continue to grading". See `docs/PROJECT_OVERVIEW_AND_CHANGES.md`, "Save next to the program tabs".*
   - **OCR text beside the photo** (layout B, see below)
 - **OCR text beside the photo (layout B):**
   - Photo and a read-only "OCR text" panel sit side by side on top; the tab editor keeps full width underneath.

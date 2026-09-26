@@ -1,6 +1,16 @@
 # Claude Handoff: Handwritten C-Code Dataset
 
+> **Commits:** always a subject *and* a body (what changed, why, checks run),
+> and never any AI attribution (`Co-Authored-By` Claude/Codex, "Generated with").
+> Full rule and example: "Commit messages" in the repo-root `AGENTS.md`.
+
 ## Current integration state — 2026-09-24
+
+**Update 2026-09-26:** Review Code now has a Save button next to the program
+tabs (every tab, stays on Step 2, Cmd/Ctrl+S); the unsaved prompt is Keep
+editing / Discard changes; the footer reads "Continue to grading". Branch
+`feature/program-tabs-save`, merged into `feature/pre-extraction`; web tests
+120/120. See TEAM_SYNC for the handoff.
 
 The pushed `feature/pre-extraction` branch includes the pushed
 `feature/program-tabs` work. Auto-extraction is off by default. When enabled,
