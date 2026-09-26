@@ -743,6 +743,13 @@ handwriting.
 - **Two teachers on one paper** (fix `446b05c`): any change to the programs
   advances the page's revision, so a save from an older view of the tabs is
   refused as a conflict instead of overwriting.
+- **Program 1 and the page's code** (2026-09-27, `575474e`): a direct
+  change of `submissions.verified_text` (older branches do this) updates
+  Program 1 too, so grading never reads stale code. The Program 1 copy on the
+  page row stays until the submissions list reads `submission_programs`.
+- **Live refresh and program tabs** (2026-09-27, `bcb0fea`): when another
+  teacher changes the tabs, an untouched screen refreshes them; a screen with
+  unsaved tab changes gets a conflict on save instead of deleting their tab.
 - **Code review:** [`reviews/2026-09-26-judge0-integration-code-review.md`](reviews/2026-09-26-judge0-integration-code-review.md)
   lists nine findings; all but #8 (Nombrado's OCR CORS setting) are fixed:
   #3 and #6 in `f3c3a69` (Step 3 stays on the program just graded, grading

@@ -30,3 +30,4 @@ One file per update, newest last. Each note says what changed, why, which files,
 | 2026-09-27 | [Code review of question linking, and the fixes](2026-09-27-code-review-fixes.md) | Nikko | `df06e0e`, `47851dc` |
 | 2026-09-27 | [Onto `judge0-integration`; Edit-screen validation fix; dead scanner removed](2026-09-27-onto-judge0-integration.md) | Nikko | `fefbf9e`, `751bc7a`, this commit |
 | 2026-09-26 | [Page revision from a trigger; leftover page grades cleared](2026-09-26-revision-trigger-and-leftover-page-grade.md) | Jayrald | `4060749` |
+| 2026-09-27 | [Program 1 follows the page's code; a stale tab list can't delete tabs](2026-09-27-mirror-sync-and-stale-tabs.md) | Jayrald | `575474e`, `bcb0fea` |
