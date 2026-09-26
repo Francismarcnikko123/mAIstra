@@ -4,6 +4,7 @@ import {
   OnDestroy,
   ChangeDetectorRef,
   ElementRef,
+  HostListener,
   QueryList,
   ViewChild,
   ViewChildren,
@@ -643,17 +644,20 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.closeModal();
   }
 
-  /** Save with the usual rules; close only if the save went through. */
-  async saveAndClose() {
-    this.closeConfirmOpen = false;
-    const id = this.selectedSubmission?.id;
-    await this.saveVerifiedText();
-    if (id && this.saveStatus[id] === 'saved') {
-      this.closeModal();
-    } else if (this.selectedSubmission) {
-      // Show the reason (a save rule or a failed save) where the tabs are.
-      this.reviewStep = 2;
-    }
+  /**
+   * Cmd/Ctrl+S on the Code step does what the Save button next to the tabs
+   * does (save every program, stay on the step) and keeps the browser's own
+   * "save page" dialog from opening.
+   */
+  @HostListener('document:keydown', ['$event'])
+  onSaveShortcut(event: KeyboardEvent) {
+    if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 's') return;
+    if (!this.selectedSubmission || this.reviewStep !== 2 || this.closeConfirmOpen) return;
+    event.preventDefault();
+    // Same conditions as the Save button: it only exists once there is code
+    // to save, so an unextracted paper is never saved as empty verified code.
+    const id = this.selectedSubmission.id;
+    if (this.hasExtractedText(id) && !this.isSaving(id)) void this.saveVerifiedText();
   }
 
 
@@ -1151,6 +1155,24 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
   isExtracting(id: string): boolean {
     return this.extractingIds.has(id);
+  }
+
+  /**
+   * Text beside the Save button. While the database has no `answers` column
+   * only Program 1 is stored, so it must not claim every program was saved.
+   */
+  saveStatusLabel(id: string): string {
+    const status = this.saveStatus[id];
+    if (status === 'error') return 'Save failed, try again';
+    // Jayrald's revision guard: someone else changed this paper meanwhile.
+    if (status === 'conflict') {
+      return 'Changed by someone else. Save again to keep yours';
+    }
+    // Code typed while the save was running is not saved yet.
+    if (this.isProgram1Unsaved(id)) return 'New changes need to be saved';
+    return this.extraAnswersError[id] === EXTRA_PROGRAMS_UNSAVABLE
+      ? '✓ Program 1 saved'
+      : '✓ All programs saved';
   }
 
   isSaving(id: string): boolean {

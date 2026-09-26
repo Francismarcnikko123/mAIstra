@@ -417,7 +417,7 @@ The following state is intentionally retained in `SubmissionsListComponent`:
   - **Re-extract on a paper with tabs** only refreshes that panel and never overwrites a tab. The teacher copies what they need. Without tabs, Re-extract works as before.
   - **"View question"** shows the linked question's prompt and test cases, read-only, without the model answer.
   - **"Change"** on Program 1 goes back to Details.
-  - **Unsaved dots** mark tabs changed since the last save. Closing the review with unsaved changes (✕, the dark overlay, Cancel or Finish) asks: Keep editing / Discard changes / Save and close.
+  - **Unsaved dots** mark tabs changed since the last save. Closing the review with unsaved changes (✕, the dark overlay, Cancel or Finish) asks: Keep editing / Discard changes. (Until 2026-09-26 it also offered "Save and close"; saving now happens with the Save button next to the tabs. See "Save next to the program tabs" below.)
   - Tooltips on the tab marks, guide text in an empty tab, and ←/→ keys between tabs.
 - Code: `submissions-list/extra-answers.ts` holds the pure parse, taken-question and save-rule helpers. `submissions-list/program-tabs.css` holds the tab styles, kept separate so the component stylesheet stays under its 12 kB build budget. `CodeEditorComponent.refresh()` re-measures a previously hidden tab.
 - **Migration:** apply `supabase/migrations/20260923000000_add_submission_answers.sql` to enable saving Programs 2..n. It adds a column-level `UPDATE (answers)` grant for `anon` and `authenticated` so the review editor works after the public API lockdown migration. Only Jayrald applies it to the cloud project. Until it runs, the app still works. `getSubmissions()` retries without `answers` when Postgres reports the column missing (42703), Program 1 saves as before, and Step 2 marks extra tabs as preview-only. On save, Program 1 is saved, the extra tabs stay on screen unsaved, and a message says so ("Program 1 was saved. Programs 2 and up can't be saved yet…").
@@ -437,6 +437,8 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 
 > **Owner:** Nombrado (OCR server, review editor). The worker writes to the shared `submissions` table, so it's announced in `docs/TEAM_SYNC.md`.
 
+- **Branch and handoff:** `feature/pre-extraction` is pushed and includes the pushed `feature/program-tabs` branch. Nikko owns mobile selection/sending of `question_id` for Program 1. Jayrald owns applying the `answers` migration and the remaining cloud schema for Nikko's complete question-linking flow. The worker and badge can be tested on new papers before that integration; neither branch is merged to `main` yet.
+
 - **What it does:** when the OCR server runs with `AUTO_EXTRACT=true`, a background worker reads papers that arrived from the phone and saves `extracted_text`, so teachers open them already extracted. It's off by default.
 - **Same results:** it uses the same extraction function as the Extract button (`extract_image_url` in `ocr_feature/main.py`) under the same lock. The pipeline is unchanged, so the recorded accuracy numbers still apply.
 - **Never overwrites work:** the save only goes through if `extracted_text` and `verified_text` are still empty at that moment. It writes nothing else: not `verified_text`, `answers` or `status`.
@@ -454,6 +456,27 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - **Not yet:** provenance columns.
 - **Verification:** OCR 231/231 tests and web 114/114 tests pass; TypeScript checks and Angular build pass with the existing CSS budget warning. The unchanged 20-sample evaluator still reports clean_ws CER **0.099**, clean WER **0.328**, and clean token accuracy **0.716**.
 
+## Save next to the program tabs (2026-09-26, branch `feature/program-tabs-save`, merged into `feature/pre-extraction`)
+
+> **Owner:** Nombrado (review editor). One label change in Jayrald's Step 2 footer, announced in `docs/TEAM_SYNC.md`.
+
+**Why:** Step 2 had no plain Save. A teacher could only save by going to grading ("Save and continue to grading") or by leaving (✕ → "Save and close", which closed the paper, so reaching grading meant reopening it). Nikko's first review screen (`da00269`) had a plain Save; the 3-step redesign (`aca278e`) replaced it.
+
+**What changed (teacher's view):**
+- A **Save** button at the right end of the program tab bar saves **every tab of the paper** in one update and keeps the teacher on Step 2. The unsaved dots clear and "✓ All programs saved" shows next to it. While the cloud database has no `answers` column, only Program 1 is stored: the label then says "✓ Program 1 saved", the extra tabs keep their dots, and the existing message explains why (fixed the same day; the first version claimed "All programs saved"). **Cmd/Ctrl+S** does the same on Step 2 (and no longer opens the browser's "save page" dialog there).
+- The footer button is now **"Continue to grading"**. Its logic is unchanged: it still saves first, and moves to Step 3 only when the save succeeds, so grading always runs on code that is in the database.
+- The **✕ / overlay / Cancel / Finish** prompt for unsaved changes now offers **Keep editing** (primary) and **Discard changes**. "Save and close" is removed; saving lives next to the tabs.
+
+**What did not change:**
+- One save function for everything: the Save button, the shortcut and "Continue to grading" all call the existing `saveVerifiedText()`. The save rules (a tab with code needs a question, no duplicate questions), the save-generation/timer/destroy guards, and the columns written (`verified_text`, `answers`, `status = 'verified'`, `verified_at`) are unchanged. `extracted_text` is still only ever written with OCR output, never with the teacher's edits.
+- Save stays clickable when nothing looks changed, because an untouched pre-extracted paper looks saved but is still `pending` with no `verified_text`; Save must still verify it. The shortcut does nothing on a paper with no extracted code yet (the button is hidden there too).
+- No schema, OCR or grading change.
+
+**Fix included:** the app is zoneless, so setting `reviewStep` after an `await` did not re-render. "Save and review code" and "Continue to grading" could leave the dialog on the old step until the next click. `continueFromDetails()` and `saveCodeAndContinue()` now call `detectChanges()` after the step changes, the same two-line fix Jayrald made on `judge0-integration` (`8e20fd5`).
+
+**Code:** `submissions-list.html` (tab bar wrapper `program-tabs-bar` with the Save area outside `role="tablist"`; footer label; two-button prompt), `submissions-list.ts` (`onSaveShortcut()` `@HostListener`; `saveAndClose()` removed; the two `detectChanges()` calls), `program-tabs.css` (bar and Save styles), `submissions-list.css` (unused `.save-status` removed).
+
+**Verification:** web 121/121 tests (7 new program-tab tests replace the one Save-and-close test; the continue-to-grading test now checks the step is rendered); application and spec TypeScript checks and `ng build` pass with the existing CSS budget warning. Viewed in the running app without saving: the Save button in the tab bar (pinned right while many tabs scroll), the "Continue to grading" label, and the two-button prompt.
 ## Question sections and mobile question linking (2026-09-24)
 
 > **Owner:** Nikko. Spec: `IMPLEMENTATION_SPEC_question_linking.md`. Change notes in [`docs/changes/`](changes/README.md).
@@ -473,6 +496,7 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - **Behaviour after the merge:** closing a review with unsaved programs asks Save / Discard / Keep editing, then restores the saved version; re-extracting over saved code asks first; Programs 2..n are saved inside Jayrald's revision-guarded update.
 - **Follow-ups:** the sections migration was renamed because its version clashed with `20260924000000_save_grade_for_stored_code.sql` ([note](changes/2026-09-26-migration-rename.md)); the question page no longer shows marks, which `judge0-integration` removed from test cases ([note](changes/2026-09-26-question-page-drop-marks.md)).
 - **Verification:** web 281/281, mobile 53/53, OCR tests pass; `ng build` passes with a stylesheet size warning. Checked in the browser: program tabs, question lock, remove arming and re-extract prompt. `judge0_api` tests not run locally.
+- **Second pass (2026-09-26), after Nombrado's review:** merged his latest `feature/pre-extraction` (`0f87354`: Save next to the program tabs, handoff); restored `AGENTS.md` (deleted by `judge0-integration`); `ocr_feature/` is identical to his branch again (Jayrald's CORS change and `test_api.py` not included). His `saveStatusLabel()` now also shows Jayrald's save conflict, and `code-editor.ts` keeps Jayrald's `readOnly` input; both await his OK. Web 289/289, OCR tests pass. Not pushed: Nombrado asked to wait. [Note](changes/2026-09-26-merge-latest-pre-extraction.md)
 
 The Judge0 wrapper now converts outbound Judge0 connectivity failures into a
 clear HTTP `502` response that identifies the configured `JUDGE0_BASE_URL`,
@@ -590,6 +614,9 @@ Focused tests now cover:
 
 > **Owner:** Shared
 
+- **2026-09-26 program-tabs Save checkpoint:** web 121/121; Angular application and spec TypeScript checks and `ng build` pass with the existing CSS budget warning. No OCR code changed, so the OCR suite was not re-run (last run 231/231 on 2026-09-24).
+- **2026-09-24 pre-extraction checkpoint:** OCR 231/231, web 114/114; Angular application and spec TypeScript checks pass, and Angular build passes with the existing CSS budget warning. The live phone-photo, server-off and restart catch-up badge checks passed. See the pre-extraction section above for scope.
+- **Earlier environment limitation (historical):** Vitest was blocked in WSL when `node_modules` held Windows-native Rollup/esbuild packages; this did not apply to the later macOS verification above.
 - Angular application TypeScript compilation passes.
 - The focused submission-list test file passes isolated TypeScript validation.
 - Angular template compilation passed after the submission workflow changes, and after the Judge0 output-verification changes (`ng build --configuration development` succeeds).
@@ -622,6 +649,6 @@ Before deploying mAIstra beyond a trusted development environment:
 
 1. **OCR:** import the incoming bond paper and yellow pad datasets, which are the current blocker for OCR work. They should add new writers, give both paper types a writer-disjoint holdout, and support a retrain and re-evaluation on the same test set.
 2. Add and verify Supabase migrations and RLS policies, starting with enabling RLS on `submissions`. (The frontend key was corrected in `a448198`.)
-3. Reinstall Angular dependencies on the operating system used for testing, then run the complete frontend suite.
+3. Keep the Angular dependency install matched to the operating system used for testing; the complete frontend suite passed at the 2026-09-24 checkpoint.
 4. Add authentication and rate limiting to the OCR and Judge0 wrapper services.
 5. Move API endpoints and mobile Supabase configuration into environment-specific configuration.

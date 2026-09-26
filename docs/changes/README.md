@@ -12,3 +12,4 @@ One file per update, newest last. Each note says what changed, why, which files,
 | 2026-09-26 | [Merge pre-extraction and judge0-integration into `feature/question-linking-v2`](2026-09-26-merge-pre-extraction-and-judge0.md) | Nikko (merge), Nombrado + Jayrald (reviewers) | `0e21d5c`, `a727934`, `ffcf908` |
 | 2026-09-26 | [Rename the question sections migration](2026-09-26-migration-rename.md) | Nikko | `246cb7e` |
 | 2026-09-26 | [Question page: drop marks](2026-09-26-question-page-drop-marks.md) | Nikko | `c6178c6` |
+| 2026-09-26 | [Merge Nombrado's latest pre-extraction; restore `AGENTS.md` and `ocr_feature/`](2026-09-26-merge-latest-pre-extraction.md) | Nikko (merge), Nombrado (review) | this merge commit |

@@ -1,11 +1,12 @@
 # Pre-extraction on arrival: implementation plan
 
 > Design: `docs/superpowers/specs/2026-09-11-pre-extraction-on-submission-design.md` (and its 2026-09-24 addendum). Speed context: `docs/ocr/EVALUATION.md`, "Speed experiment — 2026-09-24" (about 7 s per page on CPU; the fix is to hide the wait, not to change the model).
-> **Status (2026-09-24):** Tasks 1–5 and 8 are committed on `feature/pre-extraction` (`6d02e52`, `eba1a37`, `632bf30`). Task 6 Option A is implemented and live-checked with the user.
+> **Status (2026-09-24):** Tasks 1–5 and 8 are committed on `feature/pre-extraction` (`6d02e52`, `eba1a37`, `632bf30`). Task 6 Option A is implemented, live-checked with the user, and pushed. The branch includes the pushed `feature/program-tabs` work through merge `d9df182`; neither branch is merged to `main`.
 > - After Option A: OCR 231/231 tests, web 114/114 tests; both TypeScript checks and Angular build pass (the known CSS budget warning remains). The 20-sample evaluator is unchanged: clean_ws CER 0.099, clean WER 0.328, clean token accuracy 0.716.
 > - A read-only check against the cloud confirmed the worker's query. It also found **204 of 209 papers unread** (old test data), so a start-date limit was added (`AUTO_EXTRACT_SINCE`, default = server start). With the default, 0 papers would be read.
 > - Option A adds the OCR health state, the web badge, and a realtime UPDATE listener while preserving existing callers and teacher edits.
 > - Live check: a new phone paper showed **Extracting… → Needs review** without a reload. With the OCR server stopped, a second paper showed **Needs OCR**. Restarting with `AUTO_EXTRACT_SINCE` set just before the test photos caught it up, and the same open page changed to **Needs review**. No direct database write was made by the test.
+> - Remaining integration: Nikko owns the mobile `question_id` selection/sending (Program 1); Jayrald owns the cloud migrations/schema for the complete question-linking flow. The worker/list flow can be tested before that integration. The race check in Task 7 was not separately live-tested.
 
 **Goal:** when a paper arrives from the phone, the OCR server reads it in the background and saves `extracted_text`. When the teacher opens it, the code is already there. Same pipeline and settings, so accuracy is unchanged (clean_ws CER 0.099 / WER 0.328 / token accuracy 0.716).
 

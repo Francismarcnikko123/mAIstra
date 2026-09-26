@@ -110,4 +110,19 @@ describe('SubmissionsListComponent section folders', () => {
     expect(component.submissions).toHaveLength(4);
     expect(component.groupedSubmissions.map((g) => g.topic)).toEqual(['Chapter 3', 'Uncategorized']);
   });
+
+  it("says when a save hit someone else's change or newer typing", async () => {
+    const { component } = createComponent();
+    await component.loadSubmissions();
+    component.openModal(component.submissions.find((s) => s.id === 's2')!);
+
+    component.saveStatus['s2'] = 'conflict';
+    expect(component.saveStatusLabel('s2')).toBe(
+      'Changed by someone else. Save again to keep yours',
+    );
+
+    component.saveStatus['s2'] = 'saved';
+    component.updateSubmissionCode('s2', 'typed after saving');
+    expect(component.saveStatusLabel('s2')).toBe('New changes need to be saved');
+  });
 });
