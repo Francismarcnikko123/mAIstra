@@ -145,6 +145,48 @@ async saveQuestion(question: any) {
       .insert([{ section_id: sectionId, question_id: questionId, number }]);
   }
 
+  /**
+   * Saves an edited question. Jayrald's 20260926000400 migration allows these
+   * columns; changing test_cases or question_type clears the grades of papers
+   * linked to the question (his trigger).
+   */
+  async updateQuestion(
+    id: string,
+    fields: {
+      question_name: string;
+      question_text: string;
+      question_type: string;
+      model_answer: string;
+      test_cases: unknown[];
+      can_publish: boolean;
+    },
+  ) {
+    return await this.supabase
+      .from('questions')
+      .update(fields)
+      .eq('id', id)
+      .select('id')
+      .single();
+  }
+
+  /** Moves an already-sectioned question to another section and/or number. */
+  async moveQuestionToSection(questionId: string, sectionId: string, number: number) {
+    return await this.supabase
+      .from('question_section_items')
+      .update({ section_id: sectionId, number })
+      .eq('question_id', questionId);
+  }
+
+  /** Graded papers whose grade an edit to this question's test cases would clear. */
+  async countGradedPapers(questionId: string): Promise<number> {
+    const { count, error } = await this.supabase
+      .from('submissions')
+      .select('id', { count: 'exact', head: true })
+      .eq('question_id', questionId)
+      .eq('status', 'graded');
+    return error ? 0 : (count ?? 0);
+  }
+
   /** Every question's section and number, for the question bank. */
   async getSectionItems() {
     return await this.supabase

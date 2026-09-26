@@ -5,7 +5,7 @@ import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { SupabaseService } from '../../services/supabase';
 import { Judge0Service } from '../../services/judge0.service';
-import { NEW_SECTION, QuestionFormComponent } from './question-form';
+import { EditQuestionRequest, NEW_SECTION, QuestionFormComponent } from './question-form';
 
 // Section and question number (Nikko). Validation and saving rules are
 // covered in question-form.spec.ts.
@@ -24,6 +24,9 @@ describe('QuestionFormComponent sections', () => {
       }),
       getSectionNumbers: vi.fn().mockResolvedValue({ data: [], error: null }),
       addQuestionToSection: vi.fn().mockResolvedValue({ error: null }),
+      updateQuestion: vi.fn().mockResolvedValue({ data: { id: 'q-sum' }, error: null }),
+      moveQuestionToSection: vi.fn().mockResolvedValue({ error: null }),
+      countGradedPapers: vi.fn().mockResolvedValue(0),
       ...overrides,
     };
   }
@@ -163,5 +166,149 @@ describe('QuestionFormComponent sections', () => {
     expect(template).toContain('New section name');
     expect(template).toContain('Question No.');
     expect(template).toContain('Teachers will see:');
+  });
+
+  describe('editing a saved question', () => {
+    const saved = (overrides: Partial<EditQuestionRequest['question']> = {}) => ({
+      id: 'q-sum',
+      question_name: 'Sum of Two Integers',
+      question_text: 'Read two integers and print their sum.',
+      question_type: 'program',
+      model_answer: 'int main(void) { printf("5"); return 0; }',
+      test_cases: [{ test_code: '', test_input: 'hello', expected_output: '5' }],
+      can_publish: true,
+      ...overrides,
+    });
+
+    async function editing(
+      request: Partial<EditQuestionRequest> = {},
+      supabase = createSupabase({
+        getSectionNumbers: vi.fn().mockResolvedValue({ data: [{ number: 1 }, { number: 2 }], error: null }),
+      }),
+    ) {
+      const { component } = await readyComponent(supabase, false);
+      const done = vi.fn();
+      component.editDone.subscribe(done);
+      await component.startEdit({
+        question: saved(),
+        place: { sectionId: 'sec-basic', number: 1 },
+        ...request,
+      });
+      return { component, supabase, done };
+    }
+
+    it('opens pre-filled, still validated, and its own number is not "taken"', async () => {
+      const { component } = await editing();
+
+      expect(component.isEditing).toBe(true);
+      expect(component.questionName).toBe('Sum of Two Integers');
+      expect(component.questionType).toBe('program');
+      expect(component.testCases).toEqual([
+        { test_code: '', test_input: 'hello', expected_output: '5' },
+      ]);
+      expect(component.sectionId).toBe('sec-basic');
+      expect(component.questionNumber).toBe(1);
+      expect(component.takenNumbers).toEqual([2]);
+      expect(component.saveBlockedReason()).toBe('');
+    });
+
+    it('locks Save again once the model answer is edited', async () => {
+      const { component } = await editing();
+
+      component.modelAnswer = 'int main(void) { return 1; }';
+      component.clearValidationResults(); // what the editor's valueChange does
+
+      expect(component.saveBlockedReason()).toContain('Validate the test cases first');
+    });
+
+    it('a question that never passed must be validated before saving', async () => {
+      const { component } = await editing({ question: saved({ can_publish: false }) });
+      expect(component.saveBlockedReason()).toContain('Validate the test cases first');
+
+      await component.validateModelAnswer();
+      expect(component.saveBlockedReason()).toBe('');
+    });
+
+    it('"Validate test cases" on the question page validates as the form opens', async () => {
+      const { component } = await editing({ question: saved({ can_publish: false }), validate: true });
+      expect(component.canPublish).toBe(true);
+    });
+
+    it('saves the question in place without touching its section when that is unchanged', async () => {
+      const { component, supabase, done } = await editing();
+      component.questionName = 'Sum of two integers';
+
+      await component.save();
+
+      expect(supabase.updateQuestion).toHaveBeenCalledWith(
+        'q-sum',
+        expect.objectContaining({ question_name: 'Sum of two integers', can_publish: true }),
+      );
+      expect(supabase.saveQuestion).not.toHaveBeenCalled();
+      expect(supabase.moveQuestionToSection).not.toHaveBeenCalled();
+      expect(supabase.addQuestionToSection).not.toHaveBeenCalled();
+      expect(done).toHaveBeenCalledOnce();
+      expect(component.isEditing).toBe(false);
+    });
+
+    it('moves the question when its number changes', async () => {
+      const { component, supabase } = await editing();
+      component.questionNumber = 3;
+
+      await component.save();
+
+      expect(supabase.moveQuestionToSection).toHaveBeenCalledWith('q-sum', 'sec-basic', 3);
+    });
+
+    it('gives an unsectioned question its first section and number', async () => {
+      const { component, supabase } = await editing({ place: null });
+      expect(component.saveBlockedReason()).toBe('Choose a section.');
+
+      component.sectionId = 'sec-basic';
+      await component.onSectionChange();
+      component.questionNumber = 3;
+      await component.save();
+
+      expect(supabase.addQuestionToSection).toHaveBeenCalledWith('q-sum', 'sec-basic', 3);
+      expect(supabase.moveQuestionToSection).not.toHaveBeenCalled();
+    });
+
+    it('warns before clearing grades when test cases change on a graded question', async () => {
+      const supabase = createSupabase({ countGradedPapers: vi.fn().mockResolvedValue(2) });
+      const { component } = await editing({}, supabase);
+      // A changed test input is a test-case change (the fake Judge0 still passes it).
+      component.testCases = [{ test_code: '', test_input: 'hello again', expected_output: '5' }];
+      component.clearValidationResults();
+      await component.validateModelAnswer();
+
+      await component.save();
+      expect(supabase.updateQuestion).not.toHaveBeenCalled();
+      expect(component.gradeWarning).toContain('2 graded papers use this question');
+
+      await component.confirmGradeReset();
+      expect(supabase.updateQuestion).toHaveBeenCalledOnce();
+    });
+
+    it('no warning when only the name changes on a graded question', async () => {
+      const supabase = createSupabase({ countGradedPapers: vi.fn().mockResolvedValue(2) });
+      const { component } = await editing({}, supabase);
+      component.questionName = 'Renamed';
+
+      await component.save();
+
+      expect(component.gradeWarning).toBe('');
+      expect(supabase.updateQuestion).toHaveBeenCalledOnce();
+    });
+
+    it('Cancel leaves edit mode without saving', async () => {
+      const { component, supabase, done } = await editing();
+
+      component.cancelEdit();
+
+      expect(component.isEditing).toBe(false);
+      expect(component.questionName).toBe('');
+      expect(supabase.updateQuestion).not.toHaveBeenCalled();
+      expect(done).toHaveBeenCalledOnce();
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { Component, ChangeDetectorRef, EventEmitter, OnInit, Output } from '@angular/core';
+import { Component, ChangeDetectorRef, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
@@ -30,6 +30,23 @@ export const NEW_SECTION = '__new__';
 
 // Postgres unique_violation.
 const UNIQUE_VIOLATION = '23505';
+
+/** A saved question opened for editing from the question page. */
+export interface EditQuestionRequest {
+  question: {
+    id: string;
+    question_name: string;
+    question_text: string;
+    question_type: string;
+    model_answer: string;
+    test_cases: unknown[] | null;
+    can_publish?: boolean | null;
+  };
+  /** Its current section and number, or null when it has none yet. */
+  place: { sectionId: string; number: number } | null;
+  /** Run "Validate Test Cases" as soon as the form opens. */
+  validate?: boolean;
+}
 interface ValidationResult {
   passed: boolean;
   expected: string;
@@ -86,6 +103,29 @@ export class QuestionFormComponent implements OnInit {
   takenNumbers: number[] = [];
   readonly NEW_SECTION = NEW_SECTION;
 
+  // Edit mode: the id of the saved question being edited, or null when
+  // creating. Save stays locked until validation passes, as when creating.
+  editingId: string | null = null;
+  private editOriginal: {
+    place: { sectionId: string; number: number } | null;
+    testsKey: string;
+  } | null = null;
+  /** Graded papers whose grades an edit to the test cases would clear. */
+  gradedPaperCount = 0;
+  gradeWarning = '';
+  private gradeResetConfirmed = false;
+  /** Tells the page the edit is finished (saved or cancelled). */
+  @Output() editDone = new EventEmitter<void>();
+
+  @Input() set editRequest(request: EditQuestionRequest | null | undefined) {
+    if (request) void this.startEdit(request);
+    else if (this.editingId) this.exitEdit();
+  }
+
+  get isEditing(): boolean {
+    return this.editingId !== null;
+  }
+
   readonly PROGRAM_TEMPLATE = `int main(void) {\n  return 0;\n}`;
 
   constructor(
@@ -113,8 +153,12 @@ export class QuestionFormComponent implements OnInit {
     this.takenNumbers = [];
     if (this.sectionId && this.sectionId !== NEW_SECTION) {
       const { data } = await this.supabase.getSectionNumbers(this.sectionId);
+      const own = this.editOriginal?.place;
       this.takenNumbers = (data ?? [])
         .map((row: { number: number }) => row.number)
+        .filter(
+          (n: number) => !(own && own.sectionId === this.sectionId && own.number === n),
+        )
         .sort((a: number, b: number) => a - b);
     }
     this.cdr.detectChanges();
@@ -316,12 +360,30 @@ export class QuestionFormComponent implements OnInit {
       return;
     }
 
+    if (
+      this.isEditing &&
+      this.gradedPaperCount > 0 &&
+      this.testsChanged() &&
+      !this.gradeResetConfirmed
+    ) {
+      this.gradeWarning =
+        `${this.gradedPaperCount === 1 ? '1 graded paper uses' : `${this.gradedPaperCount} graded papers use`} this question. ` +
+        'Saving the changed test cases clears their grades, and they will need grading again.';
+      this.cdr.detectChanges();
+      return;
+    }
+
     this.isSaving = true;
     this.errorMessage = '';
     this.successMessage = '';
+    this.gradeWarning = '';
     this.cdr.detectChanges();
 
     try {
+      if (this.isEditing) {
+        await this.saveEdit();
+        return;
+      }
       const sectionId = await this.resolveSectionId();
       if (!sectionId) return;
       const label = this.labelPreview;
@@ -390,6 +452,8 @@ export class QuestionFormComponent implements OnInit {
     return !!this.collapsedTestCases[index];
   }
   clearValidationResults() {
+    this.gradeWarning = '';
+    this.gradeResetConfirmed = false;
     this.validationVersion++;
     this.validatedInputs = '';
     this.validationResults = [];
@@ -521,6 +585,134 @@ export class QuestionFormComponent implements OnInit {
     this.sections = [...this.sections, data];
     this.sectionId = data.id;
     return data.id;
+  }
+
+  /** "Save and clear grades" on the graded-papers warning. */
+  async confirmGradeReset() {
+    this.gradeResetConfirmed = true;
+    await this.save();
+  }
+
+  /** Opens a saved question in the form, pre-filled. */
+  async startEdit(request: EditQuestionRequest) {
+    const q = request.question;
+    this.editingId = q.id;
+    this.questionName = q.question_name ?? '';
+    this.questionText = q.question_text ?? '';
+    this.questionType = q.question_type === 'function' ? 'function' : 'program';
+    this.modelAnswer = q.model_answer ?? '';
+    const cases = Array.isArray(q.test_cases) ? q.test_cases : [];
+    this.testCases = cases.length
+      ? cases.map((tc) => {
+          const t = (tc ?? {}) as Record<string, unknown>;
+          return {
+            test_code: String(t['test_code'] ?? ''),
+            test_input: String(t['test_input'] ?? ''),
+            expected_output: String(t['expected_output'] ?? ''),
+          };
+        })
+      : [this.createDefaultTestCase()];
+    this.collapsedTestCases = {};
+    this.hasAttemptedValidation = false;
+    this.newSectionName = '';
+    this.clearValidationResults();
+    this.successMessage = '';
+    this.gradedPaperCount = 0;
+    this.editOriginal = { place: request.place, testsKey: this.testsKey() };
+    this.sectionId = request.place?.sectionId ?? '';
+    this.questionNumber = request.place?.number ?? null;
+    // A question that already passed keeps counting as validated until its
+    // model answer or test cases are edited (which clears this).
+    if (q.can_publish === true) {
+      this.canPublish = true;
+      this.validatedInputs = this.executionInputsKey();
+    }
+    this.cdr.detectChanges();
+
+    await this.onSectionChange();
+    this.gradedPaperCount = await this.supabase.countGradedPapers(q.id);
+    if (request.validate) await this.validateModelAnswer();
+    this.cdr.detectChanges();
+  }
+
+  /** Leave edit mode without saving. */
+  cancelEdit() {
+    this.exitEdit();
+    this.editDone.emit();
+  }
+
+  private exitEdit() {
+    this.editingId = null;
+    this.editOriginal = null;
+    this.gradedPaperCount = 0;
+    this.resetForm();
+    this.successMessage = '';
+    this.cdr.detectChanges();
+  }
+
+  private async saveEdit() {
+    const id = this.editingId!;
+    const sectionId = await this.resolveSectionId();
+    if (!sectionId) return;
+    const label = this.labelPreview;
+    const number = this.questionNumber!;
+
+    const { error } = await this.supabase.updateQuestion(id, {
+      question_name: this.questionName.trim(),
+      question_text: this.questionText,
+      question_type: this.questionType,
+      model_answer: this.modelAnswer,
+      test_cases: this.testCases.map((testCase) => ({
+        ...testCase,
+        test_input: this.stdinFor(this.questionType, testCase.test_input),
+      })),
+      // Only reachable after every test case passed.
+      can_publish: true,
+    });
+    if (error) {
+      this.errorMessage = 'Error: ' + error.message;
+      return;
+    }
+    this.questionSaved.emit();
+    // The question is saved; later failures only concern its section.
+    this.editOriginal = { place: this.editOriginal?.place ?? null, testsKey: this.testsKey() };
+    this.gradedPaperCount = await this.supabase.countGradedPapers(id);
+
+    const before = this.editOriginal.place;
+    if (!before || before.sectionId !== sectionId || before.number !== number) {
+      const link = before
+        ? await this.supabase.moveQuestionToSection(id, sectionId, number)
+        : await this.supabase.addQuestionToSection(id, sectionId, number);
+      if (link.error) {
+        this.errorMessage =
+          link.error.code === UNIQUE_VIOLATION
+            ? `The changes were saved, but Q${number} is already used in ${this.sectionName}. Pick another number and save again.`
+            : `The changes were saved, but the section couldn't be updated: ${link.error.message}`;
+        await this.onSectionChange();
+        return;
+      }
+    }
+
+    this.exitEdit();
+    this.successMessage = `Question updated: ${label}`;
+    await this.loadSections();
+    this.editDone.emit();
+  }
+
+  /** Test cases and type as saved; a change clears linked grades. */
+  private testsKey(): string {
+    return JSON.stringify({
+      type: this.questionType,
+      cases: this.testCases.map(({ test_code, test_input, expected_output }) => ({
+        test_code,
+        test_input: this.stdinFor(this.questionType, test_input),
+        expected_output,
+      })),
+    });
+  }
+
+  private testsChanged(): boolean {
+    return !!this.editOriginal && this.editOriginal.testsKey !== this.testsKey();
   }
 
   private resetForm() {

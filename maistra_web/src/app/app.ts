@@ -3,6 +3,7 @@ import { NgIf } from '@angular/common';
 import { SubmissionsListComponent } from './components/submissions-list/submissions-list';
 import { QuestionFormComponent } from './components/question-form/question-form';
 import { QuestionBankComponent } from './components/question-bank/question-bank';
+import { EditQuestionRequest } from './components/question-form/question-form';
 
 @Component({
   selector: 'app-root',
@@ -86,4 +87,6 @@ import { QuestionBankComponent } from './components/question-bank/question-bank'
 export class App {
   /** Which page is showing. Create opens from the bank's button. */
   page: 'bank' | 'submissions' | 'create' = 'submissions';
+  /** Set when the form is opened to edit a saved question; null to create. */
+  editRequest: EditQuestionRequest | null = null;
 }

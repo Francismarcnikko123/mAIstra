@@ -20,8 +20,9 @@ and `AGENTS.md` are identical to `feature/pre-extraction`.
   on the web, picked on the phone, one page submitted, filed in the **Basic**
   folder with `question_id`, `gate_result = PASS` and a `batch_id`
   ([test note](changes/2026-09-26-end-to-end-test.md)).
-- **Next (Nikko):** the Edit screen, so older questions can get a section and
-  number and appear on the phone.
+- **Editing (2026-09-26):** *Edit* / *Validate test cases* on a question open
+  it in the form; Save is locked until validation passes. Older questions get a
+  section and number here to appear on the phone ([note](changes/2026-09-26-edit-questions.md)).
 - **Where to read:** one note per update in [`changes/`](changes/README.md),
   the dated sections in the [overview](PROJECT_OVERVIEW_AND_CHANGES.md), and
   Nikko's section of [TEAM_SYNC.md](TEAM_SYNC.md).

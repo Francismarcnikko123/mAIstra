@@ -21,4 +21,5 @@ One file per update, newest last. Each note says what changed, why, which files,
 | 2026-09-26 | [Every program on a paper is its own row, graded on its own](2026-09-26-submission-programs-and-per-program-grading.md) | Jayrald | `f85d99e`, `f3138c6`, `96eda09` |
 | 2026-09-26 | [Merge Jayrald's schema work (`268eb54`) into v2](2026-09-26-merge-judge0-schema.md) | Nikko (merge) | `ce02c06` |
 | 2026-09-26 | [Mobile: pages of one answer share a `batch_id`](2026-09-26-mobile-batch-id.md) | Nikko | `49038c1` |
-| 2026-09-26 | [End-to-end test against the live database](2026-09-26-end-to-end-test.md) | Nikko | this commit (docs only) |
+| 2026-09-26 | [End-to-end test against the live database](2026-09-26-end-to-end-test.md) | Nikko | `b1e7728` |
+| 2026-09-26 | [Web: edit and re-validate saved questions](2026-09-26-edit-questions.md) | Nikko | this commit |

@@ -24,6 +24,7 @@
 }
 
 .page-header {
+  margin-bottom: 16px;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -73,14 +74,9 @@
   cursor: not-allowed;
 }
 
-.actions-note,
 .muted {
   color: #6b7280;
   font-size: 13px;
-}
-
-.actions-note {
-  margin: 8px 0 16px;
 }
 
 .warning-strip {
