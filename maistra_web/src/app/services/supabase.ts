@@ -54,7 +54,7 @@ async saveQuestion(question: any) {
   }
 
   // ── QUESTION SECTIONS (Nikko) ───────────────────────────
-  // Tables from supabase/migrations/20260924000000_add_question_sections.sql.
+  // Tables from supabase/migrations/20260926000100_add_question_sections.sql.
 
   async getQuestionSections() {
     return await this.supabase
