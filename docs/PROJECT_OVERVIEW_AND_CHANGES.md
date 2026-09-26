@@ -643,6 +643,25 @@ handwriting.
   to run on a database that is already correct.
 - `supabase/tests/database/security_contract.test.sql` now checks that both
   tables are published.
+- `20260926000200_add_submission_gate_result.sql` adds `submissions.gate_result`
+  (the phone's photo verdict: `PASS`, `FIXABLE`, `RETAKE` or NULL). The browser
+  can set it only on insert, and the insert policy refuses `RETAKE` pages.
+  [Note](changes/2026-09-26-gate-result-can-publish-and-cloud-migrations.md)
+- `20260926000300_restore_question_can_publish.sql` brings back
+  `questions.can_publish`, the "model answer validated" flag the phone's
+  question picker filters on. Existing questions with test cases were marked
+  validated.
+- `20260926000400_allow_question_updates.sql` lets the question page edit a
+  saved question (validated like a new one, no delete). Changing a question's
+  test cases or type clears the grades of its linked papers and advances their
+  `grading_revision`, so a grade computed against the old test cases can't be
+  saved. [Note](changes/2026-09-26-question-updates.md)
+- **Cloud project is at `20260926000400`.** Nombrado's `answers` migration and
+  Nikko's sections migration were applied along with the three above.
+- **Decided (see `TEAM_SYNC.md`):** papers with several programs move to a
+  `submission_programs` table (one row per program with its own question and
+  grade), replacing the `answers` column, which is still empty.
+  `code-similarity/duplicate` is parked and will be rebuilt on top of it.
 
 ## Setup documentation
 
@@ -667,6 +686,7 @@ handwriting.
 - Manual-output and function-input update (September 8): 79 focused Vitest tests pass across question-form, C structure checks, submissions-list, and Judge0 runner; `tsc --noEmit -p tsconfig.spec.json` and the Angular development build pass. Live Judge0 verification was not run for this update.
 - Equal-weight scoring prototype (September 9): all 85 frontend Vitest tests pass; `tsc --noEmit -p tsconfig.spec.json` and the Angular development build pass. Adviser approval and live Judge0 verification remain pending.
 - End-to-end tests and review workflow fixes (September 26): all 7 Playwright tests pass, and they passed 35 of 35 runs with `--repeat-each=5`; all 164 frontend Vitest tests still pass. The tests run against faked services, so the real OCR, Judge0 and Supabase were not exercised.
+- Database migrations (September 26): `supabase test db` passes 58/58 on local Supabase and the Python migration contract tests pass 18/18. After the cloud push, the new columns, grants, policies and trigger were checked by querying the cloud project directly. The phone and the question page were not tried against them yet.
 
 ## Important security work
 
@@ -676,7 +696,7 @@ Before deploying mAIstra beyond a trusted development environment:
 
 - ~~Rotate the Supabase `service_role` key exposed in Angular configuration.~~ **Done 2026-09-23 (`a448198`):** Supabase disabled the project's legacy keys on 2026-09-21. `maistra_web/src/environment.ts` now uses a publishable key. The legacy `service_role` JWT must stay disabled and must not be re-enabled.
 - Never place a Supabase service-role key in browser or mobile code.
-- Add complete Row Level Security policies for questions, submissions, and storage objects. RLS is currently enabled on `questions` only. `submissions` has a permissive policy but RLS is **not enabled**, so the publishable key does not restrict access to it.
+- Add complete Row Level Security policies for questions, submissions, and storage objects. RLS is enabled on `questions`, `submissions` and the section tables (`20260921000000_lock_down_public_api.sql`, confirmed in the cloud on 2026-09-26), with column-level grants. The policies still allow any caller with the publishable key because there are no logins yet.
 - Restrict access to handwritten submission images or serve them with signed URLs.
 - Authenticate and rate-limit the OCR and Judge0 wrapper APIs.
 - Restrict the OCR URL downloader to trusted storage hosts and enforce download-size limits.
@@ -688,7 +708,7 @@ Before deploying mAIstra beyond a trusted development environment:
 > **Owner:** Shared
 
 1. **OCR:** import the incoming bond paper and yellow pad datasets, which are the current blocker for OCR work. They should add new writers, give both paper types a writer-disjoint holdout, and support a retrain and re-evaluation on the same test set.
-2. Add and verify Supabase migrations and RLS policies, starting with enabling RLS on `submissions`. (The frontend key was corrected in `a448198`.)
+2. Tighten the RLS policies once teachers log in: they are enabled on every table but still allow any caller with the publishable key. (The frontend key was corrected in `a448198`.)
 3. Reinstall Angular dependencies on the operating system used for testing, then run the complete frontend suite.
 4. Add authentication and rate limiting to the OCR and Judge0 wrapper services.
 5. Move API endpoints and mobile Supabase configuration into environment-specific configuration.

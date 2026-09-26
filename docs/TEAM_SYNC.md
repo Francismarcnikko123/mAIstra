@@ -80,16 +80,16 @@ A short, shared record of **what each of us changed that affects the others**, *
 ## Jayrald (submissions/review UI, Judge0, Supabase)
 
 ### To do (requested by teammates; please update this section when done)
-- [ ] (2026-09-24, from Nombrado) **Answer the open questions** in Nombrado's section: which branch is current, whether `code-similarity/duplicate` merges, option A or B for multi-program papers, migration order, and the target branch for `feature/program-tabs`.
-- [ ] (2026-09-24, from Nombrado) **Apply `supabase/migrations/20260923000000_add_submission_answers.sql`** to the cloud project, unless we choose option B.
+- [x] (2026-09-24, from Nombrado) **Answer the open questions** in Nombrado's section: which branch is current, whether `code-similarity/duplicate` merges, option A or B for multi-program papers, migration order, and the target branch for `feature/program-tabs`.
+- [x] (2026-09-24, from Nombrado) **Apply `supabase/migrations/20260923000000_add_submission_answers.sql`** to the cloud project, unless we choose option B.
 - [ ] (2026-09-24, from Nombrado) **Grade every program on a paper:** loop over `programsForGrading(verified_text, question_id, answers)` and grade each entry against its own question's model answer and test cases. Decide how per-program results are keyed and how scores combine.
 - [ ] (2026-09-24, from Nombrado) **OK pre-extraction on the cloud project** (see Nombrado → Changed). Later: a secret key for the OCR server once RLS is on, and your view on also listening for realtime UPDATEs in `subscribeToSubmissions()` so the list badge refreshes by itself.
-- [ ] (2026-09-24, from Nombrado) **Enable RLS on `submissions`.** It is currently enabled only on `questions`.
-- [ ] (2026-09-24, from Nikko) **Add `submissions.gate_result text`** and add `gate_result` to the submissions INSERT grant (and allow it in `submissions_public_insert`). The phone's quality gate decides PASS / FIXABLE / RETAKE and currently throws that away; without it a low grade can't be traced back to a bad photo. Every screen reads submissions, so a column avoids a join in three places. Until this is applied, **mobile uploads fail**.
-- [ ] (2026-09-24, from Nikko) **Add a reliable "model answer validated" flag on `questions`.** `can_publish` was dropped in `20260917000000_remove_unused_question_validation_columns.sql`. The mobile picker filters on `questions.can_publish = true`; if you prefer another name, tell me and I'll switch the query. Until this exists, the picker shows "Could not load questions". The web question form now writes `can_publish: true` on insert (it only saves after every test case passes), so please also add `can_publish` to the `questions` INSERT grant. Until then, saving a question from the form fails on this branch.
-- [ ] (2026-09-24, from Nikko) **Allow updating questions** (an UPDATE grant + policy on `questions`, plus UPDATE on `question_section_items`, which the migration already grants). The question page's *Edit* and *Validate test cases* buttons are disabled until then, and unsectioned questions can't be given a section.
-- [ ] (2026-09-26, from Nikko) **Renamed my sections migration** from `20260924000000_add_question_sections.sql` to `20260926000100_add_question_sections.sql`: it had the same version number as your `20260924000000_save_grade_for_stored_code.sql`. Contents unchanged; please apply it under the new name.
-- [ ] (2026-09-24, from Nikko) **Apply `supabase/migrations/20260926000100_add_question_sections.sql`** (two new tables, `question_sections` and `question_section_items`; nothing on `questions` changes).
+- [x] (2026-09-24, from Nombrado) **Enable RLS on `submissions`.** It is currently enabled only on `questions`.
+- [x] (2026-09-24, from Nikko) **Add `submissions.gate_result text`** and add `gate_result` to the submissions INSERT grant (and allow it in `submissions_public_insert`). The phone's quality gate decides PASS / FIXABLE / RETAKE and currently throws that away; without it a low grade can't be traced back to a bad photo. Every screen reads submissions, so a column avoids a join in three places. Until this is applied, **mobile uploads fail**.
+- [x] (2026-09-24, from Nikko) **Add a reliable "model answer validated" flag on `questions`.** `can_publish` was dropped in `20260917000000_remove_unused_question_validation_columns.sql`. The mobile picker filters on `questions.can_publish = true`; if you prefer another name, tell me and I'll switch the query. Until this exists, the picker shows "Could not load questions". The web question form now writes `can_publish: true` on insert (it only saves after every test case passes), so please also add `can_publish` to the `questions` INSERT grant. Until then, saving a question from the form fails on this branch.
+- [x] (2026-09-24, from Nikko) **Allow updating questions** (an UPDATE grant + policy on `questions`, plus UPDATE on `question_section_items`, which the migration already grants). The question page's *Edit* and *Validate test cases* buttons are disabled until then, and unsectioned questions can't be given a section.
+- [x] (2026-09-26, from Nikko) **Renamed my sections migration** from `20260924000000_add_question_sections.sql` to `20260926000100_add_question_sections.sql`: it had the same version number as your `20260924000000_save_grade_for_stored_code.sql`. Contents unchanged; please apply it under the new name.
+- [x] (2026-09-24, from Nikko) **Apply `supabase/migrations/20260926000100_add_question_sections.sql`** (two new tables, `question_sections` and `question_section_items`; nothing on `questions` changes).
 - Do **not** change `ocr_feature/` or the program-tabs code. If grading needs something from them, add it under Needs from others.
 
 When you finish an item: tick it, add the date and commit, and note anything that affects others under **Changed (affects others)**.
@@ -97,12 +97,38 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 ### Status
 
 ### Changed (affects others)
+- (2026-09-26) **For Nombrado, answers to section 7 of the `submission_programs` proposal:**
+  1. **Table, not jsonb.** `submission_programs` it is.
+  2. **Grade columns go on `submission_programs`**, as sketched (results, passed/total, `graded_at`, `grading_revision`), with the same stale-grade triggers and a `save_program_grade()` like `save_submission_grade()`. No separate grades table.
+  3. **Switch-over:** grading moves to the new table as part of my "grade every program" task. Until then the Program 1 mirror (your section 4, step 4) is fine: each save also writes Program 1 to `submissions.verified_text` / `question_id`. The mirror is removed once grading reads the table.
+  4. **I write the migration** (schema, triggers, `save_submission_programs()`, `save_program_grade()`, RLS, grants, dropping the empty `answers` column). You then switch the review screen to it; I'll add the `supabase.ts` calls you need or OK yours.
+  5. **`question_id … on delete restrict`**: a question with verified programs can't be deleted.
+  6. **A page is `graded` only when every program on it is graded.** Editing any program's code or question sends it back to `verified`. **Scores stay per program** (e.g. `Q1 3/4 · Q2 2/2`); there is no page total, because each program answers a different question and pages of one answer aren't grouped yet.
+- (2026-09-26) **For Nombrado, answers to your open questions (2026-09-24):**
+  1. **Current branch:** `judge0-integration`. It already contains `codex/supabase-security`.
+  2. **`code-similarity/duplicate` is parked**, not merged. It is 25 commits behind, rewrites `submissions-list.*`, and its one-submission-per-(assessment, question, student) index assumes one program per row. Similarity comes back later, rebuilt on top of `submission_programs` (programs grouped by question).
+  3. **Multi-program papers: your `submission_programs` table proposal is accepted.** Note: I applied `20260923000000_add_submission_answers.sql` to the cloud before I saw your "hold" request (it's on `feature/pre-extraction`, not on my branch). The column is empty (0 of 212 rows), so the `submission_programs` migration will simply drop it. Answers to its section 7 are in the next entry.
+  4. **Migrations:** I apply them to the cloud, in version order, with `supabase db push`. The cloud is at `20260926000400`; date new migrations after that and announce them here.
+  5. **Nikko doesn't wait for `assessments`.** Nikko's question sections (live in the cloud) cover grouping and numbering.
+  6. **Target branch:** merge `feature/pre-extraction` (which includes `feature/program-tabs`) into **`judge0-integration`**. Everything goes to `main` later in one merge.
+  7. **Submission → assessment link:** none for now; assessments are parked with the similarity branch. The tab picker can list all validated questions (optionally Program 1's section first).
+- (2026-09-26) **For Nikko, questions can be edited now** (`20260926000400_allow_question_updates`, applied to the cloud). The browser can update `question_name`, `question_text`, `model_answer`, `test_cases`, `question_type` and `can_publish`; edits are checked like new questions (`questions_public_update`). Still no delete. You can enable *Edit* and *Validate test cases*.
+  - **Send `can_publish: false`** with any edit to the model answer or test cases that hasn't passed validation again. The database can't tell whether the new test cases were run, so it never resets the flag by itself.
+  - **Editing `test_cases` or `question_type` clears the grades** of every paper linked to that question (Program 1), moves `graded` papers back to `verified`, and advances `grading_revision`, so a grade computed against the old test cases can't be saved. Renaming or editing the text or model answer keeps grades. Warn the teacher before saving such an edit if the question has graded papers.
+- (2026-09-26) **Cloud project is now at `20260926000300`.** Applied with `supabase db push --include-all`: `20260923000000_add_submission_answers`, `20260926000100_add_question_sections`, `20260926000200_add_submission_gate_result`, `20260926000300_restore_question_can_publish`. `submissions.answers`, `question_sections`, `question_section_items`, `submissions.gate_result` and `questions.can_publish` all exist in the cloud now.
+- (2026-09-26) **For Nikko, `submissions.gate_result`:** accepts `PASS`, `FIXABLE`, `RETAKE` or NULL. The browser can set it on **insert only** (no UPDATE grant). `submissions_public_insert` accepts NULL, `PASS` or `FIXABLE` and **rejects `RETAKE`**, matching the phone's rule. Mobile uploads should work again.
+- (2026-09-26) **For Nikko, `questions.can_publish`:** kept your name. `boolean NOT NULL DEFAULT false`; the browser can set it on insert. All 22 existing cloud questions were set to `true` (every one has test cases and was created after the form started requiring passing validation on 2026-09-04). There is still no UPDATE on `questions`; that's the next item.
+- (2026-09-26) **For Nombrado:** applying the `answers` migration doesn't lock us into option A; it only adds a column. The A/B decision is still open.
 
 ### Needs from others
 
 ### Open questions
 
 ### Done
+- (2026-09-26) Question updates: `20260926000400_allow_question_updates.sql` written, tested locally (pgTAP 58/58) and applied to the cloud. Commit `018fe7d`.
+- (2026-09-26) `submissions.gate_result` and `questions.can_publish` migrations written, tested locally (pgTAP 51/51) and applied to the cloud. Commit `018fe7d`.
+- (2026-09-26) Applied Nombrado's `answers` migration and Nikko's sections migration (under its new `20260926000100` name) to the cloud.
+- (2026-09-26) RLS on `submissions`: already enabled in the cloud by `20260921000000_lock_down_public_api.sql`; nothing to do.
 
 ---
 

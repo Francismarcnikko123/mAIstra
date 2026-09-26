@@ -12,3 +12,5 @@ One file per update, newest last. Each note says what changed, why, which files,
 | 2026-09-26 | [Merge pre-extraction and judge0-integration into `feature/question-linking-v2`](2026-09-26-merge-pre-extraction-and-judge0.md) | Nikko (merge), Nombrado + Jayrald (reviewers) | `0e21d5c`, `a727934`, `ffcf908` |
 | 2026-09-26 | [Rename the question sections migration](2026-09-26-migration-rename.md) | Nikko | `246cb7e` |
 | 2026-09-26 | [Question page: drop marks](2026-09-26-question-page-drop-marks.md) | Nikko | `c6178c6` |
+| 2026-09-26 | [Gate verdicts, the validated flag, and catching the cloud up](2026-09-26-gate-result-can-publish-and-cloud-migrations.md) | Jayrald | `018fe7d` |
+| 2026-09-26 | [Questions can be edited; edited test cases clear stale grades](2026-09-26-question-updates.md) | Jayrald | `018fe7d` |
