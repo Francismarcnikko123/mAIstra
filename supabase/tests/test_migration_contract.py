@@ -156,3 +156,9 @@ def test_review_fixes_4_5_7_9_are_declared():
     # 9: programs 2+ are matched to rows by question, positions move in one statement
     assert "unique (submission_id, position)\n    deferrable initially immediate" in MIGRATION_SQL
     assert "grant update (position) on table public.submission_programs" in MIGRATION_SQL
+
+
+def test_program_one_follows_the_page_code_too():
+    # 20260926001300: a direct change of the page's code reaches Program 1.
+    assert "create trigger sync_program_one_on_page_change" in MIGRATION_SQL
+    assert "after update of question_id, verified_text" in MIGRATION_SQL
