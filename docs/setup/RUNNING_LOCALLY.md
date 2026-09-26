@@ -383,7 +383,7 @@ PW_CHANNEL=chrome npm run e2e          # bash
 $env:PW_CHANNEL='chrome'; npm run e2e  # PowerShell
 ```
 
-17/17 passed on `judge0-integration` on 2026-09-27 (local Chrome).
+19/19 passed on `judge0-integration` on 2026-09-27 (local Chrome).
 
 ## Common local mistakes (not VM-related)
 

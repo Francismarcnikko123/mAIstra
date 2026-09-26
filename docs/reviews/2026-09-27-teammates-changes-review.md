@@ -15,14 +15,14 @@
 | # | Severity | Finding | Where | Who fixes |
 |---|---|---|---|---|
 | 1 | ✅ Fixed (Nikko, 2026-09-27) | Saving a question rewrites its test cases even for a rename, so old questions lose their graded papers' grades with no warning | `supabase.ts` `updateQuestion` + `question-form.ts` | Nikko |
-| 2 | **High** | Editing a question has no check for a newer version: a second teacher's edit is overwritten silently | `supabase.ts` `updateQuestion` / `markQuestionValidated` | Nikko (Jayrald can add a revision column if wanted) |
+| 2 | ✅ Fixed (Nikko, 2026-09-27) | Editing a question has no check for a newer version: a second teacher's edit is overwritten silently | `supabase.ts` `updateQuestion` / `markQuestionValidated` | Nikko (Jayrald can add a revision column if wanted) |
 | 3 | ✅ Fixed `8c11129` | "New changes need to be saved" disappears after 3 s while a program tab is still unsaved | `submissions-list.ts` `saveVerifiedText` timer | **Jayrald** |
 | 4 | Medium (design) | Without the `submission_programs` table, the Save label always says "New changes need to be saved" | `submissions-list.ts` `saveStatusLabel` (merge `fefbf9e`) | Nombrado (decide) |
 | 5 | ✅ Fixed (Nikko, 2026-09-27) | If "mark validated" fails, a retry warns about grades that are already cleared | `question-form.ts` `saveEdit` | Nikko |
-| 6 | Low-Medium | A live photo badge can be wiped by a reload that was already running | `submissions-list.ts` `loadSectionFolders` | Nikko |
-| 7 | Low | A typed topic that matches a section name is silently replaced with "Uncategorized" | `submissions-list.ts` `isSectionName` | Nikko |
-| 8 | Low (partly fixed 2026-09-27) | The fake backend's question PATCHes don't behave like the database | `tests/e2e/support/fake-backend.ts` | Nikko |
-| 9 | Low | `countGradedPapers` downloads every program row and makes two round trips | `supabase.ts` | Nikko |
+| 6 | ✅ Fixed (Nikko, 2026-09-27) | A live photo badge can be wiped by a reload that was already running | `submissions-list.ts` `loadSectionFolders` | Nikko |
+| 7 | Low (not reachable today; unchanged) | A typed topic that matches a section name is silently replaced with "Uncategorized" | `submissions-list.ts` `isSectionName` | Nikko |
+| 8 | ✅ Fixed (Nikko, 2026-09-27) | The fake backend's question PATCHes don't behave like the database | `tests/e2e/support/fake-backend.ts` | Nikko |
+| 9 | ✅ Fixed (Nikko, 2026-09-27) | `countGradedPapers` downloads every program row and makes two round trips | `supabase.ts` | Nikko |
 | 10 | Low | Leftover code: most of `saveStatusMessage` is dead, and the label's tone is computed three times per render | `submissions-list.ts` / `.html` | Jayrald + Nombrado |
 
 ---
@@ -45,6 +45,8 @@ So when a teacher only **renames** such a question:
 **Fix:** send only the columns that actually changed, compared with what was loaded. Keep unknown keys such as `mark` when rewriting test cases, or drop them deliberately behind the grade warning.
 
 ### 2. High — question edits have no conflict check
+
+> **Fixed by Nikko (2026-09-27, `d139ef2`), without a revision column:** `updateQuestion` filters on all five content columns as loaded (PostgREST casts the `test_cases` filter to JSONB and compares by value; checked read-only on the cloud), and `markQuestionValidated` on the validated model answer, test cases and type. A save that matches no row changes nothing and the form reports the conflict. E2E test "a save made from an outdated copy is refused…" fails on the old code.
 
 **Where:** `supabase.ts:178`.
 
@@ -100,6 +102,8 @@ The cloud has the table, so only old local databases are affected. Nombrado's te
 
 ### 6. Low-Medium — a live photo badge can disappear
 
+> **Fixed by Nikko (2026-09-27, `d139ef2`):** the maps are merged (verdicts never change after upload); a failed reload keeps the known badges.
+
 **Where:** `submissions-list.ts:218`, with `loadSectionFolders`.
 
 The realtime handler writes the new paper's `gate_result` into `gateResults`. A `loadSectionFolders` that was already running then replaces the whole map with a query result taken before the upload. The badge disappears until the next full reload.
@@ -107,6 +111,8 @@ The realtime handler writes the new paper's `gate_result` into `gateResults`. A 
 **Fix (Nikko):** merge the maps instead of replacing them, or read `gate_result` in the single-row refetch.
 
 ### 7. Low — typed topics matching a section name are replaced
+
+> **Nikko (2026-09-27): not changed.** Neither the web app nor the phone has a topic field any more, so a teacher can't type "Basic" on purpose; `topic` is only written from the question's section. Revisit if a topic field comes back.
 
 **Where:** `submissions-list.ts:546` (`isSectionName`).
 
@@ -116,7 +122,7 @@ A teacher who links a paper to an unsectioned question and types the topic "Basi
 
 ### 8. Low — the e2e fake doesn't match the database for question edits
 
-> **Partly fixed by Nikko (2026-09-27, `a7fcf76`):** the fake now clears grades like `invalidate_grades_for_question` and compares JSON by value. Still open: the update policy check and `UNIQUE(section_id, number)`. The flaky graded-papers test now waits for the third card and uses `.nth(2)`.
+> **Fixed by Nikko (2026-09-27):** grade clearing and value comparison in `a7fcf76`; the `questions_public_update` check and `UNIQUE(section_id, number)` in `d139ef2` (new e2e test for the "number already used" path). The flaky graded-papers test now waits for the third card and uses `.nth(2)`.
 
 **Where:** `tests/e2e/support/fake-backend.ts:435`.
 
@@ -130,6 +136,8 @@ So the graded-papers-warning test can't show grades being cleared, and the "numb
 **Fix (Nikko):** mirror the trigger, the unique rule and value-based comparison in the fake.
 
 ### 9. Low — `countGradedPapers` is heavier than needed
+
+> **Fixed by Nikko (2026-09-27, `d139ef2`):** `Promise.all` and `.not('graded_at', 'is', null)`.
 
 **Where:** `supabase.ts:201`.
 
