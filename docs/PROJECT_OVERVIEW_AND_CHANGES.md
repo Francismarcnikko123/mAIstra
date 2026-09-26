@@ -722,9 +722,12 @@ handwriting.
   advances the page's revision, so a save from an older view of the tabs is
   refused as a conflict instead of overwriting.
 - **Code review:** [`reviews/2026-09-26-judge0-integration-code-review.md`](reviews/2026-09-26-judge0-integration-code-review.md)
-  lists nine findings; #1, #2, #3 and #6 are fixed (#3 and #6 in `f3c3a69`: Step 3
-  stays on the program just graded, and grading waits for a re-read in
-  progress), the rest are open there.
+  lists nine findings; all but #8 (Nombrado's OCR CORS setting) are fixed:
+  #3 and #6 in `f3c3a69` (Step 3 stays on the program just graded, grading
+  waits for a re-read in progress) and #4, #5, #7, #9 in migrations
+  `20260926000800`–`001100` (an edited question is no longer marked validated;
+  pages with programs keep no page-level grade; a question edit notifies
+  every affected page; tab grades survive clearing or reordering tabs).
 
 ## Setup documentation
 

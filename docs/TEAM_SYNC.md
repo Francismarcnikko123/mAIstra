@@ -148,6 +148,10 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 - (2026-09-26, `judge0-integration`) **Working branch: `judge0-integration`** (pushed). Everything of mine lands here. It contains `feature/question-linking-v2` (Nikko, merged in `138ef02`) and `feature/pre-extraction` up to `0f87354` (Nombrado, merged in `046b88c`). `code-similarity/duplicate` is parked. Cloud Supabase is at `20260926000600`.
 
 ### Changed (affects others)
+- (2026-09-26, `judge0-integration`) **Review fixes #4, #5, #7 and #9** (`719dac1`, `a8f6990`, `24aafe8`, `0c1dc8c`; migrations `20260926000800`–`001100`).
+  - **For Nikko (#7):** editing a question's model answer, test cases or type now sets `can_publish = false` on the server, even if the same update sends true. When you enable *Edit* / *Validate test cases*: save the content first, then mark it validated with a second update that sets only `can_publish = true`.
+  - **For Nombrado (#9):** clearing or reordering program tabs keeps the other programs' grades now (programs are matched by question). Nothing to change in the review code.
+  - **For everyone (#4, #5):** a page with programs keeps no page-level grade (the grade is per program); a question edit that clears grades now shows at once on open papers.
 - (2026-09-26, `judge0-integration`) **Review fixes #3 and #6** (`f3c3a69`, web only): in Step 3 the program just graded stays selected (it used to jump to the next one while showing the old results), and grading waits for a re-read of the programs still in progress. Nothing for others to change.
 - (2026-09-26, `judge0-integration`) **Review fixes #1 and #2** (`446b05c`, migration `20260926000700`; code review in `docs/reviews/2026-09-26-judge0-integration-code-review.md`).
   - **For everyone:** changing a paper's question on Details now moves Program 1 to that question and clears its grade, so it is graded against the right question.
@@ -191,6 +195,7 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 - (2026-09-26, `judge0-integration`) ~~**For Nombrado:** applying the `answers` migration doesn't lock us into option A; the A/B decision is still open.~~ Superseded: the `submission_programs` table was chosen and the `answers` column is dropped.
 
 ### Needs from others
+- (2026-09-26, `judge0-integration`) **Nombrado:** review finding #8: `ocr_feature/main.py` allows any origin (`allow_origins=["*"]`), so any website the teacher visits can make the local OCR server fetch any URL. Please restrict it to the web app's origins (and ideally the Supabase storage host for `image_url`). Details in `docs/reviews/2026-09-26-judge0-integration-code-review.md`.
 - (2026-09-26, `judge0-integration`) **Nombrado:** `saveStatusLabel()` says "✓ All programs saved" in two cases where it shouldn't: after a save **conflict** (`saveStatus = 'conflict'`, another teacher changed the paper), and after a successful save while the teacher keeps typing (`saveStatus` stays `'saved'`). Once it covers both, the older message under the editor can go.
 - (2026-09-26, `judge0-integration`) **Nombrado:** `code-editor.ts` has a `readOnly` input that the Judge0 component uses for Step 3 (`[readOnly]="codeReadOnly"`). Please keep it in your version, or add your own equivalent.
 - (2026-09-26, `judge0-integration`) **Nombrado:** `EXTRA_PROGRAMS_UNSAVABLE` still says "the database is missing the answers column". It only shows on a database without `submission_programs` now; reword when convenient.

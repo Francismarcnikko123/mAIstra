@@ -19,3 +19,4 @@ One file per update, newest last. Each note says what changed, why, which files,
 | 2026-09-26 | [Every program on a paper is its own row, graded on its own](2026-09-26-submission-programs-and-per-program-grading.md) | Jayrald | `f85d99e`, `f3138c6`, `96eda09` |
 | 2026-09-26 | [Review fixes: Program 1 follows the page's question; tab-only saves are guarded](2026-09-26-review-fixes-program-one-and-tab-saves.md) | Jayrald | `446b05c` |
 | 2026-09-26 | [Review fixes: Step 3 stays on the graded program; grading waits for re-reads](2026-09-26-review-fixes-step-3.md) | Jayrald | `f3c3a69` |
+| 2026-09-26 | [Review fixes #4, #5, #7 and #9](2026-09-26-review-fixes-4-5-7-9.md) | Jayrald | `719dac1`, `a8f6990`, `24aafe8`, `0c1dc8c`, `2cd57a7` |

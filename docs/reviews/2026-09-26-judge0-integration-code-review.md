@@ -12,12 +12,12 @@
 | 1 | ✅ Fixed `446b05c` | Web + DB | Changing Program 1's question on Details doesn't update its `submission_programs` row, so it is graded against the old question | Jayrald |
 | 2 | ✅ Fixed `446b05c` | DB | The save guard (page `grading_revision`) doesn't move when only Programs 2+ change, so two teachers can overwrite each other's tabs | Jayrald |
 | 3 | ✅ Fixed `f3c3a69` | Web | After grading, Step 3 jumps to the next ungraded program but still shows the previous program's results | Jayrald |
-| 4 | Medium | DB | `save_program_grade()` marks the page graded but never updates the page row's grade columns | Jayrald |
-| 5 | Medium | DB + Web | A question edit that clears a Program 2+ grade sends no realtime event for pages that weren't `graded`, so the old grade stays on screen | Jayrald |
+| 4 | ✅ Fixed `a8f6990` | DB | `save_program_grade()` marks the page graded but never updates the page row's grade columns | Jayrald |
+| 5 | ✅ Fixed `24aafe8` | DB + Web | A question edit that clears a Program 2+ grade sends no realtime event for pages that weren't `graded`, so the old grade stays on screen | Jayrald |
 | 6 | ✅ Fixed `f3c3a69` | Web | A fast Submit right after "Continue to grading" can grade stale program rows | Jayrald |
-| 7 | Low | DB | Nothing on the server resets `can_publish` when a question's answer or test cases change | Jayrald (+ Nikko's edit form) |
+| 7 | ✅ Fixed `719dac1` | DB | Nothing on the server resets `can_publish` when a question's answer or test cases change | Jayrald (+ Nikko's edit form) |
 | 8 | Low | OCR | `ocr_feature/main.py` is back to `allow_origins=["*"]` (Nombrado's version, as they asked) | Nombrado |
-| 9 | Low | Web + DB | Clearing a middle tab renumbers the later tabs, which wipes their grades | Jayrald (+ Nombrado's `answersToSave`) |
+| 9 | ✅ Fixed `0c1dc8c` | Web + DB | Clearing a middle tab renumbers the later tabs, which wipes their grades | Jayrald (+ Nombrado's `answersToSave`) |
 
 Two claims in the docs (`2d31248`) were wrong because of #1 and #2; the fixes make them true (see [Docs accuracy](#docs-accuracy)).
 
@@ -65,6 +65,8 @@ With no chip picked by the teacher, the selection is "first ungraded". Once a pr
 
 ### 4. Medium — the page row claims "graded" with no grade on it
 
+> **Fixed in `a8f6990`** (migration `20260926000900`): pages with program rows keep no page-level grade (cleared once), and `save_submission_grade()` refuses them. `save_program_grade()` deliberately doesn't write page columns, because that would advance the page revision and make the teacher's next save a conflict. Known gap: a page given code and a question directly in the database (never through the review) can carry an old page-level grade until its programs are saved.
+
 **Where:** `20260926000600_add_submission_programs.sql:324` (`save_program_grade`).
 
 `save_program_grade()` writes the grade only on the program row. `sync_page_graded_status()` then sets `submissions.status = 'graded'`, while `passed_test_cases`, `total_test_cases` and `graded_at` on the page row stay empty or hold an older grade.
@@ -74,6 +76,8 @@ With no chip picked by the teacher, the selection is "first ungraded". Once a pr
 **Fix:** decide what the page row's grade columns mean now. Either mirror Program 1's grade onto them in `save_program_grade()`, like `verified_text` is mirrored, or document them as legacy and stop reading them.
 
 ### 5. Medium — cleared Program 2+ grades don't reach open pages
+
+> **Fixed in `24aafe8`** (migration `20260926001000`): every page with a program linked to the edited question gets a new `grading_revision` once, so a realtime UPDATE always fires; pages whose own question was edited aren't bumped twice.
 
 **Where:** `20260926000600_add_submission_programs.sql:178` (`invalidate_grades_for_question`).
 
@@ -97,6 +101,8 @@ The paper is removed from `staleProgramIds` before the re-read finishes. A Submi
 
 ### 7. Low — `can_publish` isn't reset on the server
 
+> **Fixed in `719dac1`** (migration `20260926000800`): a BEFORE UPDATE trigger sets `can_publish = false` whenever `model_answer`, `test_cases` or `question_type` change, even if the same update sends true. Marking a question validated is a separate update that changes only `can_publish`.
+
 **Where:** `supabase/migrations/20260926000400_allow_question_updates.sql:24`.
 
 The rule "send `can_publish: false` with any unvalidated edit" is only a comment and a TEAM_SYNC note, and no web code sends question updates yet. A client that forgets it leaves an edited question marked as validated, and the phone keeps offering it.
@@ -112,6 +118,8 @@ The `046b88c` merge restored Nombrado's `allow_origins=["*"]`, as they asked; th
 **Action:** not ours to change. Add a note under Needs from others asking Nombrado to restrict the origins (and ideally the allowed image hosts). This is already on the "Important security work" list in the overview.
 
 ### 9. Low — clearing a middle tab loses the later tabs' grades
+
+> **Fixed in `0c1dc8c`** (migration `20260926001100`): Programs 2+ are matched to rows by question; clearing or reordering tabs only moves rows and keeps their grades. The position constraint is now `DEFERRABLE INITIALLY IMMEDIATE`, and the browser role may update `position` (still limited to 1..50 by the policy).
 
 **Where:** `submissions-list.ts:992` (`saveVerifiedText` → `answersToSave`) and `save_submission_programs`.
 
@@ -140,7 +148,7 @@ The `046b88c` merge restored Nombrado's `allow_origins=["*"]`, as they asked; th
 
 1. ~~**#1 and #2.**~~ Fixed in `446b05c`.
 2. ~~**#3 and #6.**~~ Fixed in `f3c3a69`.
-3. **#4 and #5.** Consistency of the page row and live updates.
-4. **#7.** Before Nikko turns on question editing.
-5. **#9.** Grade preservation.
+3. ~~**#4 and #5.**~~ Fixed in `a8f6990` and `24aafe8`.
+4. ~~**#7.**~~ Fixed in `719dac1`.
+5. ~~**#9.**~~ Fixed in `0c1dc8c`.
 6. **#8.** Request to Nombrado.
