@@ -2,6 +2,7 @@
 #     .venv/bin/python -m tests.test_export_dataset
 import csv
 import io
+import json
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -224,6 +225,137 @@ class ExportDatasetSummaryTests(unittest.TestCase):
         summary = output.getvalue()
         self.assertIn("Provenance: 1/2 fully verified", summary)
         self.assertIn("labels.csv now contains 2 total row(s)", summary)
+
+
+def run_export(rows, getenv=("https://db", "key")):
+    """Run main() on fake rows; return (labels.csv rows by id, printed output)."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        export_dir = Path(temp_dir)
+        labels_csv = export_dir / "labels.csv"
+        output = io.StringIO()
+        with (
+            patch.object(export_dataset, "IMAGES_DIR", export_dir / "images"),
+            patch.object(export_dataset, "LABELS_CSV", labels_csv),
+            patch.object(export_dataset, "load_dotenv"),
+            patch.object(export_dataset.os, "getenv", side_effect=list(getenv)),
+            patch.object(export_dataset, "fetch_verified_submissions", return_value=rows),
+            patch.object(export_dataset, "download_image", return_value=True),
+            redirect_stdout(output),
+        ):
+            export_dataset.main()
+        with labels_csv.open(newline="", encoding="utf-8") as file:
+            written = {row["submission_id"]: row for row in csv.DictReader(file)}
+    return written, output.getvalue()
+
+
+class ExportDatasetProgramsTests(unittest.TestCase):
+    def test_split_page_exports_every_program_as_its_own_block(self):
+        row = submission("split-1", "int p1;", "int pl;\nint p2:\nint p3;")
+        # Stored out of order on purpose: position decides, not list order.
+        row["submission_programs"] = [
+            {"position": 2, "verified_text": "int p2;"},
+            {"position": 1, "verified_text": "int p1;"},
+            {"position": 3, "verified_text": "int p3;"},
+        ]
+        written, output = run_export([row])
+
+        exported = written["split-1"]
+        self.assertEqual(json.loads(exported["program_blocks"]),
+                         ["int p1;", "int p2;", "int p3;"])
+        self.assertEqual(exported["verified_text"], "int p1;\n\nint p2;\n\nint p3;")
+        # Tab order is not reading order: no misleading correction distance.
+        self.assertEqual(exported["correction_edit_distance"], "")
+        self.assertIn("1 of them hold several programs", output)
+
+    def test_split_page_saved_without_edits_is_set_aside_like_any_other(self):
+        row = submission("split-unedited", "int p1;", "int p1;\nint p2;")
+        row["submission_programs"] = [
+            {"position": 1, "verified_text": "int p1;"},
+            {"position": 2, "verified_text": "int p2;"},
+        ]
+        written, output = run_export([row])
+        self.assertNotIn("split-unedited", written)
+        self.assertIn("split-unedited", output)
+
+    def test_one_program_exports_exactly_as_before(self):
+        row = submission("single-1", "int x = 1;", "int x = l;")
+        row["submission_programs"] = [{"position": 1, "verified_text": "int x = 1;"}]
+        written, _ = run_export([row])
+
+        exported = written["single-1"]
+        self.assertEqual(exported["verified_text"], "int x = 1;")
+        self.assertEqual(exported["program_blocks"], "")
+        self.assertEqual(exported["correction_edit_distance"], "1")
+
+    def test_page_without_program_rows_falls_back_to_the_page_text(self):
+        written, _ = run_export([submission("legacy-1", "int y;", "int v;")])
+        self.assertEqual(written["legacy-1"]["verified_text"], "int y;")
+        self.assertEqual(written["legacy-1"]["program_blocks"], "")
+
+    def test_programs_table_wins_over_a_stale_program_1_copy_and_is_reported(self):
+        row = submission("stale-1", "old program one", "int z = 0;")
+        row["submission_programs"] = [{"position": 1, "verified_text": "int z = 0 ;"}]
+        written, output = run_export([row])
+
+        self.assertEqual(written["stale-1"]["verified_text"], "int z = 0 ;")
+        self.assertIn("WARNING: Program 1 in submission_programs differs", output)
+        self.assertIn("stale-1", output)
+
+    def test_prefers_supabase_key_and_accepts_the_legacy_name(self):
+        getenv_calls = []
+
+        def getenv(name, default=None):
+            getenv_calls.append(name)
+            return {"SUPABASE_URL": "https://db", "SUPABASE_KEY": "publishable"}.get(name, default)
+
+        with (
+            patch.object(export_dataset, "load_dotenv"),
+            patch.object(export_dataset.os, "getenv", side_effect=getenv),
+            patch.object(export_dataset, "fetch_verified_submissions", return_value=[]) as fetch,
+            redirect_stdout(io.StringIO()),
+        ):
+            export_dataset.main()
+        fetch.assert_called_once_with("https://db", "publishable")
+        self.assertNotIn("SUPABASE_ANON_KEY", getenv_calls)
+
+
+class FakeResponse:
+    def __init__(self, status_code, payload=None, text=""):
+        self.status_code, self._payload, self.text = status_code, payload, text
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise AssertionError(f"unexpected HTTP {self.status_code}")
+
+
+class FetchVerifiedSubmissionsTests(unittest.TestCase):
+    def test_reads_verified_and_graded_pages_with_their_programs(self):
+        with patch.object(export_dataset.requests, "get",
+                          return_value=FakeResponse(200, [{"id": "a"}])) as get:
+            rows = export_dataset.fetch_verified_submissions("https://db", "k")
+
+        params = get.call_args.kwargs["params"]
+        self.assertEqual(params["status"], "in.(verified,graded)")
+        self.assertIn("submission_programs(position,verified_text)", params["select"])
+        self.assertEqual(rows, [{"id": "a"}])
+
+    def test_retries_without_programs_on_a_database_without_the_table(self):
+        responses = [
+            FakeResponse(400, text='Could not find a relationship between '
+                                   '"submissions" and "submission_programs"'),
+            FakeResponse(200, [{"id": "a"}]),
+        ]
+        with (
+            patch.object(export_dataset.requests, "get", side_effect=responses) as get,
+            redirect_stdout(io.StringIO()),
+        ):
+            rows = export_dataset.fetch_verified_submissions("https://db", "k")
+
+        self.assertEqual(rows, [{"id": "a"}])
+        self.assertNotIn("submission_programs", get.call_args.kwargs["params"]["select"])
 
 
 if __name__ == "__main__":

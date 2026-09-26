@@ -80,6 +80,7 @@ from core.ocr_pipeline import (
     line_member_bounds,
 )
 from core.preprocess import preprocess_image, DEFAULT_CONFIG
+from evaluators.labels_schema import program_blocks
 
 OUTPUT_DIR = Path("datasets/recognition")
 IMAGES_DIR = OUTPUT_DIR / "images"
@@ -186,6 +187,59 @@ def _align_lines(gt_lines, detected_lines):
     return pairs
 
 
+def _pair_lines(gt_blocks, detected_lines):
+    """Pair ground-truth lines with detected lines for one page.
+
+    gt_blocks is a list of texts: one for a page stored as one text, several
+    for a page the teacher split into programs (labels.csv program_blocks).
+    Returns (pairs, None) with pairs as [(gt_text, detected_index), ...], or
+    (None, reason) when too little of the page aligns to trust it.
+
+    One block behaves exactly as before: equal line counts pair 1:1 by
+    position, otherwise _align_lines with the MIN_PAGE_COVERAGE gate.
+
+    Several blocks: each block's order within itself is the page's order,
+    but the blocks' order (tab order) says nothing about where they sit on
+    the page. So each block is aligned against ALL detected lines on its
+    own, never assuming block order. A detected line claimed by two blocks
+    is ambiguous and dropped from both, never force-assigned. Coverage is
+    measured over all blocks' lines together, with the same threshold.
+    """
+    blocks = [[line for line in text.split("\n") if line.strip()] for text in gt_blocks]
+    total_gt = sum(len(lines) for lines in blocks)
+
+    if len(blocks) == 1:
+        gt_lines = blocks[0]
+        if len(detected_lines) == len(gt_lines):
+            # Counts already agree -- trust positional 1:1 pairing directly,
+            # same as before _align_lines existed. Running the similarity
+            # gate here too would second-guess correct pairs on pages where
+            # OCR's text is just noisy despite being in the right place.
+            return [(gt_lines[i], i) for i in range(len(gt_lines))], None
+        index_pairs = _align_lines(gt_lines, detected_lines)
+        coverage = len(index_pairs) / len(gt_lines) if gt_lines else 0.0
+        if coverage < MIN_PAGE_COVERAGE:
+            return None, (
+                f"line count mismatch (OCR found {len(detected_lines)}, "
+                f"ground truth has {len(gt_lines)}); alignment matched only "
+                f"{len(index_pairs)}/{len(gt_lines)} lines"
+            )
+        return [(gt_lines[g], d) for g, d in index_pairs], None
+
+    claims = {}  # detected_index -> [gt_text, ...] from every block that matched it
+    for gt_lines in blocks:
+        for g, d in _align_lines(gt_lines, detected_lines):
+            claims.setdefault(d, []).append(gt_lines[g])
+    pairs = [(texts[0], d) for d, texts in sorted(claims.items()) if len(texts) == 1]
+    coverage = len(pairs) / total_gt if total_gt else 0.0
+    if coverage < MIN_PAGE_COVERAGE:
+        return None, (
+            f"split page ({len(blocks)} programs): alignment matched only "
+            f"{len(pairs)}/{total_gt} lines (OCR found {len(detected_lines)})"
+        )
+    return pairs, None
+
+
 def _detect_lines_with_boxes(preprocessed_path: str):
     """Run OCR on a preprocessed image and return grouped lines, each a
     (x_min, y_min, x_max, y_max, text) tuple -- the union box of every
@@ -278,11 +332,14 @@ def _crop(image, x_min, y_min, x_max, y_max):
 
 
 def _load_rows():
-    """Yield (source_name, image_path, ground_truth_text) from
+    """Yield (source_name, image_path, ground_truth_blocks) from
     datasets/verified/ only -- the training-data source. samples/ is
     deliberately NOT read here; it is the held-out test set and must never
     contribute a crop to train.txt or val.txt (see the module docstring's
-    TEST-SET ISOLATION note)."""
+    TEST-SET ISOLATION note).
+
+    ground_truth_blocks is [verified_text] for a page stored as one text, or
+    the page's programs (program_blocks) when the teacher split it."""
     verified_csv = Path("datasets/verified/labels.csv")
     if verified_csv.exists():
         for row in csv.DictReader(verified_csv.open(encoding="utf-8")):
@@ -290,7 +347,7 @@ def _load_rows():
             path = Path("datasets/verified") / image_path if image_path else None
             if path and path.exists() and row.get("verified_text"):
                 name = Path(image_path).stem
-                yield name, path, row["verified_text"]
+                yield name, path, program_blocks(row) or [row["verified_text"]]
 
 
 def main() -> int:
@@ -307,8 +364,7 @@ def main() -> int:
     pages = {}  # source_name -> [(crop_path, label_text), ...]
     skipped = []
 
-    for source_name, image_path, ground_truth in _load_rows():
-        gt_lines = [line for line in ground_truth.split("\n") if line.strip()]
+    for source_name, image_path, ground_truth_blocks in _load_rows():
 
         # Normally one part (the page itself); a landscape two-page spread
         # yields two independent parts (left half, right half) processed
@@ -340,27 +396,13 @@ def main() -> int:
             skipped.append((source_name, "unsafe detection geometry or unreadable preprocessed image"))
             continue
 
-        if len(detected_lines) == len(gt_lines):
-            # Counts already agree -- trust positional 1:1 pairing directly,
-            # same as before _align_lines existed. Running the similarity
-            # gate here too would second-guess correct pairs on pages where
-            # OCR's text is just noisy despite being in the right place.
-            pairs = list(enumerate(range(len(gt_lines))))
-        else:
-            pairs = _align_lines(gt_lines, detected_lines)
-            coverage = len(pairs) / len(gt_lines) if gt_lines else 0.0
-            if coverage < MIN_PAGE_COVERAGE:
-                skipped.append((
-                    source_name,
-                    f"line count mismatch (OCR found {len(detected_lines)}, "
-                    f"ground truth has {len(gt_lines)}); alignment matched only "
-                    f"{len(pairs)}/{len(gt_lines)} lines",
-                ))
-                continue
+        pairs, reason = _pair_lines(ground_truth_blocks, detected_lines)
+        if pairs is None:
+            skipped.append((source_name, reason))
+            continue
 
-        for i, (gt_index, det_index) in enumerate(pairs, start=1):
+        for i, (gt_text, det_index) in enumerate(pairs, start=1):
             x_min, y_min, x_max, y_max, _ocr_text = detected_lines[det_index]
-            gt_text = gt_lines[gt_index]
             crop = _crop(line_images[det_index], x_min, y_min, x_max, y_max)
             if crop.size == 0:
                 continue

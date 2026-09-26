@@ -38,6 +38,7 @@ from pathlib import Path
 from core.preprocess import PreprocessConfig
 from core.ocr_pipeline import extract_text_from_image
 from evaluators.evaluation import evaluate_text_pair
+from evaluators.labels_schema import is_split_page
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 IMAGE = str(_SCRIPT_DIR / "samples/greenbook/green_writer10_B2_1.jpg")
@@ -82,6 +83,10 @@ def _load_reference(image_path: str) -> tuple[str, str] | None:
         with p.open(newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
                 if Path(row.get(name_col, "")).name == base:
+                    # A page split into several programs stores them in tab
+                    # order, not reading order: not a whole-page reference.
+                    if is_split_page(row):
+                        continue
                     text = row.get(text_col)
                     if text:
                         return text, f"{csv_path} ({name_col}={base})"
