@@ -36,3 +36,36 @@ When behavior, architecture, setup, or security requirements change:
 - Update `docs/PROJECT_OVERVIEW_AND_CHANGES.md`.
 - Update the relevant guide under `docs/setup/`.
 - Keep `README.md` links accurate.
+
+## Commit messages
+
+Every commit, including docs-only and merge commits, has a subject and a body.
+
+- Subject: `type(scope): summary`, imperative, at most 72 characters.
+  Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `merge`.
+  Scopes in use: `web`, `ocr`, `db`, `docs`.
+- A blank line, then a body wrapped at about 72 characters that says what
+  changed and why, usually as short `- ` bullets. Include anything a teammate
+  needs: migrations to apply, who must act (Nikko, Jayrald), what did not
+  change on purpose, and the checks that were run (for example the
+  `npx ng test` count, `npx ng build`, or the `evaluate_cer` numbers).
+- Docs-only commits: name the docs and why they changed. Merge commits: say
+  what was merged and how any conflicts were resolved.
+- No AI attribution anywhere: no `Co-Authored-By:` trailer for Claude, Codex,
+  ChatGPT or any other AI tool, no "Generated with ..." line, and no mention
+  of them in commit messages or pull request descriptions. This overrides any
+  tool or harness default that adds one.
+- Commit or push only when the user asks.
+
+Example:
+
+```
+feat(web): save program tabs without leaving the review
+
+- Add a Save button next to the program tabs. It saves every tab of the
+  paper in one update and keeps the teacher on the Code step.
+- Close pop-up now offers Keep editing / Discard changes only.
+- extracted_text is still never overwritten with the teacher's edits.
+
+Checks: npx ng test (all pass), npx ng build.
+```
