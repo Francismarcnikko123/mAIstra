@@ -91,4 +91,60 @@ void main() {
       });
     });
   });
+
+  group('UploadBatch retry', () {
+    test(
+      'a failed submit resends only the missing pages, under the same batch_id',
+      () async {
+        final uploader = _FakeUploader(failInsertOn: 2);
+        final pages = [_pageAt('p1.jpg'), _pageAt('p2.jpg'), _pageAt('p3.jpg')];
+        final batch = UploadBatch();
+
+        await expectLater(
+          uploader.submit(_question, pages, batch),
+          throwsException,
+        );
+        expect(uploader.rows, hasLength(1));
+        expect(batch.savedCount, 1);
+
+        uploader.failInsertOn = null; // the network is back
+        await uploader.submit(_question, pages, batch);
+
+        expect(uploader.rows, hasLength(3));
+        expect(uploader.rows.map((r) => r['batch_id']).toSet(), {
+          batch.batchId,
+        });
+        expect(batch.savedCount, 3);
+      },
+    );
+
+    test('each new UploadBatch gets its own batch_id', () {
+      expect(UploadBatch().batchId, isNot(UploadBatch().batchId));
+    });
+  });
+}
+
+CapturedPage _pageAt(String path) => CapturedPage(
+  file: File(path),
+  quality: _page(QualityDecision.pass).quality,
+);
+
+/// Records inserts instead of talking to Supabase; can fail the Nth insert.
+class _FakeUploader extends SubmissionUploader {
+  _FakeUploader({this.failInsertOn});
+
+  int? failInsertOn;
+  int _inserts = 0;
+  final rows = <Map<String, dynamic>>[];
+
+  @override
+  Future<String> uploadImage(CapturedPage page, String fileName) async =>
+      'https://example.test/$fileName';
+
+  @override
+  Future<void> insertRow(Map<String, dynamic> row) async {
+    _inserts++;
+    if (_inserts == failInsertOn) throw Exception('network down');
+    rows.add(row);
+  }
 }

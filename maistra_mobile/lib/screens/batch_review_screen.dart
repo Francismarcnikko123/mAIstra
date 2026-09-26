@@ -33,6 +33,18 @@ class _BatchReviewScreenState extends State<BatchReviewScreen> {
       widget.uploader ?? SubmissionUploader();
   bool _busy = false;
   String? _uploadError;
+  // Created on the first Submit and kept for retries: one batch_id per
+  // answer, and pages already saved are not sent again.
+  UploadBatch? _batch;
+
+  bool _isSaved(CapturedPage page) => _batch?.isSaved(page) ?? false;
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   List<CapturedPage> get _pages => widget.pages;
 
@@ -53,6 +65,8 @@ class _BatchReviewScreenState extends State<BatchReviewScreen> {
       final fresh = await scanPage();
       if (fresh == null || !mounted) return;
       setState(() => _replace(page, fresh));
+    } catch (e) {
+      _showError("Couldn't check that photo. Please take it again.");
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -64,6 +78,8 @@ class _BatchReviewScreenState extends State<BatchReviewScreen> {
       final fresh = await recropPage(page);
       if (fresh == null || !mounted) return;
       setState(() => _replace(page, fresh));
+    } catch (e) {
+      _showError("Couldn't recrop that page. Try again or retake it.");
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -86,7 +102,8 @@ class _BatchReviewScreenState extends State<BatchReviewScreen> {
     });
     try {
       final count = _pages.length;
-      await _uploader.submit(widget.question, List.of(_pages));
+      final batch = _batch ??= UploadBatch();
+      await _uploader.submit(widget.question, List.of(_pages), batch);
       if (!mounted) return;
       _pages.clear();
       Navigator.pushAndRemoveUntil(
@@ -103,8 +120,10 @@ class _BatchReviewScreenState extends State<BatchReviewScreen> {
     } catch (e) {
       if (mounted) {
         setState(
-          () => _uploadError =
-              'Upload failed. Check your connection and try again. ($e)',
+          () => _uploadError = (_batch?.savedCount ?? 0) > 0
+              ? '${_batch!.savedCount} of ${_pages.length} pages were sent before the upload failed. '
+                    'Check your connection and tap Submit again to send the rest.'
+              : 'Upload failed. Check your connection and try again. ($e)',
         );
       }
     } finally {
@@ -169,7 +188,9 @@ class _BatchReviewScreenState extends State<BatchReviewScreen> {
                         key: ValueKey(page.file.path),
                         page: page,
                         index: i,
-                        enabled: !_busy,
+                        // A page already saved to the database can't be
+                        // changed or removed from this answer any more.
+                        enabled: !_busy && !_isSaved(page),
                         onPreview: () => _showPreview(page, i),
                         onRetake: () => _retake(page),
                         onRecrop: () => _recrop(page),

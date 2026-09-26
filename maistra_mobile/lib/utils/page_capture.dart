@@ -116,13 +116,9 @@ Future<CapturedPage?> recropPage(CapturedPage page) async {
   if (!ok) return null;
   final file = File(saveTo);
   if (!await file.exists()) return null;
-  final bytes = await file.readAsBytes();
-  final quality = await compute(checkQuality, bytes);
-  return CapturedPage(
-    file: file,
-    quality: quality,
-    originalPath: page.originalPath,
-  );
+  // Same check -> auto-fix -> re-check as a scanned page, so a recropped
+  // FIXABLE page is corrected before upload like every other page.
+  return _gate(file, page.originalPath);
 }
 
 Future<CapturedPage> _gate(File file, String? originalPath) async {
