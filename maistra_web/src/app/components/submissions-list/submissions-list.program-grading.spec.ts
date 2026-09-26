@@ -249,4 +249,59 @@ describe('SubmissionsListComponent grading several programs', () => {
       expect.objectContaining({ passed: true, expectedOutput: '2' }),
     ]);
   });
+
+  it('stays on the program just graded, with its own results (review #3)', async () => {
+    const ctx = setup({ runs: [accepted('3')] });
+    const { component } = ctx;
+    const selected = await open(ctx, [programRow(1, 'q-sum', 'sum code'), programRow(2, 'q-max', 'max code')]);
+    expect(component.selectedGradingProgram(selected)?.id).toBe('program-1');
+
+    await component.checkSubmission(selected);
+
+    // Program 2 is now the first ungraded one, but the view must not jump
+    // to it while showing Program 1's results.
+    const open1 = component.selectedSubmission!;
+    expect(component.selectedGradingProgram(open1)?.id).toBe('program-1');
+    expect(component.gradingKey(open1)).toBe('program-1');
+    expect(component.gradingQuestionLabel(open1)).toBe('Basic · Q1 · Sum');
+    expect(component.submissionTestResults['paper-1']).toEqual([
+      expect.objectContaining({ expectedOutput: '3', passed: true }),
+    ]);
+
+    // Reopened later, the paper starts on its first ungraded program.
+    component.closeModal();
+    component.openModal(component.submissions[0]);
+    expect(component.selectedGradingProgram(component.selectedSubmission)?.id).toBe('program-2');
+  });
+
+  it('waits for a re-read already in progress before grading (review #6)', async () => {
+    let finishRead!: (value: unknown) => void;
+    const fresh = {
+      ...paper([programRow(1, 'q-sum', 'sum code, saved', { id: 'program-new', grading_revision: 2 })]),
+      grading_revision: 5,
+    };
+    const getSubmission = vi.fn().mockImplementation(
+      () => new Promise((resolve) => { finishRead = () => resolve({ data: fresh, error: null }); }),
+    );
+    const ctx = setup({ getSubmission });
+    const { component, saveProgramGrade } = ctx;
+    const selected = await open(ctx, [programRow(1, 'q-sum', 'sum code')]);
+    (component as unknown as { staleProgramIds: Set<string> }).staleProgramIds.add('paper-1');
+    getSubmission.mockClear(); // opening the paper re-reads it once already
+
+    // Opening Step 3 starts the re-read; Submit is clicked before it ends.
+    component.setReviewStep(3);
+    const grading = component.checkSubmission(selected);
+    finishRead(undefined);
+    await grading;
+
+    expect(getSubmission).toHaveBeenCalledTimes(1);
+    expect(saveProgramGrade).toHaveBeenCalledWith(
+      'program-new',
+      2,
+      'q-sum',
+      'sum code, saved',
+      expect.any(Array),
+    );
+  });
 });

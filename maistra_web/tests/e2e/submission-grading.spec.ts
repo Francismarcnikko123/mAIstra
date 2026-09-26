@@ -256,6 +256,9 @@ test('each program on a paper is graded against its own question', async ({
 
   await dialog.getByRole('button', { name: 'Submit Code' }).click();
   await expect(first).toContainText('✓ 2/2');
+  // The view stays on the program just graded (review #3).
+  await expect(first).toHaveAttribute('aria-selected', 'true');
+  await expect(dialog.locator('.grading-context')).toContainText('Sum of two numbers');
   // One of two programs graded: the paper is not graded yet.
   expect(backend.submissions.get(SUBMISSION_ID)?.status).toBe('verified');
 

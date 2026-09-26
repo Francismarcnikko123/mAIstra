@@ -117,6 +117,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   // Papers saved this session whose program rows (ids, revisions) haven't
   // been re-read yet; grading re-reads them first.
   private staleProgramIds = new Set<string>();
+  // Re-reads of a paper's programs still in flight; grading waits for them.
+  private programRefreshes = new Map<string, Promise<void>>();
   gateResults = new Map<string, string>();
   readonly gateBadge = gateBadge;
   searchQuery = '';
@@ -562,6 +564,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
 
     this.checkError = '';
     this.isChecking = false;
+    // A reopened paper starts Step 3 on its first ungraded program again.
+    delete this.gradingProgramIds[submission.id];
     this.restorePersistedGrade(submission);
 
     const saved = submission.verified_text ?? submission.extracted_text ?? '';
@@ -1443,8 +1447,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.submissionTestResults[submission.id] = [];
 
     try {
-      // A save made this session may have changed the program rows.
-      if (this.staleProgramIds.has(submissionId)) {
+      // A save made this session may have changed the program rows; a
+      // re-read Step 3 already started must finish first.
+      if (this.staleProgramIds.has(submissionId) || this.programRefreshes.has(submissionId)) {
         await this.ensureFreshPrograms(submissionId);
         if (!this.isCurrentGrading(submissionId, generation)) return;
       }
@@ -1733,15 +1738,28 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     };
   }
 
-  /** Re-reads a paper saved this session so its program rows are current. */
-  private async ensureFreshPrograms(id: string) {
-    if (!this.staleProgramIds.has(id)) return;
+  /**
+   * Re-reads a paper saved this session so its program rows are current.
+   * A caller that arrives while a re-read is running waits for that one.
+   * A save made during the re-read marks the paper stale again, so the next
+   * caller re-reads once more.
+   */
+  private ensureFreshPrograms(id: string): Promise<void> {
+    const running = this.programRefreshes.get(id);
+    if (running) return running;
+    if (!this.staleProgramIds.has(id)) return Promise.resolve();
     this.staleProgramIds.delete(id);
-    try {
-      await this.refreshSubmission(id);
-    } catch (err) {
-      console.error('Could not re-read the programs of this paper:', err);
-    }
+    const refresh = (async () => {
+      try {
+        await this.refreshSubmission(id);
+      } catch (err) {
+        console.error('Could not re-read the programs of this paper:', err);
+      } finally {
+        this.programRefreshes.delete(id);
+      }
+    })();
+    this.programRefreshes.set(id, refresh);
+    return refresh;
   }
 
   /** Opens Step 3 on current program rows, with the selected program's grade. */
@@ -1802,6 +1820,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Stay on the program just graded: once it's graded, "first ungraded"
+    // would move the view to the next program while these results show.
+    this.gradingProgramIds[id] = program.id;
     this.submissionTestResults[id] = testResults;
     this.submissionRunOutput[id] = testResults.at(-1)?.actualOutput || '';
     this.submissionCheckStatus[id] = testResults.every((result) => result.passed)
