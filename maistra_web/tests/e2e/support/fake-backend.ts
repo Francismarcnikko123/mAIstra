@@ -203,6 +203,15 @@ export class FakeBackend {
         score_percent: row.score_percent,
         graded_at: row.graded_at,
       });
+      // The grade now lives on the program; the page keeps none
+      // (20260926000900).
+      Object.assign(row, {
+        grading_results: [],
+        passed_test_cases: null,
+        total_test_cases: null,
+        score_percent: null,
+        graded_at: null,
+      });
     }
     return row;
   }
@@ -492,7 +501,9 @@ export class FakeBackend {
       !!row &&
       row.grading_revision === Number(params['p_grading_revision']) &&
       row.question_id === params['p_question_id'] &&
-      row.verified_text === params['p_graded_code'];
+      row.verified_text === params['p_graded_code'] &&
+      // Pages with programs are graded per program (20260926000900).
+      this.programsOf(row.id).length === 0;
     if (!row || !matches) return this.json(route, null);
 
     const results = params['p_grading_results'] as Array<{ passed: boolean }>;
@@ -545,15 +556,51 @@ export class FakeBackend {
 
     const storable = (entry: (typeof wanted)[number]) =>
       entry.verified_text.trim() !== '' && !!entry.question_id;
+    const kept = wanted.filter(storable);
+    const existing = this.programsOf(page.id);
+    // Program 1 by tab; Programs 2+ by question, else the row on their tab
+    // that no other program took (20260926001100).
+    const byQuestion = new Map<number, ProgramRow>();
+    for (const entry of kept.filter((item) => item.position > 1)) {
+      const row = existing.find(
+        (program) =>
+          program.position > 1 &&
+          program.question_id === entry.question_id &&
+          ![...byQuestion.values()].includes(program),
+      );
+      if (row) byQuestion.set(entry.position, row);
+    }
+    const taken = new Set(byQuestion.values());
+    const plan = kept.map((entry) => {
+      let row = byQuestion.get(entry.position);
+      if (!row) {
+        const onTab = existing.find((program) => program.position === entry.position);
+        if (onTab && (entry.position === 1 || !taken.has(onTab))) row = onTab;
+      }
+      return { entry, row };
+    });
+    const planned = new Set(plan.map((item) => item.row).filter(Boolean));
+    const replaceAll = params['p_replace_all'] !== false;
     let changed = 0;
-    for (const entry of wanted.filter(storable)) {
-      const existing = this.programsOf(page.id).find((program) => program.position === entry.position);
-      if (!existing) {
+    for (const program of existing) {
+      if (planned.has(program)) continue;
+      if (replaceAll || program.position <= wanted.length) {
+        this.programs.splice(this.programs.indexOf(program), 1);
+        changed += 1;
+      }
+    }
+    for (const { entry, row } of plan) {
+      if (!row) {
         this.addProgram(page.id, entry.position, entry.question_id!, entry.verified_text);
         changed += 1;
-      } else if (existing.verified_text !== entry.verified_text || existing.question_id !== entry.question_id) {
-        changed += 1;
-        Object.assign(existing, {
+        continue;
+      }
+      const inputsDiffer =
+        row.verified_text !== entry.verified_text || row.question_id !== entry.question_id;
+      if (inputsDiffer || row.position !== entry.position) changed += 1;
+      row.position = entry.position;
+      if (inputsDiffer) {
+        Object.assign(row, {
           question_id: entry.question_id,
           verified_text: entry.verified_text,
           grading_results: [],
@@ -561,16 +608,8 @@ export class FakeBackend {
           total_test_cases: null,
           score_percent: null,
           graded_at: null,
-          grading_revision: existing.grading_revision + 1,
+          grading_revision: row.grading_revision + 1,
         });
-      }
-    }
-    const replaceAll = params['p_replace_all'] !== false;
-    for (const program of this.programsOf(page.id)) {
-      const entry = wanted.find((item) => item.position === program.position);
-      if ((entry && !storable(entry)) || (!entry && replaceAll)) {
-        this.programs.splice(this.programs.indexOf(program), 1);
-        changed += 1;
       }
     }
     // Any program change moves the page revision (20260926000700).

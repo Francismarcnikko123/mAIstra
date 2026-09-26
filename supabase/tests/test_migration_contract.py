@@ -140,3 +140,16 @@ def test_program_one_follows_the_page_and_tab_saves_move_the_revision():
     assert "v_revision := public.advance_page_revision(p_submission_id)" in MIGRATION_SQL
     assert "create trigger sync_program_one_on_question_change" in MIGRATION_SQL
     assert "after update of question_id" in MIGRATION_SQL
+
+
+def test_review_fixes_4_5_7_9_are_declared():
+    # 7: an edited question's content is no longer marked validated
+    assert "create trigger reset_can_publish_on_question_edit" in MIGRATION_SQL
+    # 4: the legacy page-level grade refuses pages that have programs
+    assert "where program.submission_id = p_submission_id" in MIGRATION_SQL
+    assert "create or replace function public.save_submission_grade(" in MIGRATION_SQL
+    # 5: pages whose programs use an edited question get a new revision
+    assert "question_id is distinct from new.id" in MIGRATION_SQL
+    # 9: programs 2+ are matched to rows by question, positions move in one statement
+    assert "unique (submission_id, position)\n    deferrable initially immediate" in MIGRATION_SQL
+    assert "grant update (position) on table public.submission_programs" in MIGRATION_SQL
