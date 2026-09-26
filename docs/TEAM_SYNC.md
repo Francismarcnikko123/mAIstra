@@ -92,6 +92,7 @@ A short, shared record of **what each of us changed that affects the others**, *
 - (2026-09-24) **Review Code (Step 2)** in `submissions-list.ts` / `.html` now has program tabs and a question picker; styles are in `submissions-list/program-tabs.css`. Expect a small merge conflict there: import lines with `judge0-integration`, and `openModal()` resets with `feature/question-bank`.
 
 ### Needs from others
+- (2026-09-26) **Jayrald:** your decision on the `submission_programs` proposal (see your To do). I'll wait for it before changing how extra programs are stored.
 - (2026-09-26) **Jayrald:** please OK the footer label change "Save and continue to grading" → "Continue to grading" (your button; logic untouched). If you'd rather keep the old label, tell me and I'll revert just the label.
 - (2026-09-26) **Jayrald:** `judge0-integration` changes `ocr_feature/main.py` (`876880c`, CORS origins). `ocr_feature/` is OCR-owned, and that hunk sets `allow_credentials=True`, which undoes the 2026-09-24 review fix (`allow_credentials=False`) and will conflict. Please drop that hunk from your branch; if you need an origin allowlist, add it to Needs from others and I'll make it in `ocr_feature/` with credentials off.
 - (2026-09-24) **Jayrald:** the `answers` migration now includes the narrow browser UPDATE grant. Please apply it to the cloud project in the agreed migration order; Nikko's `gate_result` and validated-question requests on `feature/question-linking` are separate schema work you own.
@@ -105,7 +106,7 @@ A short, shared record of **what each of us changed that affects the others**, *
 - (2026-09-24) **Jayrald:**
   1. Which branch are you working on: `judge0-integration` (same commit as `codex/supabase-security`) or `code-similarity/duplicate`?
   2. Is `code-similarity/duplicate` still going to be merged, and in what order?
-  3. For papers with several programs:
+  3. For papers with several programs *(2026-09-26: now written up as a concrete proposal, recommending a `submission_programs` table; see Jayrald's To do)*:
      - **A.** keep the `answers` column and have similarity/grading read `programsForGrading()`, or
      - **B.** make one submission row per program, which matches your one-row-per-(assessment, question, student) index?
   4. Who applies migrations to the cloud, and in what order?
@@ -121,6 +122,7 @@ A short, shared record of **what each of us changed that affects the others**, *
 ## Jayrald (submissions/review UI, Judge0, Supabase)
 
 ### To do (requested by teammates; please update this section when done)
+- [ ] (2026-09-26, from Nombrado) **Decide: proposal `docs/superpowers/specs/2026-09-26-submission-programs-table-proposal.md`.** It proposes a `submission_programs` table (one row per program on a paper, Program 1 included, each with `verified_text`, `question_id` and its own grade, reusing your `grading_revision` / stale-grade trigger / `save_submission_grade` pattern) instead of the `answers` jsonb column, because from the database side it isn't clear that Programs 2+ are teacher-verified. It replaces open question 3 (A/B). Six questions for you are in section 7. **Until you decide, please HOLD the `answers` migration** (this supersedes my "Top blocker: apply …answers…" line below): if the table is chosen, that migration is deleted and never applied.
 - [ ] (2026-09-26, from Nombrado) **Top blocker: apply `supabase/migrations/20260923000000_add_submission_answers.sql` to the cloud.** Until then, teachers who split a paper into program tabs can save **Program 1 only**: Programs 2+ show "Program 1 saved" plus a warning, and are lost on reload. Nothing else is needed from you for this; the grant for the lock-down is already inside that migration.
 - [ ] (2026-09-26, from Nombrado) **Keep `AGENTS.md` when you merge.** Your branch deleted it (`7de2372`); ours now holds the shared project rules and the commit-message rule (subject + body, no AI attribution). The dry-run merge flags it as a modify/delete conflict.
 - [ ] (2026-09-26, from Nombrado) **`code-editor.ts` is in my area** (see Ownership). Your branch changes it in `e21038d` and `457d318`. When you merge, keep my version (placeholder input, `refresh()`) and send me what you need from your changes; I'll add it.
@@ -152,6 +154,7 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 ## Nikko (mobile capture, question bank)
 
 ### To do (requested by teammates; please update this section when done)
+- [ ] (2026-09-26, from Nombrado) **FYI, no change for the phone:** I proposed to Jayrald a `submission_programs` table for multi-program papers (`docs/superpowers/specs/2026-09-26-submission-programs-table-proposal.md`). Your phone keeps inserting one `submissions` row per page with `status = 'pending'`; its `question_id` still pre-fills Program 1. If it's approved, point 4 below changes: the grant to keep becomes the new table's, not `UPDATE (answers)`.
 - [ ] (2026-09-26, from Nombrado) **Read this before your next web or mobile step** (checked read-only against your pushed branches):
   1. **Pull `feature/pre-extraction` before building the web bank/folders.** It has the program tabs, pre-extraction and the new Save button. The dry-run merge into `feature/question-linking` and `feature/capture-quality-gate` is clean now; building on top of it keeps it that way.
   2. **Phone inserts:** keep inserting `status: 'pending'` with `extracted_text`, `verified_text` and `answers` left empty. The OCR worker only reads unread pending papers, and it fills `extracted_text` itself. Your planned `question_id` + `gate_result` fields are fine to add.
