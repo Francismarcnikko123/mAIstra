@@ -2,6 +2,7 @@
 
 ## Current state — 2026-09-24 (supersedes everything below)
 
+- **Web, 2026-09-26:** `feature/program-tabs-save` (merged into `feature/pre-extraction`) adds a Save button next to the program tabs plus Cmd/Ctrl+S, removes "Save and close" from the unsaved prompt, and renames the footer to "Continue to grading" (logic unchanged, still saves first). Also `detectChanges()` after step changes (zoneless app; mirrors Jayrald's `8e20fd5`). Web tests 120/120. Commit messages must follow "Commit messages" in the repo-root `AGENTS.md`.
 - **OCR:** continuation association has been **live** since 2026-09-17 (`core/continuation.py`). Pre-extraction on arrival is implemented on pushed `feature/pre-extraction`, off by default, with the same OCR pipeline and unchanged clean_ws CER 0.099 / WER 0.328 / token accuracy 0.716. New bond and yellow pad datasets remain the next accuracy evidence step.
 - **Web:** pushed `feature/pre-extraction` includes pushed `feature/program-tabs` and the realtime **Extracting… → Needs review** list badge. The live phone-photo, server-off and restart catch-up checks passed. See `web/WEB_CODEBASE_GUIDE.md`, `setup/RUNNING_LOCALLY.md`, and the pre-extraction plan. At that checkpoint OCR tests passed 231/231 and web tests 114/114.
 - **Integration:** Nikko owns the mobile `question_id` selection/sending (Program 1). Jayrald owns applying the `answers` migration and the cloud schema required by Nikko's complete question-linking flow. OCR worker behavior can be tested with new papers before that integration. See `TEAM_SYNC.md`.
@@ -65,8 +66,11 @@ Three people, three components:
    a bug fix.
 4. **Never reconstruct braces from indentation/layout.** A missing `{`/`}` may
    be the student's real mistake. Synthesizing one inflates the grade.
-5. **No AI attribution in commits/PRs** (no `Co-Authored-By: Claude` etc.) —
-   standing instruction from the user across this whole project.
+5. **No AI attribution in commits/PRs** (no `Co-Authored-By: Claude`,
+   Codex, ChatGPT etc.) — standing instruction from the user across this
+   whole project. **Every commit also needs a body** (what changed, why,
+   checks run), docs and merge commits included. Full format and an example:
+   "Commit messages" in the repo-root `AGENTS.md`.
 6. **Read Nikko's branch read-only.** `git fetch` + `git show
    origin/feature/document-scanner:<path>` only. Never check out or merge it
    into `ocr_feature` — that's the team's own merge schedule.

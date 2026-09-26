@@ -1,5 +1,13 @@
 # OCR — Current State and Next Steps
 
+## Web update — 2026-09-26 (no OCR change)
+
+A Save button next to the program tabs now saves every tab without leaving
+Review Code; "Save and close" is gone and the footer reads "Continue to
+grading". No OCR code changed; the OCR next step is still the bond and yellow
+pad datasets. See [TEAM_SYNC.md](TEAM_SYNC.md) and the overview's "Save next to
+the program tabs".
+
 ## Integration update — 2026-09-24 (supersedes the optional-work note below)
 
 Pre-extraction on arrival is implemented and pushed on `feature/pre-extraction`,

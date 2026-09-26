@@ -3,16 +3,63 @@
   display: none !important; /* :host { display: block } would otherwise win over [hidden] */
 }
 
-.program-tabs {
+/* The bar holds the tab list and, outside it, the Save button. */
+.program-tabs-bar {
   display: flex;
   align-items: flex-end;
-  gap: 2px;
-  padding: 6px 6px 0;
-  overflow-x: auto;
   border: 1px solid #e2e8f0;
   border-bottom: 0;
   border-radius: 12px 12px 0 0;
   background: #f1f5f9;
+}
+
+.program-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 6px 6px 0;
+  overflow-x: auto;
+}
+
+/* Save writes every tab of the paper at once and keeps the Code step open. */
+.program-save {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 7px;
+}
+
+.program-save-status {
+  color: #15803d;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.program-save-status.error {
+  color: #991b1b;
+}
+
+.program-save-button {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid #4f46e5;
+  border-radius: 8px;
+  color: #4f46e5;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.program-save-button:hover:not(:disabled) {
+  background: #eef2ff;
+}
+
+.program-save-button:disabled {
+  opacity: 0.6;
 }
 
 .program-tab {

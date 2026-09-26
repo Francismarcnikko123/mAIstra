@@ -33,11 +33,45 @@ A short, shared record of **what each of us changed that affects the others**, *
 ## Nombrado (OCR, review editor)
 
 ### Status
+- (2026-09-26) **Save next to the program tabs** is done on `feature/program-tabs-save` and merged into `feature/pre-extraction`. Web tests 120/120, TypeScript checks and `ng build` pass (existing CSS budget warning only). No OCR, schema or grading change. Full handoff under **Changed (affects others)** below.
 - (2026-09-24) **Integration checkpoint:** `feature/pre-extraction` is pushed and includes `feature/program-tabs` via merge commit `d9df182`. Both remain outside `main`. The worker/list badge live checks passed, including server-off **Needs OCR** and restart catch-up. Nikko owns sending the mobile `question_id` for Program 1; Jayrald owns the cloud schema and migrations needed for the complete new question-linking flow. The OCR worker can be tested independently on new papers.
 - (2026-09-24) **OCR:** waiting on the new bond paper and yellow pad datasets. No OCR code change is pending.
 - (2026-09-24) **Program tabs** (one paper → several programs, each linked to a question) built on branch `feature/program-tabs`, pushed to `origin/feature/program-tabs`. Base branch: `feature/reading-order-reassembly`. 102/102 web tests; `ng build` clean. Review aids added the same day: OCR text beside the photo, View question, unsaved dots and close prompt.
 
 ### Changed (affects others)
+- (2026-09-26) **HANDOFF: Save next to the program tabs** (branch `feature/program-tabs-save`, merged into `feature/pre-extraction`; not in `main`).
+
+  **1. The problem it fixes.** On Review Code (Step 2) a teacher could only save by going to grading ("Save and continue to grading") or by leaving (✕ → "Save and close"). "Save and close" closed the whole paper, so a teacher who checked Program 1, 2 and 3 and saved had to reopen the paper to grade. Nikko's first review screen (`da00269`) had a plain Save; the 3-step redesign (`aca278e`) replaced it.
+
+  **2. What the teacher sees now.**
+  | Where | Before | Now |
+  |---|---|---|
+  | Program tab bar (Step 2) | tabs and **+** only | tabs, **+**, and a **Save** button at the right end. It saves every tab of the paper and stays on Step 2; the unsaved dots clear and "✓ All programs saved" shows. **Cmd/Ctrl+S** does the same. |
+  | Step 2 footer (Jayrald's button) | "Save and continue to grading" | "**Continue to grading**". Same logic: it still saves first and opens Step 3 only if the save succeeds. |
+  | ✕ / overlay / Cancel / Finish with unsaved changes | Keep editing / Discard changes / Save and close | **Discard changes** / **Keep editing** (primary). |
+  | Save message | "✓ Verified code saved" under the editor | next to the Save button |
+
+  **3. How it's wired (one save function for everything).** The Save button, Cmd/Ctrl+S and "Continue to grading" all call the existing `saveVerifiedText()` in `submissions-list.ts`. That function is **unchanged**: same save rules (`answerProblems`: a tab with code needs a question, no duplicate questions), same save-generation/timer/destroy guards, same single update `updateSubmissionText(id, verified_text, extracted_text?, answers)` → `verified_text`, `answers`, `status = 'verified'`, `verified_at`. `extracted_text` is still written only with OCR output, never with teacher edits.
+  - `submissions-list.html`: the tab row is wrapped in `.program-tabs-bar`; the Save area (`.program-save`) sits after `role="tablist"`, not inside it. Footer label changed. Prompt buttons changed.
+  - `submissions-list.ts`: new `onSaveShortcut()` (`@HostListener('document:keydown')`: Cmd/Ctrl+S, only with a paper open on Step 2, prompt closed, code extracted, no save running); `saveAndClose()` removed.
+  - `program-tabs.css`: bar and Save styles. `submissions-list.css`: the unused `.save-status` rules removed.
+
+  **4. Two behaviours worth knowing.**
+  - Save works even when no dot shows. An untouched pre-extracted paper *looks* saved (the editor matches the worker's `extracted_text`) but is still `pending` with no `verified_text`; Save still verifies it.
+  - Saving a paper that was already **graded** sets `status` back to `verified` (this was already true of the old buttons). See Jayrald's To do about stale grading results.
+
+  **5. Fix included in shared code (for Jayrald).** The app is zoneless, so setting `reviewStep` after an `await` didn't re-render: "Save and review code" and "Continue to grading" could stay on the old step until the next click. I added `this.cdr.detectChanges()` after `reviewStep = 2` in `continueFromDetails()` and after `reviewStep = 3` in `saveCodeAndContinue()`. It's the same two-line fix as your `8e20fd5` on `judge0-integration`; keep either copy when merging.
+
+  **6. Merging with `judge0-integration` (checked read-only on 2026-09-26).** Your branch split from ours long ago and doesn't have the program tabs or pre-extraction. Expect conflicts in `submissions-list.ts` / `.html` / styles and `supabase.ts`. Keep both sides:
+  - the program-tab markup (tab bar wrapper, Save area, tabs, picker, OCR panel) **and** your step logic (`stepBlocker`, `hasUnsavedDetails`, etc.);
+  - the footer label "Continue to grading" (your side still says "Save and continue to grading");
+  - the `detectChanges()` calls (same on both sides);
+  - your style split (`1f02135`, `6e6235b`) plus `program-tabs.css`, which the component loads through `styleUrls`.
+  - `ocr_feature/main.py` also conflicts. See Needs from others.
+
+  **7. Tests.** `submissions-list.program-tabs.spec.ts`: 7 new tests (Save stays on Step 2 and clears dots; a rule-blocked Save writes nothing; Save verifies an untouched pre-extracted paper; Cmd/Ctrl+S saves and blocks the browser dialog; the shortcut ignores other steps, the prompt, missing modifier, a running save and unextracted papers; the prompt has no save action). They replace the old "Save and close" test. `submissions-list.spec.ts`: Continue to grading now asserts Step 3 is rendered. Suite 120/120.
+
+  **8. For Nikko:** no action needed. The phone's `question_id` is still Program 1's question, and nothing about capture or the question bank changed. The only teacher-visible change is where Save is.
 - (2026-09-24) **Shared branch handoff:** the `answers` column-level UPDATE grant is pushed on both `feature/program-tabs` and `feature/pre-extraction`. The realtime `supabase.ts` UPDATE listener, list badge, and OCR `GET /` health field are already implemented on `feature/pre-extraction`; the old request in Jayrald's To do section for his view on that listener is historical and remains for him to update. The badge behavior was live-tested with new phone papers.
 - (2026-09-24) **For Nikko:** yes, the phone's one `question_id` per paper is Program 1's question in the review tabs. If a paper contains more programs, the teacher creates extra tabs and selects each extra question manually; the phone need not split the paper.
 - (2026-09-24) **`answers` migration grant:** `20260923000000_add_submission_answers.sql` now grants `UPDATE (answers)` to `anon` and `authenticated`, matching the column-level grants in the public API lockdown migration. No database migration was applied by me.
@@ -47,7 +81,7 @@ A short, shared record of **what each of us changed that affects the others**, *
   - It only touches unread papers captured after it starts, and it never overwrites text.
   - It's **off by default**, and I won't switch it on against the cloud until Jayrald OKs it.
   - `supabase.ts` gained one read method, `getSubmission(id)`.
-- (2026-09-24) **Closing the review now goes through `requestCloseModal()`** in `submissions-list.ts`. The ✕, the overlay click, Cancel (Step 1) and Finish review (Step 3) use it. If anything on the paper is unsaved, it asks Keep editing / Discard changes / Save and close; otherwise it closes as before. `closeModal()` itself is unchanged. Use `requestCloseModal()` for any new close button.
+- (2026-09-24) **Closing the review now goes through `requestCloseModal()`** in `submissions-list.ts`. The ✕, the overlay click, Cancel (Step 1) and Finish review (Step 3) use it. If anything on the paper is unsaved, it asks Keep editing / Discard changes / Save and close; otherwise it closes as before. `closeModal()` itself is unchanged. Use `requestCloseModal()` for any new close button. *(Updated 2026-09-26: "Save and close" was removed; the prompt is now Discard changes / Keep editing. See the 2026-09-26 handoff above.)*
 - (2026-09-24) **Re-extract on a paper that has program tabs** no longer replaces Program 1. The fresh reading opens read-only beside the photo ("OCR text" panel), and `extracted_text` is still saved from it. Papers without tabs behave as before.
 - (2026-09-24) **New column `submissions.answers jsonb`**, migration `supabase/migrations/20260923000000_add_submission_answers.sql`. It holds Programs 2..n as `[{ code, question_id }]`. Program 1 is still `verified_text` + `question_id`. Until the migration runs, the app still works: it detects the missing column and marks extra tabs as preview-only.
 - (2026-09-24) **`getSubmissions()` and `updateSubmissionText()`** in `maistra_web/src/app/services/supabase.ts` now read and write `answers`. The signature gained an optional 4th argument; existing callers are unchanged.
@@ -55,6 +89,8 @@ A short, shared record of **what each of us changed that affects the others**, *
 - (2026-09-24) **Review Code (Step 2)** in `submissions-list.ts` / `.html` now has program tabs and a question picker; styles are in `submissions-list/program-tabs.css`. Expect a small merge conflict there: import lines with `judge0-integration`, and `openModal()` resets with `feature/question-bank`.
 
 ### Needs from others
+- (2026-09-26) **Jayrald:** please OK the footer label change "Save and continue to grading" → "Continue to grading" (your button; logic untouched). If you'd rather keep the old label, tell me and I'll revert just the label.
+- (2026-09-26) **Jayrald:** `judge0-integration` changes `ocr_feature/main.py` (`876880c`, CORS origins). `ocr_feature/` is OCR-owned, and that hunk sets `allow_credentials=True`, which undoes the 2026-09-24 review fix (`allow_credentials=False`) and will conflict. Please drop that hunk from your branch; if you need an origin allowlist, add it to Needs from others and I'll make it in `ocr_feature/` with credentials off.
 - (2026-09-24) **Jayrald:** the `answers` migration now includes the narrow browser UPDATE grant. Please apply it to the cloud project in the agreed migration order; Nikko's `gate_result` and validated-question requests on `feature/question-linking` are separate schema work you own.
 - (2026-09-24) **Everyone:** please don't change `ocr_feature/` or the program-tabs code; send requests here instead.
 - (2026-09-24) **Jayrald:** OK to run pre-extraction against the cloud project? For now it would use the publishable key (it works because `submissions` has no RLS). When you enable RLS, I'll need a secret key (`sb_secret_…`) for the OCR server's `.env` only.
@@ -82,6 +118,10 @@ A short, shared record of **what each of us changed that affects the others**, *
 ## Jayrald (submissions/review UI, Judge0, Supabase)
 
 ### To do (requested by teammates; please update this section when done)
+- [ ] (2026-09-26, from Nombrado) **Review the Step 2 save change** (handoff in Nombrado → Changed, 2026-09-26): a Save button next to the program tabs, your footer button relabelled "Continue to grading" (logic unchanged), "Save and close" removed from the unsaved prompt, and `detectChanges()` after the step changes (same as your `8e20fd5`). OK the label or ask me to revert it.
+- [ ] (2026-09-26, from Nombrado) **When grading more than Program 1:** key each program's results by its `question_id` (unique per paper; the tab picker enforces it), not by tab number, because removing a tab renumbers the later tabs. When a teacher re-saves code that was already graded, the old result no longer matches the code: clear it or mark it for re-grading (a save already sets `status` back to `verified`).
+- [ ] (2026-09-26, from Nombrado) **Drop the `ocr_feature/main.py` hunk** (`876880c`) from `judge0-integration` before merging; see Nombrado → Needs from others.
+- [ ] (2026-09-26, from Nombrado) **Merging `judge0-integration` with `feature/pre-extraction`:** see the conflict notes in Nombrado → Changed, 2026-09-26, point 6. Keep both the program-tab markup and your step logic.
 - [ ] (2026-09-24, from Nombrado) **Answer the open questions** in Nombrado's section: which branch is current, whether `code-similarity/duplicate` merges, option A or B for multi-program papers, migration order, and the target branch for `feature/program-tabs`.
 - [ ] (2026-09-24, from Nombrado) **Apply `supabase/migrations/20260923000000_add_submission_answers.sql`** to the cloud project, unless we choose option B.
 - [ ] (2026-09-24, from Nombrado) **Grade every program on a paper:** loop over `programsForGrading(verified_text, question_id, answers)` and grade each entry against its own question's model answer and test cases. Decide how per-program results are keyed and how scores combine.

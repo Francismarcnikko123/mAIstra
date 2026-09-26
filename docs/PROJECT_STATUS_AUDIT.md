@@ -1,5 +1,13 @@
 # mAIstra — Project Status Audit (2026-09-02)
 
+## Web update — 2026-09-26
+
+Review Code gained a Save button next to the program tabs (every tab, stays on
+the step; Cmd/Ctrl+S). The unsaved prompt is Keep editing / Discard changes and
+the footer reads "Continue to grading". Branch `feature/program-tabs-save`,
+merged into `feature/pre-extraction`; web tests 120/120. See
+[TEAM_SYNC.md](TEAM_SYNC.md).
+
 ## Integration update — later 2026-09-24
 
 Pushed `feature/pre-extraction` includes `feature/program-tabs` and the optional

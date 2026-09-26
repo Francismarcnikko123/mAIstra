@@ -1,5 +1,17 @@
 # mAIstra — Project docs
 
+## Web update — 2026-09-26 (read with the block below)
+
+Review Code (Step 2) has a **Save** button next to the program tabs (and
+Cmd/Ctrl+S). It saves every tab of the paper and keeps the teacher on the step,
+so checking several programs and then grading no longer means closing and
+reopening the paper. The footer button is now **Continue to grading** (it still
+saves first), and the unsaved-changes prompt offers Keep editing / Discard
+changes. Branch `feature/program-tabs-save`, merged into `feature/pre-extraction`;
+web tests 120/120. Details: [overview](PROJECT_OVERVIEW_AND_CHANGES.md)
+("Save next to the program tabs"), [web guide](web/WEB_CODEBASE_GUIDE.md),
+and the handoff in [TEAM_SYNC.md](TEAM_SYNC.md).
+
 ## Current integration state — 2026-09-24
 
 `feature/pre-extraction` is pushed and includes the program-tabs work from

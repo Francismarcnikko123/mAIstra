@@ -559,16 +559,6 @@ button:disabled {
   font-size: 13px;
 }
 
-.save-status {
-  color: #991b1b;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.save-status.saved {
-  color: #15803d;
-}
-
 .grading-context {
   justify-content: flex-start;
   gap: 12px;

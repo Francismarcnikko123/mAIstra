@@ -162,6 +162,10 @@ now uses one `<span>` with `[ngClass]="saveStatus[selectedSubmission.id]"`
 and a single conditional text expression, exactly the fix direction
 originally proposed here. No longer duplicated.
 
+**Update 2026-09-26:** that line under the editor was removed. The save status
+now shows once, next to the Save button in the program tab bar
+(`.program-save-status`: "✓ All programs saved" / "Save failed, try again").
+
 ---
 
 ## Remaining work

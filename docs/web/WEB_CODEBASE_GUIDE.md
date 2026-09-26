@@ -441,8 +441,9 @@ logic specifically: the `extracted_text`-omitted-when-absent contract
 (§4.2), and (per the spec file size added in `263b6d7`) the race-safety
 behavior in `saveVerifiedText()`. Run with `npx ng test --watch=false` from
 `maistra_web/` (Vitest via `@angular/build:unit-test`). The 89-test count was
-the first program-tabs checkpoint; after pre-extraction the recorded suite is
-114/114. The program-tab tests are listed at the end of this guide.
+the first program-tabs checkpoint; after pre-extraction the recorded suite was
+114/114, and after the 2026-09-26 Save-next-to-the-tabs change it is 120/120.
+The program-tab tests are listed at the end of this guide.
 
 ---
 
@@ -450,9 +451,11 @@ the first program-tabs checkpoint; after pre-extraction the recorded suite is
 
 - **Manual extraction does not write immediately** — `extractText()` only calls the OCR
   backend and updates local component state (`extractedText`/
-  `editableText`). Nothing is persisted until the teacher explicitly clicks
-  **Save and continue to grading** (Step 2 of the review; it used to be
-  "Save Verified Text"). The separate OCR-server worker now saves
+  `editableText`). Nothing is persisted until the teacher explicitly saves on
+  Step 2: the **Save** button next to the program tabs (or Cmd/Ctrl+S), or
+  **Continue to grading**, which saves first (since 2026-09-26; before that
+  the only buttons were "Save and continue to grading" and the close prompt's
+  "Save and close", and originally "Save Verified Text"). The separate OCR-server worker now saves
   `extracted_text` for eligible new papers when `AUTO_EXTRACT=true`; it does
   not save `verified_text` or the teacher's edits. See
   `superpowers/plans/2026-09-24-pre-extraction-on-arrival.md`.
@@ -499,7 +502,7 @@ One paper can hold several programs. Step 2 shows browser-style tabs above the e
 - **Review aids (2026-09-24, same branch):**
   - `savedProgram1` / `savedExtras` hold what was last loaded or saved.
   - `isProgram1Unsaved`, `isExtraAnswerUnsaved` (blank tabs never count) and `hasUnsavedPrograms` (also catches removed tabs) drive the tab dots and the close prompt.
-  - `requestCloseModal()` replaces direct `closeModal()` calls from ✕, the overlay, Cancel and Finish review. Its prompt offers `keepEditing()`, `discardChangesAndClose()` (restores the snapshots and drops this session's `extractedText`) and `saveAndClose()` (normal save rules; stays on Step 2 if blocked).
+  - `requestCloseModal()` replaces direct `closeModal()` calls from ✕, the overlay, Cancel and Finish review. Its prompt offers `keepEditing()` (primary) and `discardChangesAndClose()` (restores the snapshots and drops this session's `extractedText`). `saveAndClose()` was removed on 2026-09-26; see "Save next to the tabs" below.
   - `extractText()` on a paper with tabs calls `performExtract(id, { replaceProgram1: false })`, which only updates `extractedText` and opens the OCR panel. It skips the re-extract confirmation because nothing is overwritten.
   - OCR panel: `ocrPanelOpen` plus `getOcrText()` (this session's `extractedText`, else the saved `extracted_text`). `.ocr-layout.with-ocr-text` puts photo and text side by side and the editor full width below.
   - `getActiveTabQuestion()` feeds the read-only "View question" peek.
@@ -507,3 +510,12 @@ One paper can hold several programs. Step 2 shows browser-style tabs above the e
   - `CodeEditorComponent` gained `@Input() placeholder` (Ace `placeholder` option) for the empty-tab guide text.
   - Styles: `program-tabs.css` (about 7 kB).
 - **Proposed next** (mocked, not built): move selection to a new tab, unsaved dots with a close prompt, an "N programs" badge, arrow keys, and tooltips. Details are in the plan's "Nombrado: optional and future work".
+- **Save next to the tabs (2026-09-26, branch `feature/program-tabs-save`):**
+  - **Why:** Step 2 had no plain Save. Saving meant going to grading or closing the paper (✕ → "Save and close"), so a teacher who saved and closed had to reopen the paper to grade.
+  - **Markup:** the tab row is wrapped in `.program-tabs-bar`. Inside it, `.program-tabs` (`role="tablist"`, `#tabList`) keeps the tabs and **+**, takes the free width (`flex: 1; min-width: 0`) and scrolls sideways; `.program-save` sits after it, *outside* the tablist so screen readers still see only tabs there, and stays pinned right (`flex: none`).
+  - **Save button:** `(click)="saveVerifiedText()"`, `[disabled]="isSaving(id)"` (no double saves), label "Saving…" while `savingId` is set. `.program-save-status` shows `saveStatus[id]`: "✓ All programs saved" or "Save failed, try again" (it replaced the old `.save-status` line under the editor; `saveVerifiedText()` still clears it after 3 s). Rule errors still show under the editor via `extraAnswersError`.
+  - **Shortcut:** `onSaveShortcut(event)` is a `@HostListener('document:keydown')`. It acts only on Cmd/Ctrl+S, only with a paper open on Step 2 and the close prompt shut; it then always calls `preventDefault()`, and saves only if `hasExtractedText(id)` (same condition as the button being shown) and no save is running.
+  - **Footer:** the label is "Continue to grading"; `saveCodeAndContinue()` is unchanged apart from `cdr.detectChanges()` after `reviewStep = 3` (the app is zoneless; same fix as Jayrald's `8e20fd5`). `continueFromDetails()` got the same call after `reviewStep = 2`.
+  - **Close prompt:** Discard changes (danger) + Keep editing (primary). `saveAndClose()` is gone.
+  - **Save still runs when nothing looks changed**, on purpose: an untouched pre-extracted paper has `savedProgram1 = extracted_text`, so it has no dots, but it is still `pending` with no `verified_text`.
+  - **Tests** (`submissions-list.program-tabs.spec.ts`): Save keeps Step 2 open and clears the dots; a rule-blocked Save writes nothing; Save verifies an untouched pre-extracted paper; Cmd/Ctrl+S saves and blocks the browser dialog; the shortcut does nothing outside Step 2, in the prompt, without a modifier, while saving, or with no extracted code; the prompt has no save action. `submissions-list.spec.ts`: Continue to grading renders Step 3. Suite: 120/120.
