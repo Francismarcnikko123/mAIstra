@@ -4,7 +4,8 @@ Export teacher-verified submissions from Supabase as an OCR dataset --
 fine-tuning will need, produced as a byproduct of normal grading use.
 
 Dev tool, not used by the live backend. Reads SUPABASE_URL and
-SUPABASE_ANON_KEY from .env (same values the backend uses). Run from the
+SUPABASE_KEY from .env (the same publishable key the OCR server uses;
+SUPABASE_ANON_KEY is still accepted as a fallback for old .env files). Run from the
 ocr_feature/ directory (module path, not the file path -- this file does
 `from evaluators.evaluation import ...`, which only resolves as a package
 import):
@@ -14,6 +15,20 @@ import):
 Writes to datasets/verified/:
     labels.csv   one row per verified submission
     images/      the submission images, named <submission_id>.jpg
+
+Which papers: status 'verified' or 'graded' (grading does not change the
+verified text, so a graded page is still a valid label).
+
+Where the text comes from: the submission_programs table (one row per program
+on a page, Program 1 = position 1). A page with one program exports that
+program's verified_text, exactly as before. A page the teacher split into
+several programs gets every program in the program_blocks column (JSON list,
+tab order); its verified_text column holds the blocks joined by a blank line
+for reading only. Tab order is not the page's reading order, so a split page
+is never whole-page ground truth: build_recognition_dataset.py matches each
+block to the page's lines separately, and CER/holdout readers skip it (see
+labels_schema.is_split_page). A page with no program rows (e.g. verified
+before a question was assigned) falls back to submissions.verified_text.
 
 Re-running is safe: already-downloaded images are kept, and the CSV write
 merges rather than overwrites -- rows from import_verified_batch.py's
@@ -25,6 +40,7 @@ matches the stored OCR text after whitespace normalization are quarantined
 and listed in a warning.
 """
 import csv
+import json
 import os
 import sys
 from collections import Counter
@@ -59,31 +75,73 @@ def is_suspected_unedited(row: dict) -> bool:
     return verified == extracted
 
 
-def fetch_verified_submissions(base_url: str, anon_key: str) -> list[dict]:
-    """Fetch all status='verified' rows, paging until exhausted."""
+SUBMISSION_COLUMNS = (
+    "id,image_url,extracted_text,verified_text,verified_at,topic,student_name"
+)
+# Embedded read of each page's programs (PostgREST follows the
+# submission_programs.submission_id foreign key), so there is one request per
+# page of results rather than one per submission.
+PROGRAMS_EMBED = "submission_programs(position,verified_text)"
+
+
+def fetch_verified_submissions(base_url: str, api_key: str) -> list[dict]:
+    """Fetch every verified or graded page with its programs, paging until
+    exhausted. On a database without submission_programs (older local setups)
+    it retries without the programs, and every page exports as one text."""
     rows = []
-    headers = {"apikey": anon_key, "Authorization": f"Bearer {anon_key}"}
+    headers = {"apikey": api_key, "Authorization": f"Bearer {api_key}"}
+    select = f"{SUBMISSION_COLUMNS},{PROGRAMS_EMBED}"
     offset = 0
     while True:
         response = requests.get(
             f"{base_url}/rest/v1/submissions",
             headers=headers,
             params={
-                "status": "eq.verified",
-                "select": "id,image_url,extracted_text,verified_text,"
-                          "verified_at,topic,student_name",
+                "status": "in.(verified,graded)",
+                "select": select,
                 "order": "verified_at.asc",
                 "limit": str(PAGE_SIZE),
                 "offset": str(offset),
             },
             timeout=30,
         )
+        if (
+            response.status_code == 400
+            and select != SUBMISSION_COLUMNS
+            and "submission_programs" in response.text
+        ):
+            print("  note: this database has no submission_programs table; "
+                  "exporting every page as one text.")
+            select = SUBMISSION_COLUMNS
+            rows, offset = [], 0
+            continue
         response.raise_for_status()
         page = response.json()
         rows.extend(page)
         if len(page) < PAGE_SIZE:
             return rows
         offset += PAGE_SIZE
+
+
+def page_programs(row: dict) -> list[str]:
+    """The page's verified programs in tab order (Program 1 first)."""
+    programs = row.get("submission_programs") or []
+    ordered = sorted(programs, key=lambda program: program.get("position") or 0)
+    return [program.get("verified_text") or "" for program in ordered]
+
+
+def label_for(row: dict) -> tuple[str, list[str]]:
+    """(verified_text for labels.csv, program blocks) for one page.
+
+    One program: its own verified_text and no blocks, as before the programs
+    table existed. Several: the blocks joined by a blank line (for reading and
+    the duplicate check only) plus the blocks. None: the page row's text."""
+    programs = page_programs(row)
+    if len(programs) > 1:
+        return "\n\n".join(programs), programs
+    if len(programs) == 1:
+        return programs[0], []
+    return row.get("verified_text") or "", []
 
 
 def download_image(url: str, dest: Path) -> bool:
@@ -107,11 +165,13 @@ def download_image(url: str, dest: Path) -> bool:
 def main() -> None:
     load_dotenv()
     base_url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    anon_key = os.getenv("SUPABASE_ANON_KEY", "")
-    if not base_url or not anon_key:
-        sys.exit("SUPABASE_URL and SUPABASE_ANON_KEY must be set (see .env).")
+    # SUPABASE_KEY is the publishable key the OCR server uses; the legacy
+    # SUPABASE_ANON_KEY was disabled by Supabase on 2026-09-21.
+    api_key = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY", "")
+    if not base_url or not api_key:
+        sys.exit("SUPABASE_URL and SUPABASE_KEY must be set (see .env).")
 
-    rows = fetch_verified_submissions(base_url, anon_key)
+    rows = fetch_verified_submissions(base_url, api_key)
     print(f"Found {len(rows)} verified submission(s).")
     if not rows:
         return
@@ -121,10 +181,19 @@ def main() -> None:
     exported = []
     skipped = 0
     suspected_unedited_ids = []
+    mirror_mismatch_ids = []
     for row in rows:
-        text = (row.get("verified_text") or "").strip()
+        label_text, blocks = label_for(row)
+        programs = page_programs(row)
+        # Program 1 is mirrored to submissions.verified_text. A save that
+        # bypasses save_submission_programs() (e.g. an old branch) can leave
+        # the two apart; the programs table wins, and the page is reported.
+        if programs and (row.get("verified_text") or "") != programs[0]:
+            mirror_mismatch_ids.append(str(row.get("id")))
+        row = {**row, "verified_text": label_text}
+        text = label_text.strip()
         image_url = row.get("image_url") or ""
-        if not text or not image_url:
+        if not text or not image_url or any(not block.strip() for block in blocks):
             print(f"  skip {row.get('id')}: missing verified_text or image_url")
             skipped += 1
             continue
@@ -137,7 +206,7 @@ def main() -> None:
             print(f"  skip {row.get('id')}: image download failed")
             skipped += 1
             continue
-        exported.append(row)
+        exported.append({**row, "_blocks": blocks})
 
     existing = load_existing_rows(LABELS_CSV)
     preserved = {
@@ -147,9 +216,13 @@ def main() -> None:
     for row in exported:
         extracted = row.get("extracted_text") or ""
         verified = row["verified_text"]
-        distance = edit_distance(
+        blocks = row["_blocks"]
+        # The raw OCR is the whole page in reading order; joined blocks are in
+        # tab order, so their edit distance would measure reordering, not OCR
+        # corrections. Leave it blank for split pages.
+        distance = "" if blocks else str(edit_distance(
             normalize_whitespace(extracted), normalize_whitespace(verified)
-        )
+        ))
         own_new[row["id"]] = {
             "submission_id": row["id"],
             "image_path": f"images/{row['id']}.jpg",
@@ -161,7 +234,8 @@ def main() -> None:
             "literal_verified": "",
             "literal_verified_by": "",
             "literal_verified_at": "",
-            "correction_edit_distance": str(distance),
+            "correction_edit_distance": distance,
+            "program_blocks": json.dumps(blocks, ensure_ascii=False) if blocks else "",
         }
     merged = {**preserved, **own_new}
     write_labels_csv(LABELS_CSV, merged)
@@ -184,8 +258,13 @@ def main() -> None:
         if str(row.get("correction_edit_distance", "")).strip().isdigit()
     ]
 
+    split_pages = sum(1 for row in exported if row["_blocks"])
     print(f"Exported {len(exported)} pair(s) to {LABELS_CSV} "
           f"({skipped} skipped).")
+    if split_pages:
+        print(f"{split_pages} of them hold several programs: stored per program "
+              f"in program_blocks; the crop builder aligns each program on its "
+              f"own, and CER/holdout readers skip them.")
     print(f"labels.csv now contains {len(merged)} total row(s) "
           f"({len(preserved)} preserved, {len(own_new)} from this run).")
     print(f"Provenance: {fully_verified}/{len(merged)} fully verified "
@@ -205,6 +284,13 @@ def main() -> None:
             "WARNING: skipped submission(s) whose verified_text matches "
             "extracted_text after whitespace normalization: "
             + ", ".join(suspected_unedited_ids)
+        )
+    if mirror_mismatch_ids:
+        print(
+            "WARNING: Program 1 in submission_programs differs from "
+            "submissions.verified_text for: " + ", ".join(mirror_mismatch_ids)
+            + ". The programs table was used. A save probably bypassed "
+            "save_submission_programs(); tell Jayrald."
         )
     if duplicate_groups:
         print(f"WARNING: {len(duplicate_groups)} verified text(s) appear on "

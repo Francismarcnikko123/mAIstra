@@ -7,8 +7,10 @@ from pathlib import Path
 
 from evaluators.labels_schema import (
     FIELDNAMES,
+    is_split_page,
     is_writer_batch_id,
     load_existing_rows,
+    program_blocks,
     write_labels_csv,
 )
 
@@ -96,6 +98,46 @@ class WriteLabelsCsvTests(unittest.TestCase):
                 header = next(csv.reader(f))
 
         self.assertEqual(header, FIELDNAMES)
+
+
+class ProgramBlocksTests(unittest.TestCase):
+    def test_empty_or_missing_column_means_one_text(self):
+        self.assertEqual(program_blocks({}), [])
+        self.assertEqual(program_blocks({"program_blocks": ""}), [])
+        self.assertFalse(is_split_page({"program_blocks": ""}))
+
+    def test_reads_blocks_in_stored_order(self):
+        row = {"program_blocks": '["int a;", "int b;"]'}
+        self.assertEqual(program_blocks(row), ["int a;", "int b;"])
+        self.assertTrue(is_split_page(row))
+
+    def test_a_single_block_is_not_a_split_page(self):
+        self.assertFalse(is_split_page({"program_blocks": '["int a;"]'}))
+
+    def test_malformed_value_raises_instead_of_falling_back(self):
+        with self.assertRaises(ValueError):
+            program_blocks({"submission_id": "x", "program_blocks": "not json"})
+        with self.assertRaises(ValueError):
+            program_blocks({"submission_id": "x", "program_blocks": '{"a": 1}'})
+        with self.assertRaises(ValueError):
+            program_blocks({"submission_id": "x", "program_blocks": "[1, 2]"})
+
+    def test_column_round_trips_and_old_files_read_as_empty(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "labels.csv"
+            # A labels.csv written before the column existed.
+            with path.open("w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=FIELDNAMES[:-1])
+                writer.writeheader()
+                writer.writerow({"submission_id": "old", "verified_text": "int a;"})
+            rows = load_existing_rows(path)
+            self.assertEqual(program_blocks(rows["old"]), [])
+            rows["new"] = {"submission_id": "new", "verified_text": "a\n\nb",
+                           "program_blocks": '["a", "b"]'}
+            write_labels_csv(path, rows)
+            reread = load_existing_rows(path)
+            self.assertEqual(reread["old"]["program_blocks"], "")
+            self.assertEqual(program_blocks(reread["new"]), ["a", "b"])
 
 
 if __name__ == "__main__":

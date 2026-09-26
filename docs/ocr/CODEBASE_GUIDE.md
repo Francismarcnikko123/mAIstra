@@ -169,7 +169,21 @@ Offline tooling sits *beside* this runtime path, not inside it — all under
   client.
 - **`evaluators/export_dataset.py`** — offline, pulls verified rows out of
   Supabase to build a labeled dataset for future fine-tuning. Never imported by
-  the runtime path.
+  the runtime path. **Since 2026-09-27** it reads `status` in (`verified`,
+  `graded`), uses `SUPABASE_KEY` (the legacy `SUPABASE_ANON_KEY` is only a
+  fallback), and takes each page's text from the `submission_programs` table
+  (embedded in the same request). A page the teacher split into several
+  programs is written with every program in the new `program_blocks` column
+  (JSON list, tab order); its `verified_text` is the blocks joined by a blank
+  line, for reading only, and its `correction_edit_distance` is blank (tab
+  order is not reading order). `build_recognition_dataset._pair_lines()`
+  matches each block to the page's detected lines on its own, and drops any
+  line two blocks both claim; one-text pages pair exactly as before.
+  `compare_config.py` and `select_holdout.py` skip split pages
+  (`labels_schema.is_split_page`), so they can never become a whole-page CER
+  reference or a test page. The export also warns when Program 1 in
+  `submission_programs` differs from `submissions.verified_text` (a save that
+  bypassed `save_submission_programs()`); the table wins.
 
 **The one rule that shapes almost every design choice in this package:**
 *this is a grading app.* The OCR text is read by a human teacher before it
@@ -1713,6 +1727,12 @@ you rename the package, that stub map has to move with it.)
 ---
 
 ## 8. `evaluators/export_dataset.py` — the contamination guard, in full
+
+> **2026-09-27:** the guard still compares the exported text with
+> `extracted_text`; for a split page that is the programs joined by a blank
+> line, so a page split without any correction is set aside like any other
+> unedited page. Where the text comes from (`submission_programs`, split pages,
+> `program_blocks`) is summarized in section 1.
 
 ```python
 def normalize_whitespace(text: str) -> str:

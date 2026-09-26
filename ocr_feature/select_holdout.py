@@ -23,6 +23,8 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
+from evaluators.labels_schema import is_split_page
+
 VERIFIED_CSV = Path("datasets/verified/labels.csv")
 SAMPLES_CSV = Path("samples/labels.csv")
 VERIFIED_IMAGES = Path("datasets/verified/images")
@@ -51,6 +53,10 @@ def main() -> int:
     rows = list(csv.DictReader(VERIFIED_CSV.open(encoding="utf-8")))
     by_type = defaultdict(list)
     for r in rows:
+        # A page split into several programs has no whole-page reference in
+        # reading order, so it can never become a test page.
+        if is_split_page(r):
+            continue
         pt = r["image_path"].split("/")[1]
         by_type[pt].append(r)
 

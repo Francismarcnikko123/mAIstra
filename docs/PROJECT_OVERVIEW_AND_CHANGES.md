@@ -579,6 +579,19 @@ The review questions are tracked in [the adviser-review task](plans/2026-09-09-a
 
 **Verification:** web 121/121 tests (7 new program-tab tests replace the one Save-and-close test; the continue-to-grading test now checks the step is rendered); application and spec TypeScript checks and `ng build` pass with the existing CSS budget warning. Viewed in the running app without saving: the Save button in the tab bar (pinned right while many tabs scroll), the "Continue to grading" label, and the two-button prompt.
 
+## OCR training export reads submission_programs (2026-09-27, branch `feature/ocr-export-programs`)
+
+> **Owner:** Nombrado (`ocr_feature/`). Unblocks Jayrald's decision on the Program 1 mirror.
+
+- **Why:** Programs 2+ now live in `submission_programs`, so the export's old source (`submissions.verified_text`, Program 1 only) no longer covers a page the teacher split. It also still used the disabled `SUPABASE_ANON_KEY` and skipped every `graded` page.
+- **What changed in `ocr_feature/`:**
+  - `evaluators/export_dataset.py`: reads `SUPABASE_KEY` (legacy name as fallback); fetches `verified` **and** `graded` pages with their programs embedded in the same request (`submission_programs(position,verified_text)`), falling back to page text on a database without the table. One program → its text, as before. Several → every program in a new `program_blocks` column (JSON list, tab order), `verified_text` = blocks joined by a blank line for reading, blank correction distance. Warns if Program 1 in the table differs from `submissions.verified_text`; the table wins. The contamination guard still applies (splitting without correcting is set aside).
+  - `evaluators/labels_schema.py`: `program_blocks` column, `program_blocks(row)` (malformed values raise), `is_split_page(row)`.
+  - `evaluators/build_recognition_dataset.py`: the pairing step is now `_pair_lines(gt_blocks, detected_lines)`. One block pairs exactly as before. Several blocks are each aligned against all detected lines on their own (tab order is never assumed); a line two blocks claim is dropped; coverage uses the same 0.65 threshold over all blocks.
+  - `compare_config.py`, `select_holdout.py`: skip split pages, which have no whole-page reference in reading order.
+- **Not changed:** the OCR pipeline, preprocessing, models, `samples/` (the test set) and `evaluate_cer`, so the recorded accuracy numbers still apply. Writer-batch rows from `import_verified_batch.py` (the bond/yellow datasets) are untouched and don't depend on this.
+- **Verification:** OCR 250/250 (19 new tests: schema, export, block pairing). Read-only check against the cloud with the new fetch: 9 verified/graded pages, 4 with program rows, 0 split, Program 1 copy in sync.
+
 ## Code cleanup completed
 
 > **Owner:** Shared (Jayrald + Nombrado)
