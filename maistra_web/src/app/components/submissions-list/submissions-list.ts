@@ -91,7 +91,7 @@ interface AutoExtractHealth {
 type ReviewStep = 1 | 2 | 3;
 
 const EXTRA_PROGRAMS_UNSAVABLE =
-  "Program 1 was saved. Programs 2 and up can't be saved yet: the database is missing the answers column. Ask Jayrald to apply the migration.";
+  "Program 1 was saved. Programs 2 and up can't be saved on this database: it has no submission_programs table yet. Ask Jayrald to apply the migrations.";
 type SubmissionFilter = 'all' | 'new' | 'extracted' | 'verified' | 'graded';
 
 @Component({
@@ -1202,14 +1202,27 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Text beside the Save button. While the database has no `answers` column
-   * only Program 1 is stored, so it must not claim every program was saved.
+   * Reports errors/conflicts and changes since saving beside Save; otherwise
+   * confirms Program 1 or all programs saved. No result means no label.
    */
   saveStatusLabel(id: string): string {
     if (this.saveStatus[id] === 'error') return 'Save failed, try again';
+    if (this.saveStatus[id] === 'conflict') return this.saveStatusMessage(id);
+    if (this.saveStatus[id] !== 'saved') return '';
+    if (this.saveStatusTone(id) === 'pending') return 'New changes need to be saved.';
     return this.extraAnswersError[id] === EXTRA_PROGRAMS_UNSAVABLE
       ? '✓ Program 1 saved'
       : '✓ All programs saved';
+  }
+
+  saveStatusTone(id: string): 'error' | 'pending' | '' {
+    const status = this.saveStatus[id];
+    if (status === 'error' || status === 'conflict') return 'error';
+    // Snapshots cover all tabs (including removals); stored verified_text also
+    // catches Program 1 loaded from OCR but never saved as verified code.
+    return status === 'saved' && (this.hasUnsavedPrograms(id) || this.hasUnsavedCode(id))
+      ? 'pending'
+      : '';
   }
 
   isSaving(id: string): boolean {

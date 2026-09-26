@@ -33,12 +33,20 @@ A short, shared record of **what each of us changed that affects the others**, *
 ## Nombrado (OCR, review editor)
 
 ### Status
+- (2026-09-26, evening) **Review/Save work is complete; what happens next, in order:**
+  1. **Nombrado:** merge `feature/review-save-followups` (Save-label follow-ups, `a2d39a3`) into `judge0-integration` and push. Checks: web 306/306, TypeScript clean, `ng build` OK. Playwright not run locally (package not installed here); Jayrald's run was 8/8.
+  2. **Nikko (next):** set `submissions.batch_id` on upload (Jayrald's request, the main open item), answer the `docs/` `.gitignore` question, tick the superseded lines, and answer the landscape two-page question. See Nikko's To do.
+  3. **Nombrado (later, no one waits on it):** the OCR training export (`export_dataset.py`, teacher-verified papers from Supabase) reads every program from `submission_programs`, each block aligned to its own lines; then I note it here. It does **not** need the bond / yellow batch (that comes in through `import_verified_batch.py`); timing is my choice.
+  4. **Jayrald:** after step 3, decide whether to drop the Program 1 mirror on `submissions` (his call). After step 2, anything he wants for grouping pages by `batch_id`.
+  5. **Nombrado (whenever the papers arrive):** import the bond / yellow pad datasets (`NEXT_STEPS.md`).
+  - **Everyone works on `judge0-integration`.** `feature/pre-extraction` is retired.
 - (2026-09-26) **Save next to the program tabs** is done on `feature/program-tabs-save` and merged into `feature/pre-extraction`. Web tests 121/121, TypeScript checks and `ng build` pass (existing CSS budget warning only). No OCR, schema or grading change. Full handoff under **Changed (affects others)** below; what each of you needs to do is in **your own To do**.
 - (2026-09-24) **Integration checkpoint:** `feature/pre-extraction` is pushed and includes `feature/program-tabs` via merge commit `d9df182`. Both remain outside `main`. The worker/list badge live checks passed, including server-off **Needs OCR** and restart catch-up. Nikko owns sending the mobile `question_id` for Program 1; Jayrald owns the cloud schema and migrations needed for the complete new question-linking flow. The OCR worker can be tested independently on new papers.
 - (2026-09-24) **OCR:** waiting on the new bond paper and yellow pad datasets. No OCR code change is pending.
 - (2026-09-24) **Program tabs** (one paper → several programs, each linked to a question) built on branch `feature/program-tabs`, pushed to `origin/feature/program-tabs`. Base branch: `feature/reading-order-reassembly`. 102/102 web tests; `ng build` clean. Review aids added the same day: OCR text beside the photo, View question, unsaved dots and close prompt.
 
 ### Changed (affects others)
+- (2026-09-26) **Save-label follow-ups** (`a2d39a3`, `feature/review-save-followups`): `saveStatusLabel()` now covers conflicts through the unchanged `saveStatusMessage()` and unsaved-after-save edits across all tabs; `saveStatusTone()` supplies error/pending colors. Removed the older message under the editor and its CSS with Jayrald's OK. Reworded `EXTRA_PROGRAMS_UNSAVABLE` to name the missing `submission_programs` table. Save/conflict logic is unchanged. Checks: app/spec TypeScript pass, web 306/306 (program tabs 47/47), build passes with only the existing list CSS warning, Chrome layout fixture 15/15. Playwright could not start: the local test package and bundled browsers are missing.
 - (2026-09-26) **HANDOFF: Save next to the program tabs** (branch `feature/program-tabs-save`, merged into `feature/pre-extraction`; not in `main`).
 
   **1. The problem it fixes.** On Review Code (Step 2) a teacher could only save by going to grading ("Save and continue to grading") or by leaving (✕ → "Save and close"). "Save and close" closed the whole paper, so a teacher who checked Program 1, 2 and 3 and saved had to reopen the paper to grade. Nikko's first review screen (`da00269`) had a plain Save; the 3-step redesign (`aca278e`) replaced it.
@@ -115,6 +123,9 @@ A short, shared record of **what each of us changed that affects the others**, *
   7. Once assessments exist, how does a submission link to its assessment (e.g. an `assessment_id` on `submissions`)? The tab picker needs it to list only that paper's questions.
 
 ### Done
+- (2026-09-26, `a2d39a3`) Jayrald's Save-label request: conflicts and edits after/during a save now appear beside Save; duplicate paragraph removed with his OK. `saveStatusMessage()` and its tests remain unchanged.
+- (2026-09-26, `a2d39a3`) Jayrald's `readOnly` request: verified `code-editor.ts` and its Step 3 `readOnly` input remain untouched by these follow-ups.
+- (2026-09-26, `a2d39a3`) Jayrald's schema-wording request: `EXTRA_PROGRAMS_UNSAVABLE` now says the database lacks `submission_programs` and asks him to apply the migrations.
 - (2026-09-23) Browser now uses the publishable Supabase key (`a448198`). Note: RLS is enabled on `questions` but **not** on `submissions`.
 
 ---
@@ -217,6 +228,8 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 ## Nikko (mobile capture, question bank)
 
 ### To do (requested by teammates; please update this section when done)
+- [ ] (2026-09-26, evening, from Nombrado) **You're next. Suggested order:** (1) Jayrald's `batch_id` line below (the main open item; one uuid per submit, shared by its pages); (2) his `docs/` `.gitignore` question; (3) tick my superseded `answers` lines and the Sep 24 "Make questions identifiable" item if your sections/numbers cover it; (4) **question:** your old `feature/document-scanner` has a landscape two-page check (`e9ac574`, `2e65eff`) that never merged. We agreed two-page spreads should be rejected at the quality gate. Is that check in the current gate on `judge0-integration`? If not, is it planned?
+- [ ] (2026-09-26, from Nombrado) Supersedes my two earlier 2026-09-26 lines below. `answers` is gone and Programs 2+ live in `submission_programs` (Jayrald's migration, live in the cloud). Your phone flow is unchanged, and Jayrald's `getQuestionPaperLinks()` already reads the new table, so there's nothing to do for these; you can tick both.
 - [ ] (2026-09-26, from Jayrald) **Set `submissions.batch_id` on upload** (column live in the cloud since `20260926000500`, on `judge0-integration`). In `SubmissionUploader.submit()`, make one uuid per submit and send it as `batch_id` with every page's insert. Insert only; pages keep one row each.
 - [ ] (2026-09-26, from Jayrald) **`docs/` in `.gitignore`**: intended for everyone? It came in with `feature/question-linking-v2`. Tracked docs are unaffected, but new notes need `git add -f`. If it was meant for personal notes only, a narrower pattern would avoid that.
 - [ ] (2026-09-26, from Nombrado) **FYI, no change for the phone:** I proposed to Jayrald a `submission_programs` table for multi-program papers (`docs/superpowers/specs/2026-09-26-submission-programs-table-proposal.md`). Your phone keeps inserting one `submissions` row per page with `status = 'pending'`; its `question_id` still pre-fills Program 1. If it's approved, point 4 below changes: the grant to keep becomes the new table's, not `UPDATE (answers)`.
