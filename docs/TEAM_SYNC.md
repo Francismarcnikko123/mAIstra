@@ -242,6 +242,7 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 - (2026-09-24, *resolved 2026-09-26*) **Live DB check** (read-only, with the app's publishable key): `question_sections`, `questions.can_publish`, `submissions.gate_result` and `submissions.answers` are all **missing** in the cloud project. So Nombrado's `answers` migration is also still unapplied.
 
 ### Changed (affects others)
+- (2026-09-26) **Jayrald's e2e fake backend** (`tests/e2e/support/fake-backend.ts`) gained, additively: `PATCH` questions and section items, `HEAD` submission counts, `addSectionItem()`, optional `can_publish`/`question_text`. Your 8 e2e tests still pass; my 6 are in `tests/e2e/question-bank.spec.ts`.
 - (2026-09-26) **Questions can be edited from the question page** using Jayrald's UPDATE grant. Test-case or type edits on a graded question show a warning first; saving then clears those grades through Jayrald's trigger. Saving always writes `can_publish: true` (it's only possible after validation passes).
 - (2026-09-26) **Phone inserts now also set `batch_id`**: every page of one submit shares one UUID. Old rows and web-made rows stay NULL. Nothing reads it yet.
 - (2026-09-26) **`feature/question-linking-v2` merges `judge0-integration` (Jayrald) with `feature/pre-extraction` (Nombrado).** Every conflict keeps both sides' features; decisions are in `docs/changes/2026-09-26-merge-pre-extraction-and-judge0.md` and `docs/changes/2026-09-26-merge-latest-pre-extraction.md`. Nobody's branch was changed; this only affects whoever merges v2.
