@@ -34,7 +34,7 @@ A short, shared record of **what each of us changed that affects the others**, *
 
 ### Status
 - (2026-09-26, evening) **Review/Save work is complete; what happens next, in order:**
-  1. **Nombrado:** merge `feature/review-save-followups` (Save-label follow-ups, `a2d39a3`) into `judge0-integration` and push. Checks: web 306/306, TypeScript clean, `ng build` OK. Playwright not run locally (package not installed here); Jayrald's run was 8/8.
+  1. ~~**Nombrado:** merge `feature/review-save-followups` into `judge0-integration` and push.~~ **Done 2026-09-27 (`4bf44f6`).** Checks on the merged branch: web 309/309, TypeScript clean, `ng build` OK (only the existing `submissions-list.list.css` budget warning), Playwright e2e 9/9 (fake backend, no cloud writes).
   2. **Nikko (next):** set `submissions.batch_id` on upload (Jayrald's request, the main open item), answer the `docs/` `.gitignore` question, tick the superseded lines, and answer the landscape two-page question. See Nikko's To do.
   3. **Nombrado (later, no one waits on it):** the OCR training export (`export_dataset.py`, teacher-verified papers from Supabase) reads every program from `submission_programs`, each block aligned to its own lines; then I note it here. It does **not** need the bond / yellow batch (that comes in through `import_verified_batch.py`); timing is my choice.
   4. **Jayrald:** after step 3, decide whether to drop the Program 1 mirror on `submissions` (his call). After step 2, anything he wants for grouping pages by `batch_id`.
