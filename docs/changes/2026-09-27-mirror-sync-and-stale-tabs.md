@@ -1,6 +1,6 @@
 # Program 1 follows the page's code; a stale tab list can't delete tabs (2026-09-27)
 
-> **Owner:** Jayrald. **Branch:** `judge0-integration`. **Commits:** `575474e` (migration `20260926001300`), `bcb0fea` (web). Worked on in parallel, then combined and tested together.
+> **Owner:** Jayrald. **Branch:** `judge0-integration`. **Commits:** `575474e` (migration `20260926001300`, applied to the cloud on 2026-09-27), `bcb0fea` (web). Worked on in parallel, then combined and tested together.
 
 ## What
 
@@ -50,6 +50,8 @@ Chosen instead: the page drives Program 1, and the grant stays, so old branches 
 - Python contract tests: 23/23.
 - `npx ng test`: 327/327 (5 new, 4 failed before). Both TypeScript checks pass. `npx ng build` passes (existing CSS budget warning).
 - `npx playwright test --repeat-each=2`: 31/32. The new test fails before the fix. The one failure is Nikko's flaky question-bank test, which also fails without these changes.
+
+Cloud after the push: Program 1's code and question match the page in every program row, and no page with programs keeps a page-level grade.
 
 ## Still open
 

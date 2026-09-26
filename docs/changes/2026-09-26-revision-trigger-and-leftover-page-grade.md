@@ -1,6 +1,6 @@
 # Page revision from a trigger; leftover page grades cleared (2026-09-26)
 
-> **Owner:** Jayrald. **Branch:** `judge0-integration`. **Commit:** `4060749`. Migration `20260926001200`.
+> **Owner:** Jayrald. **Branch:** `judge0-integration`. **Commit:** `4060749`. Migration `20260926001200`, applied to the cloud on 2026-09-27.
 
 ## What
 
@@ -22,6 +22,8 @@
 - `supabase/migrations/20260926001200_revision_trigger_and_leftover_page_grade.sql`
 - `supabase/tests/database/review_followups.test.sql` (9 checks)
 - `supabase/tests/test_migration_contract.py`
+
+Cloud after the push: at `20260926001300`. `advance_page_revision()` is gone, the new trigger is in place, and the security advisor shows only the unrelated Auth warning.
 
 ## Affects
 

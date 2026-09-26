@@ -171,7 +171,7 @@ A short, shared record of **what each of us changed that affects the others**, *
 When you finish an item: tick it, add the date and commit, and note anything that affects others under **Changed (affects others)**.
 
 ### Status
-- (2026-09-26, `judge0-integration`) **Working branch: `judge0-integration`** (pushed). Everything of mine lands here. It contains `feature/question-linking-v2` (Nikko, merged in `138ef02`) and `feature/pre-extraction` up to `0f87354` (Nombrado, merged in `046b88c`). `code-similarity/duplicate` is parked. Cloud Supabase is at `20260926001100` (all migrations up to the review fixes applied); `20260926001200` and `20260926001300` are committed, not applied yet.
+- (2026-09-26, `judge0-integration`) **Working branch: `judge0-integration`** (pushed). Everything of mine lands here. It contains `feature/question-linking-v2` (Nikko, merged in `138ef02`) and `feature/pre-extraction` up to `0f87354` (Nombrado, merged in `046b88c`). `code-similarity/duplicate` is parked. Cloud Supabase is at `20260926001300` (every migration applied, 2026-09-27; the Supabase security advisor shows no warning from our code).
 
 ### Changed (affects others)
 - (2026-09-27, `judge0-integration`) **For Nombrado: the Program 1 mirror gap is closed** (`575474e`, migration `20260926001300`). This is a different design from your proposal, on purpose:
