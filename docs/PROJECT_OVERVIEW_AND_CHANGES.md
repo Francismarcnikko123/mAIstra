@@ -49,6 +49,23 @@ The Angular submission review uses one existing `SubmissionsListComponent`; no a
    - Run all configured test cases.
    - Display output comparison and equal-weight test-case results.
 
+### Review workflow fixes (September 26, 2026)
+
+Both bugs were found by the new Playwright end-to-end tests.
+
+- **Steps now advance after saving.** The Angular app runs without zone.js, so
+  it only re-renders when told to. "Save and review code" and "Save and
+  continue to grading" changed the step after the save's `await` without
+  re-rendering, which left the dialog on the old step until the teacher
+  clicked something else. Both now run change detection after the step
+  changes.
+- **New questions appear without a reload.** `SubmissionsListComponent` loaded
+  questions only when the page opened, so a question saved in the question
+  form was missing from the review dialog's question picker until the page was
+  refreshed. The form now emits `questionSaved`, and `app.html` uses it to
+  reload the list's questions. A question created in another tab or by
+  another teacher still needs a page refresh.
+
 ## Submission interface changes
 
 The submission interface was redesigned to make its workflow easier to discover and navigate:
@@ -181,6 +198,55 @@ Focused tests now cover:
 - Advancing after a successful verified-code save.
 - Remaining in Review Code after a failed save.
 
+## End-to-end tests (September 26, 2026)
+
+Playwright tests in `maistra_web/tests/e2e` drive the real Angular app in
+Chromium. Run them from `maistra_web`:
+
+```bash
+npm run e2e                 # headless, starts its own dev server on port 4300
+npx playwright test --ui    # watch the browser step through each test
+```
+
+`teacher-workflow.spec.ts` follows one submission through the whole teacher
+workflow without reloading the page:
+
+1. Create a program question, validate its test cases against Judge0, and save it.
+2. Receive a new upload over Supabase Realtime, as the mobile app would send
+   it, and find it with the Needs OCR filter.
+3. Assign the new question, extract the code with OCR, correct an OCR mistake,
+   and save the verified code.
+4. Run the sample, submit against every test case, and check that the grade,
+   the OCR text and the verified text are stored separately.
+
+`submission-grading.spec.ts` and the rest of `teacher-workflow.spec.ts` cover
+the other paths: partial credit (1/2, 50%), a question whose expected output
+disagrees with its model answer, an OCR failure, Judge0 being unavailable, and
+a submission that changes while it is being graded.
+
+**Faked services.** `environment.ts` points the web app at the hosted Supabase
+project, and the teacher pages have no login, so a live run would write grades
+into production rows. The tests therefore fake Supabase (REST, the
+`save_submission_grade` RPC and Realtime), the Judge0 wrapper and the OCR
+service inside the browser (`tests/e2e/support/fake-backend.ts`). The fake
+grade save follows the same match rules as the real RPC, and any request the
+fake does not recognise fails the test.
+
+**Not covered:** the mobile capture app, real OCR accuracy, the real Judge0
+instance, and the hosted database's RLS policies. The tests confirm the
+workflow behaves correctly; they do not measure grading accuracy on real
+handwriting.
+
+## Database changes (September 26, 2026)
+
+- `20260926000000_repair_realtime_publication.sql` adds `public.submissions`
+  and `public.questions` to the `supabase_realtime` publication only when they
+  are missing. A migration can stay marked as applied after the publication
+  is changed by hand, which silently stops live updates; this repair is safe
+  to run on a database that is already correct.
+- `supabase/tests/database/security_contract.test.sql` now checks that both
+  tables are published.
+
 ## Setup documentation
 
 - `JUDGE0_UBUNTU_DOCKER_SETUP.md` explains how to deploy Judge0 CE on an Ubuntu VM with Docker, connect through SSH, configure cgroups, set `AUTHN_TOKEN` and `AUTHZ_TOKEN`, and connect mAIstra.
@@ -199,6 +265,7 @@ Focused tests now cover:
 - Live browser/Judge0 checks confirmed immediate function-format errors, successful function output, successful programs both with and without an explicit stdio header using Standard Input, and an explicit No output failure with Save disabled. No test questions were saved to Supabase during verification.
 - Manual-output and function-input update (September 8): 79 focused Vitest tests pass across question-form, C structure checks, submissions-list, and Judge0 runner; `tsc --noEmit -p tsconfig.spec.json` and the Angular development build pass. Live Judge0 verification was not run for this update.
 - Equal-weight scoring prototype (September 9): all 85 frontend Vitest tests pass; `tsc --noEmit -p tsconfig.spec.json` and the Angular development build pass. Adviser approval and live Judge0 verification remain pending.
+- End-to-end tests and review workflow fixes (September 26): all 7 Playwright tests pass, and they passed 35 of 35 runs with `--repeat-each=5`; all 164 frontend Vitest tests still pass. The tests run against faked services, so the real OCR, Judge0 and Supabase were not exercised.
 
 ## Important security work
 
