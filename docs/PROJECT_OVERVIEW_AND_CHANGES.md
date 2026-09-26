@@ -680,12 +680,41 @@ handwriting.
   test cases or type clears the grades of its linked papers and advances their
   `grading_revision`, so a grade computed against the old test cases can't be
   saved. [Note](changes/2026-09-26-question-updates.md)
-- **Cloud project is at `20260926000400`.** Nombrado's `answers` migration and
-  Nikko's sections migration were applied along with the three above.
-- **Decided (see `TEAM_SYNC.md`):** papers with several programs move to a
-  `submission_programs` table (one row per program with its own question and
-  grade), replacing the `answers` column, which is still empty.
-  `code-similarity/duplicate` is parked and will be rebuilt on top of it.
+- `20260926000500_add_submission_batch_id.sql` adds `submissions.batch_id`, set
+  by the phone on every page of one answer (insert only).
+  [Note](changes/2026-09-26-batch-id.md)
+- `20260926000600_add_submission_programs.sql` stores every program on a paper
+  as its own row, Program 1 included, with its own question and grade, and
+  drops the empty `answers` column. See "Grading every program on a paper"
+  below. [Note](changes/2026-09-26-submission-programs-and-per-program-grading.md)
+- **Cloud project is at `20260926000600`.** Nombrado's `answers` migration and
+  Nikko's sections migration were applied along with these.
+- **Branches (decided in `TEAM_SYNC.md`):** everyone builds on
+  `judge0-integration`, which now contains `feature/question-linking-v2` and
+  `feature/pre-extraction` ([note](changes/2026-09-26-merges-into-judge0-integration.md)).
+  `code-similarity/duplicate` is parked and will be rebuilt on top of
+  `submission_programs`.
+
+## Grading every program on a paper (2026-09-26, branch `judge0-integration`)
+
+> **Owner:** Jayrald. Commits `f85d99e`, `f3138c6`, `96eda09`.
+
+- **Storage:** `submission_programs` has one row per verified program (tab
+  order = `position`), each linked to the question it answers and carrying its
+  own grade and `grading_revision`. `submissions` stays the page: photo, raw
+  OCR, status. Program 1 is also mirrored to `submissions.verified_text` /
+  `question_id`.
+- **Saving the review:** `supabase.ts` calls `save_submission_programs()`,
+  which saves every tab in one step, guarded by the page's revision. The review
+  screen still receives Programs 2..n as `answers`, so the program-tab code is
+  unchanged.
+- **Grading:** Step 3 shows a chip per program when a paper has more than one.
+  Each program is graded against its own question's test cases and saved with
+  `save_program_grade()`. A page is Graded only when every program is. Cards
+  show `Q1 3/4 · Q2 not graded`; a single-program paper looks as before.
+- **Stale grades:** editing a program's code or question clears that program's
+  grade; editing a question's test cases or type clears the grades of every
+  program linked to it.
 
 ## Setup documentation
 
@@ -710,6 +739,7 @@ handwriting.
 - Equal-weight scoring prototype (September 9): all 85 frontend Vitest tests pass; `tsc --noEmit -p tsconfig.spec.json` and the Angular development build pass. Adviser approval and live Judge0 verification remain pending.
 - End-to-end tests and review workflow fixes (September 26): all 7 Playwright tests pass, and they passed 35 of 35 runs with `--repeat-each=5`; all 164 frontend Vitest tests still pass. The tests run against faked services, so the real OCR, Judge0 and Supabase were not exercised.
 - Database migrations (September 26): `supabase test db` passes 58/58 on local Supabase and the Python migration contract tests pass 18/18. After the cloud push, the new columns, grants, policies and trigger were checked by querying the cloud project directly. The phone and the question page were not tried against them yet.
+- Per-program grading and the two merges (September 26, `judge0-integration`): `supabase test db` 80/80, `npx ng test` 299/299, both TypeScript checks, `npx ng build` (existing CSS budget warning), `npx playwright test` 8/8 run twice each. The save and grade functions were also called as the browser role through the local Supabase REST API. Not yet tried by a teacher on real papers.
 
 ## Important security work
 
