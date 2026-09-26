@@ -210,6 +210,10 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       // Refetch only the row that changed. A full reload per event re-downloads
       // every submission, including on the echo of this page's own saves.
       const id = payload?.new?.id;
+      // A live upload from the phone carries its photo verdict; show the
+      // badge now instead of after the next full reload.
+      const gate = payload?.new?.gate_result;
+      if (typeof id === 'string' && typeof gate === 'string') this.gateResults.set(id, gate);
       if (typeof id === 'string') void this.refreshSubmission(id);
       else void this.loadSubmissions();
     };
@@ -519,6 +523,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     );
   }
 
+  private isSectionName(topic: string): boolean {
+    const name = topic?.trim();
+    return !!name && [...this.questionPlaces.values()].some((p) => p.sectionName === name);
+  }
+
   /** Read-only section for the Details step, from the chosen question. */
   selectedSectionName(): string {
     const place = this.questionPlaces.get(this.selectedQuestionId);
@@ -800,6 +809,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     // remains for questions that have no section yet.
     const place = this.questionPlaces.get(this.selectedQuestionId);
     if (place) this.editableTopic = place.sectionName;
+    // An unsectioned question: drop a section name left from the previous
+    // question, so the paper doesn't form a second folder with that name.
+    else if (this.isSectionName(this.editableTopic)) this.editableTopic = 'Uncategorized';
     const topic = this.editableTopic;
     const questionId = this.selectedQuestionId || null;
     const expectedRevision = this.baseRevision(
@@ -1206,10 +1218,14 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       return 'Changed by someone else. Save again to keep yours';
     }
     // Code typed while the save was running is not saved yet.
-    if (this.isProgram1Unsaved(id)) return 'New changes need to be saved';
-    return this.extraAnswersError[id] === EXTRA_PROGRAMS_UNSAVABLE
-      ? '✓ Program 1 saved'
-      : '✓ All programs saved';
+    // Programs 2..n can't be stored yet (Nombrado's preview mode): they stay
+    // unsaved on purpose, so only Program 1 decides the label.
+    if (this.extraAnswersError[id] === EXTRA_PROGRAMS_UNSAVABLE) {
+      return this.isProgram1Unsaved(id) ? 'New changes need to be saved' : '✓ Program 1 saved';
+    }
+    // Any program changed since the save, including tabs 2..n.
+    if (this.hasUnsavedPrograms(id)) return 'New changes need to be saved';
+    return '✓ All programs saved';
   }
 
   isSaving(id: string): boolean {
@@ -1425,6 +1441,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.selectedSubmission.question_id = questionId || undefined;
     const place = this.questionPlaces.get(questionId);
     if (place) this.editableTopic = place.sectionName;
+    // An unsectioned question: drop a section name left from the previous
+    // question, so the paper doesn't form a second folder with that name.
+    else if (this.isSectionName(this.editableTopic)) this.editableTopic = 'Uncategorized';
 
     this.clearCompletedGrade(this.selectedSubmission.id);
     this.cdr.detectChanges();

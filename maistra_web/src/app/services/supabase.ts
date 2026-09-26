@@ -177,14 +177,35 @@ async saveQuestion(question: any) {
       .eq('question_id', questionId);
   }
 
-  /** Graded papers whose grade an edit to this question's test cases would clear. */
-  async countGradedPapers(questionId: string): Promise<number> {
-    const { count, error } = await this.supabase
+  /**
+   * Papers with a grade that editing this question's test cases or type
+   * would clear (Jayrald's triggers): graded pages linked as Program 1, plus
+   * any program on a page (submission_programs) graded against it. Null when
+   * the count can't be read, so the caller warns instead of assuming none.
+   */
+  async countGradedPapers(questionId: string): Promise<number | null> {
+    const papers = new Set<string>();
+    const pages = await this.supabase
       .from('submissions')
-      .select('id', { count: 'exact', head: true })
+      .select('id')
       .eq('question_id', questionId)
       .eq('status', 'graded');
-    return error ? 0 : (count ?? 0);
+    if (pages.error) return null;
+    for (const row of (pages.data ?? []) as { id: string }[]) papers.add(row.id);
+
+    const programs = await this.supabase
+      .from('submission_programs')
+      .select('submission_id, graded_at')
+      .eq('question_id', questionId);
+    if (programs.error) {
+      // PGRST205: the table doesn't exist yet (older database).
+      if (programs.error.code !== 'PGRST205') return null;
+    } else {
+      for (const row of (programs.data ?? []) as { submission_id: string; graded_at: string | null }[]) {
+        if (row.graded_at) papers.add(row.submission_id);
+      }
+    }
+    return papers.size;
   }
 
   /** Every question's section and number, for the question bank. */

@@ -157,7 +157,7 @@ describe('QuestionFormComponent sections', () => {
     await component.save();
 
     expect(component.errorMessage).toContain('was taken in Basic in the meantime');
-    expect(component.errorMessage).toContain('No section yet');
+    expect(component.errorMessage).toContain('Pick another number and save again');
     expect(component.successMessage).toBe('');
   });
 
@@ -304,6 +304,55 @@ describe('QuestionFormComponent sections', () => {
       expect(component.questionName).toBe('');
       expect(supabase.updateQuestion).not.toHaveBeenCalled();
       expect(done).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('code-review fixes (2026-09-27)', () => {
+    it('after "number taken" on create, saving again updates the same question instead of inserting a copy', async () => {
+      const supabase = createSupabase({
+        addQuestionToSection: vi
+          .fn()
+          .mockResolvedValueOnce({ error: { code: '23505', message: 'duplicate key' } })
+          .mockResolvedValueOnce({ error: null }),
+      });
+      const { component } = await readyComponent(supabase);
+
+      await component.save();
+      expect(supabase.saveQuestion).toHaveBeenCalledTimes(1);
+      expect(component.isEditing).toBe(true);
+      expect(component.errorMessage).toContain('Pick another number and save again');
+
+      component.questionNumber = 4;
+      await component.save();
+
+      expect(supabase.saveQuestion).toHaveBeenCalledTimes(1); // no second copy
+      expect(supabase.updateQuestion).toHaveBeenCalledWith('q-new', expect.anything());
+      expect(supabase.addQuestionToSection).toHaveBeenLastCalledWith('q-new', 'sec-basic', 4);
+    });
+
+    it('warns when the graded-papers count cannot be read, instead of assuming none', async () => {
+      const supabase = createSupabase({ countGradedPapers: vi.fn().mockResolvedValue(null) });
+      const { component } = await readyComponent(supabase, false);
+      await component.startEdit({
+        question: {
+          id: 'q-sum',
+          question_name: 'Sum',
+          question_text: 'Add.',
+          question_type: 'program',
+          model_answer: 'int main(void) { printf("5"); return 0; }',
+          test_cases: [{ test_code: '', test_input: 'hello', expected_output: '5' }],
+          can_publish: true,
+        },
+        place: { sectionId: 'sec-basic', number: 1 },
+      });
+      component.testCases = [{ test_code: '', test_input: 'other', expected_output: '5' }];
+      component.clearValidationResults();
+      await component.validateModelAnswer();
+
+      await component.save();
+
+      expect(supabase.updateQuestion).not.toHaveBeenCalled();
+      expect(component.gradeWarning).toContain("Couldn't check whether papers graded");
     });
   });
 });

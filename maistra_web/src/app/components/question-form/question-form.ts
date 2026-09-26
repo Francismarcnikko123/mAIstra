@@ -108,8 +108,8 @@ export class QuestionFormComponent implements OnInit {
     place: { sectionId: string; number: number } | null;
     testsKey: string;
   } | null = null;
-  /** Graded papers whose grades an edit to the test cases would clear. */
-  gradedPaperCount = 0;
+  /** Graded papers an edit to the test cases would clear; null = unknown. */
+  gradedPaperCount: number | null = 0;
   gradeWarning = '';
   private gradeResetConfirmed = false;
   /** Tells the page the edit is finished (saved or cancelled). */
@@ -360,12 +360,14 @@ export class QuestionFormComponent implements OnInit {
 
     if (
       this.isEditing &&
-      this.gradedPaperCount > 0 &&
+      (this.gradedPaperCount === null || this.gradedPaperCount > 0) &&
       this.testsChanged() &&
       !this.gradeResetConfirmed
     ) {
       this.gradeWarning =
-        `${this.gradedPaperCount === 1 ? '1 graded paper uses' : `${this.gradedPaperCount} graded papers use`} this question. ` +
+        (this.gradedPaperCount === null
+          ? "Couldn't check whether papers graded against this question would lose their grades. "
+          : `${this.gradedPaperCount === 1 ? '1 graded paper uses' : `${this.gradedPaperCount} graded papers use`} this question. `) +
         'Saving the changed test cases clears their grades, and they will need grading again.';
       this.cdr.detectChanges();
       return;
@@ -412,11 +414,16 @@ export class QuestionFormComponent implements OnInit {
         this.questionNumber!,
       );
       if (link.error) {
-        // The question itself is saved; it just has no section yet.
+        // The question itself is saved; it just has no section yet. Switch
+        // to editing it, so saving again updates this question and adds its
+        // section instead of inserting a second copy.
+        this.editingId = data.id;
+        this.editOriginal = { place: null, testsKey: this.testsKey() };
+        this.gradedPaperCount = 0;
         this.errorMessage =
           link.error.code === UNIQUE_VIOLATION
-            ? `The question was saved, but Q${this.questionNumber} was taken in ${this.sectionName} in the meantime. It is under "No section yet" until it gets a free number.`
-            : `The question was saved, but not added to ${this.sectionName}: ${link.error.message}`;
+            ? `The question was saved, but Q${this.questionNumber} was taken in ${this.sectionName} in the meantime. Pick another number and save again.`
+            : `The question was saved, but not added to ${this.sectionName}: ${link.error.message}. Save again to retry.`;
         await this.onSectionChange();
         return;
       }

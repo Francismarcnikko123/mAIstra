@@ -417,13 +417,9 @@ export class FakeBackend {
       const body = this.wantsObject(request) ? (matched[0] ?? null) : matched;
       return this.json(route, body);
     }
-    // countGradedPapers(): a HEAD request with Prefer: count=exact.
-    if (method === 'HEAD' && path === '/rest/v1/submissions') {
-      const count = this.filterSubmissions(url).length;
-      return route.fulfill({
-        status: 200,
-        headers: { ...cors(), 'content-range': count ? `0-${count - 1}/${count}` : '*/0' },
-      });
+    // countGradedPapers() reads the programs graded against a question.
+    if (method === 'GET' && path === '/rest/v1/submission_programs') {
+      return this.json(route, filterRows(this.programs, url));
     }
     if (method === 'GET' && path === '/rest/v1/submissions') {
       const rows = this.filterSubmissions(url)
@@ -707,7 +703,6 @@ function cors() {
   return {
     'access-control-allow-origin': '*',
     'access-control-allow-headers': '*',
-    'access-control-allow-methods': 'GET,HEAD,POST,PATCH,OPTIONS',
-    'access-control-expose-headers': 'content-range',
+    'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS',
   };
 }

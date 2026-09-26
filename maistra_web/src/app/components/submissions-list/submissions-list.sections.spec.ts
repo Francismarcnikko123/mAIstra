@@ -125,4 +125,51 @@ describe('SubmissionsListComponent section folders', () => {
     component.updateSubmissionCode('s2', 'typed after saving');
     expect(component.saveStatusLabel('s2')).toBe('New changes need to be saved');
   });
+
+  it('the Save label reports unsaved edits in Programs 2..n too', async () => {
+    const { component } = createComponent();
+    await component.loadSubmissions();
+    component.openModal(component.submissions.find((s) => s.id === 's2')!);
+    component.saveStatus['s2'] = 'saved';
+    expect(component.saveStatusLabel('s2')).toBe('✓ All programs saved');
+
+    component.addExtraAnswer();
+    component.updateExtraAnswerCode(0, 'int main(void) { return 0; }');
+
+    expect(component.saveStatusLabel('s2')).toBe('New changes need to be saved');
+  });
+
+  it('a live upload from the phone shows its photo badge at once', async () => {
+    let onInsert: ((payload: unknown) => void) | undefined;
+    const { component } = createComponent({
+      getQuestions: vi.fn().mockResolvedValue({ data: [], error: null }),
+      getSubmission: vi.fn().mockResolvedValue({ data: null, error: null }),
+      subscribeToSubmissions: vi.fn((insert: (payload: unknown) => void) => {
+        onInsert = insert;
+        return { unsubscribe: vi.fn() };
+      }),
+    });
+    vi.spyOn(component, 'checkOcrServer').mockResolvedValue();
+    await component.ngOnInit();
+
+    onInsert!({ new: { id: 'phone-1', gate_result: 'FIXABLE' } });
+
+    expect(component.gateBadge(component.gateResults.get('phone-1'))?.label).toBe(
+      'Photo auto-corrected',
+    );
+    component.ngOnDestroy();
+  });
+
+  it('re-linking a paper to an unsectioned question drops the old section name', async () => {
+    const { component, supabase } = createComponent();
+    await component.loadSubmissions();
+    component.openModal(component.submissions.find((s) => s.id === 's2')!);
+    expect(component.selectedSectionName()).toBe('Basic');
+
+    component.onSelectedQuestionChange('q-unsectioned');
+    expect(component.editableTopic).toBe('Uncategorized');
+    await component.continueFromDetails();
+
+    expect(supabase.updateSubmissionDetails).toHaveBeenCalledWith('s2', 'Uncategorized', 'q-unsectioned', 0);
+  });
 });
