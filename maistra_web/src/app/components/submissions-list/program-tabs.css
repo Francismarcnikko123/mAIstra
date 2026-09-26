@@ -43,7 +43,19 @@
   color: #991b1b;
 }
 
+.program-save-status.pending {
+  color: #b45309;
+}
+
+.program-save-status.error,
+.program-save-status.pending {
+  white-space: normal;
+  max-width: 360px;
+  text-align: right;
+}
+
 .program-save-button {
+  flex: none;
   height: 30px;
   padding: 0 14px;
   border: 1px solid #4f46e5;
@@ -423,6 +435,23 @@
 @media (max-width: 800px) {
   .ocr-layout.with-ocr-text {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .program-tabs-bar {
+    flex-wrap: wrap;
+  }
+
+  .program-tabs {
+    flex-basis: 100%;
+  }
+
+  .program-save {
+    box-sizing: border-box;
+    width: 100%;
+    justify-content: flex-end;
+    padding-top: 7px;
   }
 }
 

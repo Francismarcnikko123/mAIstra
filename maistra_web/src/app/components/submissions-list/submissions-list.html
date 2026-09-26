@@ -341,11 +341,12 @@
                 <div class="program-save">
                   <span
                     class="program-save-status"
-                    *ngIf="saveStatus[selectedSubmission.id]"
-                    [class.error]="saveStatus[selectedSubmission.id] === 'error'"
+                    *ngIf="saveStatusLabel(selectedSubmission.id) as label"
+                    [class.error]="saveStatusTone(selectedSubmission.id) === 'error'"
+                    [class.pending]="saveStatusTone(selectedSubmission.id) === 'pending'"
                     role="status"
                   >
-                    {{ saveStatusLabel(selectedSubmission.id) }}
+                    {{ label }}
                   </span>
                   <button
                     type="button"
@@ -482,13 +483,6 @@
 
             <p class="extract-error" *ngIf="extractionError[selectedSubmission.id]">
               {{ extractionError[selectedSubmission.id] }}
-            </p>
-            <p
-              class="save-status"
-              *ngIf="saveStatusMessage(selectedSubmission.id) as message"
-              [class.saved]="saveStatus[selectedSubmission.id] === 'saved' && !hasUnsavedCode(selectedSubmission.id)"
-            >
-              {{ message }}
             </p>
           </div>
         </div>

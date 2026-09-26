@@ -1,6 +1,7 @@
 import '@angular/compiler';
 import { ChangeDetectorRef } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { readFileSync } from 'fs';
 import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { Judge0Service } from '../../services/judge0.service';
@@ -235,10 +236,11 @@ describe('SubmissionsListComponent program tabs', () => {
     expect(component.ocrPanelOpen).toBe(false);
   });
 
-  it('saves Program 1 and keeps extra programs as a preview while the answers column is missing', async () => {
+  it('saves Program 1 and keeps extra programs pending while the programs table is missing', async () => {
     const { component, updateSubmissionText, supabase } = createComponent();
     supabase.answersColumnAvailable = false;
     select(component);
+    component.submissions = [component.selectedSubmission!];
     component.addExtraAnswer();
     component.updateExtraAnswerCode(0, 'int f(void) { return 1; }');
     component.chooseExtraQuestion(0, 'q-2');
@@ -248,13 +250,19 @@ describe('SubmissionsListComponent program tabs', () => {
     expect(updateSubmissionText).toHaveBeenCalledTimes(1);
     expect(component.saveStatus['paper-1']).toBe('saved');
     expect(component.extraAnswersError['paper-1']).toBe(
-      "Program 1 was saved. Programs 2 and up can't be saved yet: the database is missing the answers column. Ask Jayrald to apply the migration.",
+      "Program 1 was saved. Programs 2 and up can't be saved on this database: it has no submission_programs table yet. Ask Jayrald to apply the migrations.",
     );
     expect(component.getExtraAnswers('paper-1')[0].code).toBe('int f(void) { return 1; }');
     expect(component.selectedSubmission?.answers).toBeUndefined();
     // The label beside Save must not claim the extra tabs were stored.
-    expect(component.saveStatusLabel('paper-1')).toBe('✓ Program 1 saved');
+    expect(component.saveStatusLabel('paper-1')).toBe('New changes need to be saved.');
+    expect(component.saveStatusTone('paper-1')).toBe('pending');
     expect(component.hasUnsavedPrograms('paper-1')).toBe(true);
+
+    // With no remaining extra draft, the partial-save confirmation is accurate.
+    component.extraAnswers['paper-1'] = [];
+    expect(component.saveStatusLabel('paper-1')).toBe('✓ Program 1 saved');
+    expect(component.saveStatusTone('paper-1')).toBe('');
   });
 
   it('the Save label reports a failed save', async () => {
@@ -267,6 +275,100 @@ describe('SubmissionsListComponent program tabs', () => {
 
     expect(component.saveStatus['paper-1']).toBe('error');
     expect(component.saveStatusLabel('paper-1')).toBe('Save failed, try again');
+    expect(component.saveStatusTone('paper-1')).toBe('error');
+  });
+
+  it('shows the existing conflict message beside Save with an error tone', async () => {
+    const { component } = createComponent({
+      updateSubmissionText: vi.fn().mockResolvedValue(null),
+    });
+    select(component);
+
+    await component.saveVerifiedText();
+
+    expect(component.saveStatus['paper-1']).toBe('conflict');
+    expect(component.saveStatusLabel('paper-1')).toBe(component.saveStatusMessage('paper-1'));
+    expect(component.saveStatusTone('paper-1')).toBe('error');
+  });
+
+  it.each(['Program 1', 'extra tab'])('reports edits to %s after saving and clears them when restored', async (tab) => {
+    const { component } = createComponent();
+    select(component);
+    component.submissions = [component.selectedSubmission!];
+    component.addExtraAnswer();
+    component.updateExtraAnswerCode(0, 'int x;');
+    component.chooseExtraQuestion(0, 'q-2');
+    await component.saveVerifiedText();
+    const savedCode = component.editableText['paper-1'];
+    const edit = (code: string) => tab === 'Program 1'
+      ? component.updateSubmissionCode('paper-1', code)
+      : component.updateExtraAnswerCode(0, code);
+
+    edit('int changed;');
+
+    expect(component.saveStatusLabel('paper-1')).toBe('New changes need to be saved.');
+    expect(component.saveStatusTone('paper-1')).toBe('pending');
+
+    edit(tab === 'Program 1' ? savedCode : 'int x;');
+
+    expect(component.saveStatusLabel('paper-1')).toBe('✓ All programs saved');
+    expect(component.saveStatusTone('paper-1')).toBe('');
+    component.ngOnDestroy();
+  });
+
+  it('reports edits typed while a save is in flight', async () => {
+    let finishSave!: (revision: number) => void;
+    const { component } = createComponent({
+      updateSubmissionText: vi.fn().mockReturnValue(new Promise<number>((resolve) => {
+        finishSave = resolve;
+      })),
+    });
+    select(component);
+    const saving = component.saveVerifiedText();
+    component.updateSubmissionCode('paper-1', 'int changed;');
+    finishSave(1);
+    await saving;
+
+    expect(component.saveStatusLabel('paper-1')).toBe('New changes need to be saved.');
+    expect(component.saveStatusTone('paper-1')).toBe('pending');
+    component.ngOnDestroy();
+  });
+
+  it('does not call unverified OCR text saved even when it matches the loaded snapshot', async () => {
+    const { component } = createComponent({
+      getSubmissions: vi.fn().mockResolvedValue({
+        data: [{ id: 'paper-1', image_url: 'x', captured_at: 'y',
+          extracted_text: 'int x;', verified_text: null }],
+        error: null,
+      }),
+    });
+    await component.loadSubmissions();
+    component.saveStatus['paper-1'] = 'saved';
+
+    expect(component.hasUnsavedPrograms('paper-1')).toBe(false);
+    expect(component.saveStatusLabel('paper-1')).toBe('New changes need to be saved.');
+    expect(component.saveStatusTone('paper-1')).toBe('pending');
+  });
+
+  it('has no Save label or tone before a result or after it clears', () => {
+    const { component } = createComponent();
+    expect(component.saveStatusLabel('paper-1')).toBe('');
+    expect(component.saveStatusTone('paper-1')).toBe('');
+    component.saveStatus['paper-1'] = '';
+    expect(component.saveStatusLabel('paper-1')).toBe('');
+    expect(component.saveStatusTone('paper-1')).toBe('');
+  });
+
+  it('uses only the label beside Save for save feedback in the template', () => {
+    const template = readFileSync('src/app/components/submissions-list/submissions-list.html', 'utf8');
+    const document = new DOMParser().parseFromString(template, 'text/html');
+    expect(document.querySelector('.save-status')).toBeNull();
+    const label = document.querySelector('.program-save-status');
+    expect(label?.getAttribute('*ngif')).toBe('saveStatusLabel(selectedSubmission.id) as label');
+    expect(label?.getAttribute('[class.error]')).toBe("saveStatusTone(selectedSubmission.id) === 'error'");
+    expect(label?.getAttribute('[class.pending]')).toBe("saveStatusTone(selectedSubmission.id) === 'pending'");
+    expect(label?.getAttribute('role')).toBe('status');
+    expect(label?.textContent?.trim()).toBe('{{ label }}');
   });
 
   it('keeps the open review in sync with the saved programs', async () => {
@@ -418,6 +520,7 @@ describe('SubmissionsListComponent program tabs', () => {
   it('Save keeps the review open on the Code step and clears the unsaved marks', async () => {
     const { component, updateSubmissionText } = createComponent();
     select(component);
+    component.submissions = [component.selectedSubmission!];
     component.reviewStep = 2;
     component.addExtraAnswer();
     component.updateExtraAnswerCode(0, 'int x;');
