@@ -8,9 +8,8 @@
       <p class="summary">{{ summary }}</p>
     </div>
     <div class="page-actions">
-      <button type="button" class="btn-secondary" (click)="edit.emit(false)">Edit</button>
-      <!-- Opens the edit form and runs validation right away. -->
-      <button type="button" class="btn-secondary" (click)="edit.emit(true)">Validate test cases</button>
+      <!-- The form has Validate Test Cases, so there is no separate button here. -->
+      <button type="button" class="btn-secondary" (click)="edit.emit()">Edit</button>
     </div>
   </header>
 
@@ -18,7 +17,7 @@
     <span class="warning-icon" aria-hidden="true">!</span>
     <span>
       Model answer has not passed validation. This question will not appear on the
-      phone and cannot be graded. Use <strong>Validate test cases</strong> to check it.
+      phone and cannot be graded. Use <strong>Edit</strong> to validate it.
     </span>
   </div>
 

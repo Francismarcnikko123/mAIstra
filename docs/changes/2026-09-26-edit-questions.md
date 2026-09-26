@@ -4,7 +4,7 @@
 
 ## What
 
-- **Question page:** **Edit** and **Validate test cases** work. Both open the create form in **edit mode**, pre-filled with the question's section, number, name, type, text, model answer and test cases. *Validate test cases* also runs validation as the form opens. The note "editing isn't available yet" is gone.
+- **Question page:** **Edit** opens the create form in **edit mode**, pre-filled with the question's section, number, name, type, text, model answer and test cases; validation happens there with **Validate Test Cases**. The note "editing isn't available yet" is gone. *(A separate "Validate test cases" button on the question page was removed the same day at Nikko's request: it only opened the same form.)*
 - **Edit mode:** title "Edit question", button **Save changes**, **Cancel** returns to the bank unchanged.
 - **Save stays locked until validation passes** (Nikko's decision, 2026-09-26):
   - A question saved as validated stays validated while only its name, text, section or number change.
@@ -16,10 +16,10 @@
 ## Files
 
 - `question-form/question-form.ts` / `.html` / `.css`: `EditQuestionRequest`, `editRequest` input, `editDone` output, `startEdit()`, `saveEdit()`, `cancelEdit()`, `confirmGradeReset()`, graded-papers warning.
-- `question-bank/question-page.*`: live buttons, `edit` output. `question-bank/question-bank.*`: `editQuestion` output.
+- `question-bank/question-page.*`: live Edit button, `edit` output. `question-bank/question-bank.*`: `editQuestion` output.
 - `app.html` / `app.ts`: opens the form with the edit request; back to the bank when done.
 - `services/supabase.ts` (Nikko's block): `updateQuestion()`, `moveQuestionToSection()`, `countGradedPapers()`.
-- Tests: 10 new in `question-form/question-form.sections.spec.ts`.
+- Tests: 9 new in `question-form/question-form.sections.spec.ts`.
 
 ## Affects
 
@@ -28,5 +28,5 @@
 
 ## Verification
 
-- Web: 310/310 tests, both TypeScript checks, `ng build` passes.
-- **Not yet checked in the browser** against the live database.
+- Web: 309/309 tests, both TypeScript checks, `ng build` passes.
+- Browser, against the live database (2026-09-26): Edit opens pre-filled and saves; Nikko confirmed it works.

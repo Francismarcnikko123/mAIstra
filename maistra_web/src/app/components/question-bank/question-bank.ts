@@ -30,7 +30,7 @@ import { EditQuestionRequest } from '../question-form/question-form';
 export class QuestionBankComponent implements OnInit {
   /** "+ Create question": the app shell opens the form. */
   @Output() createQuestion = new EventEmitter<void>();
-  /** Edit / Validate on a question page: the app opens the form pre-filled. */
+  /** Edit on a question page: the app opens the form pre-filled. */
   @Output() editQuestion = new EventEmitter<EditQuestionRequest>();
 
   isLoading = true;
@@ -129,12 +129,11 @@ export class QuestionBankComponent implements OnInit {
     return !this.search.trim() && !!this.collapsed[this.groupKey(group)];
   }
 
-  requestEdit(question: BankQuestion, validate: boolean) {
+  requestEdit(question: BankQuestion) {
     const place = indexQuestionPlaces(this.sections, this.items).get(question.id);
     this.editQuestion.emit({
       question,
       place: place ? { sectionId: place.sectionId, number: place.number } : null,
-      validate,
     });
   }
 

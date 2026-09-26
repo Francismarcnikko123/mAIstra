@@ -44,8 +44,6 @@ export interface EditQuestionRequest {
   };
   /** Its current section and number, or null when it has none yet. */
   place: { sectionId: string; number: number } | null;
-  /** Run "Validate Test Cases" as soon as the form opens. */
-  validate?: boolean;
 }
 interface ValidationResult {
   passed: boolean;
@@ -631,7 +629,6 @@ export class QuestionFormComponent implements OnInit {
 
     await this.onSectionChange();
     this.gradedPaperCount = await this.supabase.countGradedPapers(q.id);
-    if (request.validate) await this.validateModelAnswer();
     this.cdr.detectChanges();
   }
 

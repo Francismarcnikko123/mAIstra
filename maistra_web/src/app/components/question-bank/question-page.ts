@@ -27,8 +27,8 @@ export class QuestionPageComponent {
   @Input() papers: PaperLink[] = [];
   @Input() gateResults = new Map<string, string>();
   @Output() back = new EventEmitter<void>();
-  /** Open this question in the form; true = run validation straight away. */
-  @Output() edit = new EventEmitter<boolean>();
+  /** Open this question in the form. */
+  @Output() edit = new EventEmitter<void>();
 
   readonly plural = plural;
   readonly gateBadge = gateBadge;

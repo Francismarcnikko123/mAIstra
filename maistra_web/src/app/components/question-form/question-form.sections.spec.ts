@@ -229,11 +229,6 @@ describe('QuestionFormComponent sections', () => {
       expect(component.saveBlockedReason()).toBe('');
     });
 
-    it('"Validate test cases" on the question page validates as the form opens', async () => {
-      const { component } = await editing({ question: saved({ can_publish: false }), validate: true });
-      expect(component.canPublish).toBe(true);
-    });
-
     it('saves the question in place without touching its section when that is unchanged', async () => {
       const { component, supabase, done } = await editing();
       component.questionName = 'Sum of two integers';
