@@ -12,11 +12,11 @@ mAIstra is a vision-based assessment system for handwritten C programming submis
 
 > **Owner:** Nikko
 
-The Flutter mobile application captures handwritten submissions, performs a basic image-quality check, uploads images to Supabase Storage, and creates submission records.
+The Flutter mobile application captures handwritten submissions, runs the calibrated quality gate (blur, dark, bright and uneven-lighting checks with auto-correction), uploads images to Supabase Storage, and creates submission records. Since 2026-09-24 the student picks a validated question before capturing, and every page is uploaded with that `question_id` and the gate's verdict (`gate_result`).
 
 ### `maistra_web`
 
-> **Owner:** Jayrald (submissions list, review UI, grading); Nombrado (OCR extraction + review highlighting)
+> **Owner:** Jayrald (submissions list, review UI, grading); Nombrado (OCR extraction + review highlighting); Nikko (question form, question bank, section folders)
 
 The Angular teacher application manages questions and submissions. Teachers can review uploaded images, run OCR, correct extracted code, select the related question, execute code, and inspect test-case results.
 
@@ -453,6 +453,26 @@ The following state is intentionally retained in `SubmissionsListComponent`:
 - **Live check:** one new phone paper changed from **Extracting…** to **Needs review** without a reload. A second paper showed **Needs OCR** while the server was off, then changed to **Needs review** on the same open page after the server restarted with a temporary start date covering the offline capture.
 - **Not yet:** provenance columns.
 - **Verification:** OCR 231/231 tests and web 114/114 tests pass; TypeScript checks and Angular build pass with the existing CSS budget warning. The unchanged 20-sample evaluator still reports clean_ws CER **0.099**, clean WER **0.328**, and clean token accuracy **0.716**.
+
+## Question sections and mobile question linking (2026-09-24)
+
+> **Owner:** Nikko. Spec: `IMPLEMENTATION_SPEC_question_linking.md`. Change notes in [`docs/changes/`](changes/README.md).
+
+- **Schema:** new tables `question_sections` and `question_section_items` give every question a section and a number (`Basic · Q2 · Sum of two numbers`). Nothing on `questions` changes. Migration `supabase/migrations/20260926000100_add_question_sections.sql` (renamed on 2026-09-26), not applied yet. [Note](changes/2026-09-24-question-sections-migration.md)
+- **Mobile:** the student picks a validated, sectioned question before the camera opens; it stays in the app bar; Keep page is disabled on RETAKE; the review screen blocks Submit while any page is RETAKE; uploads send `question_id` and `gate_result`. The quality gate itself is unchanged. [Note](changes/2026-09-24-mobile-question-linking.md)
+- **Web:** top bar with *Question bank* and *Submissions* pages (Nombrado's mock); the create form requires section and number, previews the label and saves only after validation passes; the bank groups by section with "No section yet" last; a question page shows the model answer, test cases and linked papers; submission folders come from the question's section and Details shows it read-only. [Note](changes/2026-09-24-web-question-bank-and-folders.md)
+- **Needs from Jayrald:** apply the migration; `questions.can_publish` + INSERT grant; `submissions.gate_result` + INSERT grant; UPDATE on `questions` (for Edit). Until then the phone shows "Could not load questions", saving a question fails, and every question shows "Not validated".
+- **Verification:** mobile 53/53, web 128/128 at the time, both checked on device/browser against the live database (which lacks the new tables).
+
+## `feature/question-linking-v2`: merges and follow-ups (2026-09-26)
+
+> **Owner:** Nikko (merge). Review requested from Nombrado and Jayrald.
+
+- The branch combines the quality gate, Nombrado's program tabs and pre-extraction, the question-linking work above, and Jayrald's `judge0-integration` (revision-guarded saves, per-row realtime refresh, persisted grades, Playwright tests). The judge0 merge had 17 conflicting files; every resolution keeps both sides' features and is listed in the [merge note](changes/2026-09-26-merge-pre-extraction-and-judge0.md) and the `ffcf908` commit message.
+- **Please confirm (Nombrado, Jayrald):** `ocr_feature/main.py` CORS now uses Jayrald's localhost origins with `allow_credentials=False`.
+- **Behaviour after the merge:** closing a review with unsaved programs asks Save / Discard / Keep editing, then restores the saved version; re-extracting over saved code asks first; Programs 2..n are saved inside Jayrald's revision-guarded update.
+- **Follow-ups:** the sections migration was renamed because its version clashed with `20260924000000_save_grade_for_stored_code.sql` ([note](changes/2026-09-26-migration-rename.md)); the question page no longer shows marks, which `judge0-integration` removed from test cases ([note](changes/2026-09-26-question-page-drop-marks.md)).
+- **Verification:** web 281/281, mobile 53/53, OCR tests pass; `ng build` passes with a stylesheet size warning. Checked in the browser: program tabs, question lock, remove arming and re-extract prompt. `judge0_api` tests not run locally.
 
 The Judge0 wrapper now converts outbound Judge0 connectivity failures into a
 clear HTTP `502` response that identifies the configured `JUDGE0_BASE_URL`,
