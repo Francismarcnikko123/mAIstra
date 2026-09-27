@@ -144,7 +144,8 @@ test('teacher creates a question, then extracts, verifies and grades a new uploa
     await submissionCard(page, NEW_CARD_TIME).click();
     await dialog
       .getByRole('combobox')
-      .selectOption({ label: 'Sum of two numbers' });
+      // Details labels each question with its section and number.
+      .selectOption({ label: 'Skill Test 1A · Q1 · Sum of two numbers' });
     await dialog.getByRole('button', { name: 'Save and review code' }).click();
     await expect(
       dialog.getByRole('heading', { name: 'Review extracted code' }),

@@ -184,7 +184,7 @@
               >
                 <option value="">Select a question</option>
                 <option *ngFor="let question of questions" [value]="question.id">
-                  {{ question.question_name }}
+                  {{ questionOptionLabel(question) }}
                 </option>
               </select>
               <small class="field-error" *ngIf="!selectedQuestionId">
