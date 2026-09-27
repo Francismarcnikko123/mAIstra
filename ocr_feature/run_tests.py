@@ -1,14 +1,9 @@
-"""Run the whole test suite from tests/.
+"""Run every test in tests/, from ocr_feature/ so the tests can import the
+source modules.
 
-    .venv/bin/python run_tests.py            # all tests
-    .venv/bin/python run_tests.py -v         # verbose
-
-Tests live in tests/ but import the source modules (evaluation, ocr_pipeline,
-...) as top-level names, so they must be run with ocr_feature/ as the working
-directory / top-level dir. This runner does exactly that. To run one test
-module directly instead:
-
-    .venv/bin/python -m tests.test_evaluation
+    .venv/bin/python run_tests.py               # all tests
+    .venv/bin/python run_tests.py -v            # verbose
+    .venv/bin/python -m tests.test_evaluation   # one test file
 """
 
 import sys

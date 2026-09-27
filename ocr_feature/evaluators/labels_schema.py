@@ -1,13 +1,10 @@
-"""Shared schema and read/merge/write helpers for datasets/verified/labels.csv.
+"""The columns of datasets/verified/labels.csv, and helpers to read and
+write it.
 
-Both export_dataset.py (Supabase-sourced rows) and import_verified_batch.py
-(physically-verified batch rows, e.g. "bond_writer1_2") write into this same
-file. Before this module existed, each script opened the file in truncating
-write mode and wrote ONLY its own rows -- running one after the other
-silently destroyed the other's data. is_writer_batch_id() lets each script
-tell "my own rows" apart from "the other script's rows" by ID shape alone
-(no extra column needed), so a merge-preserving write is possible without
-either script needing to know about the other's data source.
+Two scripts write this file: export_dataset.py (rows from Supabase) and
+import_verified_batch.py (rows such as "bond_writer1_2").
+is_writer_batch_id() tells their rows apart, so each script keeps the
+other's rows.
 """
 import csv
 import json
@@ -19,11 +16,9 @@ FIELDNAMES = [
     "verified_at", "topic", "student_name",
     "literal_verified", "literal_verified_by", "literal_verified_at",
     "correction_edit_distance",
-    # Only for a page the teacher split into several programs (Supabase
-    # submission_programs): a JSON list of each program's verified text in tab
-    # order. Empty for every page stored as one text. Tab order is not the
-    # page's reading order, so such a page's verified_text is NOT whole-page
-    # ground truth; see is_split_page().
+    # Only for a page split into several programs: a JSON list of each
+    # program's text, in tab order. Such a page isn't whole-page ground truth
+    # (see is_split_page).
     "program_blocks",
 ]
 
@@ -31,14 +26,13 @@ _WRITER_BATCH_ID = re.compile(r"^(bond|green|yellow)_writer\d+")
 
 
 def is_writer_batch_id(submission_id: str) -> bool:
+    """True for rows from import_verified_batch.py (ids like "bond_writer1_2")."""
     return bool(_WRITER_BATCH_ID.match(submission_id))
 
 
 def program_blocks(row: dict) -> list[str]:
-    """The verified programs of a split page, in tab order; [] otherwise.
-
-    A malformed value raises instead of falling back to verified_text, so a
-    damaged row can never quietly become a wrong training label."""
+    """The programs of a split page, in tab order; [] otherwise. A malformed
+    value raises an error, so it can't become a wrong training label."""
     raw = (row.get("program_blocks") or "").strip()
     if not raw:
         return []
@@ -56,15 +50,13 @@ def program_blocks(row: dict) -> list[str]:
 
 
 def is_split_page(row: dict) -> bool:
-    """True when the page holds several programs stored as separate blocks.
-
-    Readers that need the whole page in reading order (CER references, test
-    holdouts) must skip these rows; the line-crop builder matches each block
-    to the page's lines on its own instead."""
+    """True if the page holds several programs. Anything that needs the
+    whole page in reading order (CER, the test set) skips these rows."""
     return len(program_blocks(row)) > 1
 
 
 def load_existing_rows(path: Path) -> dict[str, dict]:
+    """labels.csv rows by submission_id; {} if the file doesn't exist."""
     if not path.exists():
         return {}
     with path.open(encoding="utf-8", newline="") as f:
@@ -72,6 +64,7 @@ def load_existing_rows(path: Path) -> dict[str, dict]:
 
 
 def write_labels_csv(path: Path, rows_by_id: dict[str, dict]) -> None:
+    """Write all rows with the standard columns, replacing the file."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDNAMES)

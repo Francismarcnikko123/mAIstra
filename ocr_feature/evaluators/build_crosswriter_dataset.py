@@ -1,31 +1,18 @@
-"""Build the WRITER-DISJOINT (cross-writer) measurement dataset.
+"""Build the cross-writer experiment: train without 4 greenbook writers, then
+test on their pages, to measure accuracy on handwriting the model has never
+seen.
 
-Purpose: measure how the fine-tune generalizes to writers it has NEVER seen.
-We hold out a few greenbook writers ENTIRELY (all their pages), retrain on the
-rest, and evaluate the retrained model on those held-out writers' pages.
+A separate experiment: the shipped model (models/fine_tuned_rec/) is trained
+on all writers. The 4 held-out writers aren't in samples/, so the main test
+set is unaffected. Only greenbook has enough writers (about 39) to hold out
+whole writers.
 
-This is a MEASUREMENT experiment, separate from the shipped model. The shipped
-model (models/fine_tuned_rec/) trains on ALL writers; this excludes 4 of them
-purely to get an honest new-writer number. See docs/ocr/EVALUATION.md.
-
-Why greenbook writers 7/8/20/27: they are training-only (not in samples/), so
-excluding them leaves the held-out samples/ test set untouched. Its historical
-recognition-only fine-tune CER is 0.126; end-to-end CER after the two-column
-reading-order split is 0.099. Greenbook has enough writers (~39) that removing
-4 barely dents training. Bond/yellow have too few writers to hold out this way.
-
-Writer identity here uses number + batch (green_writerN_B<batch>): numbering
-resets per batch, so batch is part of the identity -- see
-docs/ocr/EVALUATION.md and the test-set-writer-overlap memory. These 4 holdouts
-have no batch collisions with any kept writer.
-
-Run from the ocr_feature/ directory:
-
+Run from ocr_feature/:
     .venv/bin/python -m evaluators.build_crosswriter_dataset
 
 Outputs:
-    <home>/Downloads/recognition_dataset_crosswriter.zip   upload to Colab, retrain
-    evaluators/crosswriter_test_manifest.json              the 15 held-out test pages
+    ~/Downloads/recognition_dataset_crosswriter.zip   training data for Colab
+    evaluators/crosswriter_test_manifest.json         the 15 held-out test pages
 """
 import csv
 import json
@@ -55,9 +42,9 @@ def _writer_of_page(image_path: str) -> str | None:
 
 
 def build_training_zip(stage: Path) -> tuple[int, int]:
-    """Write filtered train/val (holdout writers removed) + their crops under
-    stage/datasets/recognition/, then zip so unzip -d /content/ nests as the
-    notebook expects. Returns (train_kept, val_kept)."""
+    """Copy train/val without the held-out writers, with their crops, and zip
+    them in the folder layout the Colab notebook expects. Returns
+    (train_count, val_count)."""
     target = stage / "datasets" / "recognition"
     (target / "images").mkdir(parents=True, exist_ok=True)
 

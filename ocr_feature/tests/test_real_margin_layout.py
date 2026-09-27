@@ -1,10 +1,8 @@
-"""Real-photo margin replays, covering measured geometric calibration.
-
-IDs below are zero-based indices into the unedited detection fixtures.
-Expected rows were annotated against the photographs, not derived by grouping.
-B's ``dd;`` (ID 7) and C's ``od;`` (ID 0) are fabric false positives. They
-remain in every replay: layout must never discard recognition payloads.
-See reports/2026-09-13-real-margin-validation.md for calibration evidence.
+"""Replays of real margin photos (saved detections) that check the layout
+thresholds. IDs are indices into the unedited detection fixtures; the
+expected rows were annotated from the photos. B's "dd;" (ID 7) and C's "od;"
+(ID 0) are misreads of the paper texture and stay in, because layout never
+drops a detection. Evidence: reports/2026-09-13-real-margin-validation.md.
 """
 from collections import Counter
 import json

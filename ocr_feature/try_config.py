@@ -1,13 +1,8 @@
-"""
-Scratch script for eyeballing a single image under a given preprocessing
-config. Not part of the pipeline and not imported by anything -- edit it
-freely, or delete it.
+"""Run OCR on one photo, with or without adaptive denoising, and print the
+text. A quick manual check; nothing imports it.
 
-    python try_config.py                                  # default IMAGE, default config
-    python try_config.py path/to/photo.jpg                # any image, default config
+    python try_config.py                                  # default photo
     python try_config.py path/to/photo.jpg --adaptive-denoise
-
-The image path is optional -- omit it to fall back to IMAGE below.
 """
 import sys
 from pathlib import Path
@@ -29,8 +24,7 @@ result = extract_text_from_image(IMAGE, preprocess_config=config)
 
 print(f"image            : {IMAGE}")
 print(f"adaptive_denoise : {config.adaptive_denoise}")
-# average_confidence is None when every detection was filtered out or the page
-# yielded none (blank/near-blank photo), so guard the format like compare_config.
+# None when nothing was detected.
 _conf = result["average_confidence"]
 print(f"avg confidence   : {_conf:.3f}" if _conf is not None
       else "avg confidence   : n/a")

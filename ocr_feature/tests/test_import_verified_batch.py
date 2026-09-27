@@ -118,8 +118,8 @@ def _row(submission_id, text, verified_by=""):
 
 
 class ReimportForANewBatchTests(unittest.TestCase):
-    """The next batch reuses this script (review 2026-09-27): test pages
-    must stay out of train, and earlier pages must keep their rows."""
+    """Importing a new batch: test pages stay out of train, and earlier pages
+    keep their rows."""
 
     PAPER_FOLDERS = {"bond": "bond", "green": "greenbook", "yellow": "yellow_pad"}
 

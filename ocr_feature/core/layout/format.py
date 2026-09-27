@@ -1,52 +1,27 @@
-"""Indentation and blank-line reconstruction for the OCR pipeline.
+"""Restore the student's indentation and blank lines.
 
-Turns already-ordered visual lines into presentation text: reconstructs the
-student's handwritten indentation from box geometry (NOT brace depth), the
-student's vertical spacing (blank lines) from inter-line gaps, and a line's
-union bounding box. Recognition-independent and presentation-only -- it
-prepends whitespace and inserts blank lines, never changing which characters
-are emitted.
-
-Split out of core/layout.py on 2026-09-17 as a behavior-preserving refactor
--- the function bodies are unchanged. Pure standard library (math only).
-core.layout re-exports these names (and the INDENT_* / MAX_BLANK_LINES
-constants) for package-level callers and the geometry tests. `line_member_bounds`
-is also re-exported from core.ocr_pipeline (used by
-evaluators/build_recognition_dataset); the other former ocr_pipeline re-exports
-from here, such as `_expected_line_y`, were removed 2026-09-18 as unused --
-import them directly from core.layout.
+Works from box positions, not from the braces: indentation from each line's
+left edge, blank lines from the vertical gaps between lines. It only adds
+whitespace; the recognized characters are unchanged.
 """
 import math
 
 
-# Reconstruct the student's handwritten indentation from box geometry -- NOT
-# brace depth. A line indented on paper has a larger left-edge x; one indent
-# level is INDENT_STEP_CHARS character-widths of rightward offset from the line's
-# own column left margin. The unit is CHARACTER-scale on purpose: a detection
-# box spans a whole word, so median box width is ~10x a character, and a
-# student's indent is only a few characters -- a box-width unit rounds every
-# real indent to zero (measured on green_writer10: box width 109px vs char
-# width 10.7px vs a 47px case-indent). Recognition-independent and
-# presentation-only: it prepends whitespace, never changing which characters
-# are emitted.
+# One indent level = 3 character widths from the column's left edge.
+# Measured in characters, not boxes: a box spans a whole word (about 10
+# characters), which would round every real indent to zero.
 INDENT_STEP_CHARS = 3.0
 MAX_INDENT_LEVELS = 8
 INDENT_STRING = "  "
 
-# Reconstruct the student's vertical spacing (blank lines) from box geometry:
-# a gap between consecutive lines much larger than the normal line pitch means
-# the student left blank line(s). Quantized into whole blank lines and capped so
-# one runaway gap can't inject a wall of blanks. The vertical mirror of the
-# indentation reconstruction above; recognition-independent, presentation-only.
+# At most 2 blank lines in a row, so one large gap can't add many.
 MAX_BLANK_LINES = 2
 
 
 def line_member_bounds(members):
-    """Union bounding box (x_min, y_min, x_max, y_max) in raw pixel space over
-    a line's grouped members. Members must carry finite x/x_max/y_min/y_max --
-    i.e. come from the geometry-safe path of _group_detection_records; callers
-    guard for that before calling. Shared so the live pipeline and the offline
-    crop builder compute a line's box the same way."""
+    """Bounding box (x_min, y_min, x_max, y_max) around a line's members, in
+    pixels. Members need valid positions. The training-crop builder uses it
+    too, so both cut lines the same way."""
     x_min = min(member["x"] for member in members)
     x_max = max(member["x_max"] for member in members)
     y_min = min(member["y_min"] for member in members)
@@ -55,16 +30,13 @@ def line_member_bounds(members):
 
 
 def _assign_indent_levels(column_lines, char_width):
-    """Set each line's reconstructed indent level on its member dicts.
+    """Set an "indent" level on every member of the lines of one column.
 
-    `column_lines` is a list of line dicts (each with a "members" list whose
-    members carry "x"), all belonging to ONE column. `char_width` is the median
-    character width (box width / text length) of the page. Indent is measured
-    from that column's own left margin, so a two-column page's right column is
-    not read as deeply indented. Quantized into levels of
-    INDENT_STEP_CHARS * char_width and clamped to [0, MAX_INDENT_LEVELS].
-    Mutates members in place, adding an "indent" key. Any degenerate geometry
-    (no unit, non-finite x) yields level 0, i.e. today's flat behavior."""
+    The level is the distance from the column's own left edge (so a right
+    column isn't read as deeply indented), in steps of
+    INDENT_STEP_CHARS * char_width, from 0 to MAX_INDENT_LEVELS.
+    `char_width` is the page's median character width. Missing geometry
+    gives level 0."""
     if not column_lines:
         return
     unit = INDENT_STEP_CHARS * char_width
@@ -82,11 +54,10 @@ def _assign_indent_levels(column_lines, char_width):
 
 
 def _join_lines_with_vertical_gaps(structured_lines):
-    """Join structured line texts with `\n`, inserting blank lines where the
-    student left a vertical gap. `blanks = round(gap / pitch) - 1` per gap,
-    where pitch is the median positive consecutive center delta, clamped to
-    [0, MAX_BLANK_LINES]. Missing/degenerate geometry -> compact single-`\n`
-    join (today's behavior). Two-column seams are negative deltas -> 0 blanks."""
+    """Join the lines with newlines, adding blank lines where the student left
+    a vertical gap: round(gap / normal line spacing) - 1, at most
+    MAX_BLANK_LINES. Without positions, or where the next line is higher up
+    (a new column), no blank line is added."""
     if not structured_lines:
         return ""
     centers = []

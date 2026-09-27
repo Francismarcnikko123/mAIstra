@@ -1,27 +1,19 @@
-"""Pre-extraction on arrival: read new papers in the background.
+"""Read new papers in the background, before the teacher opens them.
 
-When enabled (AUTO_EXTRACT=true in .env), a thread started with the OCR server
-polls Supabase for papers that have no OCR text and no teacher text yet, runs
-the SAME extraction as the "Extract" button on each one, and saves
-`extracted_text`. The teacher then opens a paper that is already read.
+With AUTO_EXTRACT=true, a thread started with the OCR server checks Supabase
+every 10 seconds (by default) for papers with no OCR text and no teacher
+code, runs the same extraction as the Extract button, and saves
+`extracted_text`.
 
-Guarantees (see docs/superpowers/plans/2026-09-24-pre-extraction-on-arrival.md):
-- Never overwrites work: the save is a conditional update that only goes
-  through if `extracted_text` and `verified_text` are still empty at that
-  moment. A paper the teacher got to first is skipped, not an error.
-- Writes `extracted_text` only -- never `verified_text`, `answers` or `status`.
-  The web already shows a paper as extracted once `extracted_text` is set.
-- Same pipeline and settings as the endpoint, so the recorded accuracy numbers
-  still describe what teachers get.
-- A paper that keeps failing is given up after a few tries (until restart) and
-  stays "Needs OCR" for the teacher's manual extract.
-- Only papers captured after a start date are read: by default the moment the
-  server starts, or AUTO_EXTRACT_SINCE from .env to catch up after downtime.
-  Older unread papers (the shared database had 204 of 209 on 2026-09-24,
-  mostly test data) are never touched unless someone sets an early date.
+- Never overwrites work: the save only goes through while both texts are
+  still empty. A paper the teacher got to first is skipped.
+- Writes `extracted_text` only.
+- Reads only papers captured after the server started, or after
+  AUTO_EXTRACT_SINCE, so old unread papers are left alone.
+- A paper that fails max_failures times is skipped until the next restart
+  and stays "Needs OCR" for a manual extract.
 
-Only stdlib is imported at module load, so tests can use it without Supabase
-or PaddleOCR; the Supabase client is imported inside SupabaseStore.
+Supabase is imported inside SupabaseStore, so tests don't need it.
 """
 import csv
 import threading

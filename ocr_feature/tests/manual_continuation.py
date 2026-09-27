@@ -1,29 +1,17 @@
-"""Manually test a real handwriting photo with the offline association prototype.
+"""Run the continuation prototype on one real photo and compare its order
+with the pipeline's.
 
-From the repository root:
-    cd ocr_feature
-    PYTHONPATH=. .venv/bin/python -m tests.manual_continuation --help
+Prints the pipeline's raw text, the prototype's proposed order (one
+detection per line), and each decision (continuation, independent or
+ambiguous) with its reasons. Saves the debug data and comparison.json under
+outputs/manual_continuation/run-*. A manual check only: it gives no accuracy
+score, changes no fixtures or labels, and unittest doesn't run it. Needs the
+OCR environment and the fine-tuned model.
+
+From ocr_feature/:
     PYTHONPATH=. .venv/bin/python -m tests.manual_continuation "/path/to/photo.jpg"
-
-Example using the existing two-question development paper:
-    PYTHONPATH=. .venv/bin/python -m tests.manual_continuation \
-        outputs/continuation_association_intake/development/writerX_page05.jpg
-
-Optional output root (each invocation creates a unique run directory):
     PYTHONPATH=. .venv/bin/python -m tests.manual_continuation "/path/to/photo.jpg" \
         --output-dir outputs/my_continuation_checks
-
-Requires the normal OCR environment and downloaded fine-tuned model. This runs
-fresh OCR, prints production raw text versus proposed detection order, then prints
-continuation/independent/ambiguous decisions and reasons. Debug data and a complete
-comparison.json are saved under outputs/manual_continuation/run-* by default.
-Prototype text is one retained detection per line: diagnostic display, not the
-pipeline's final indentation/blank-line formatting. No recognition errors are fixed.
-Ambiguous means abstention, not proof that the fallback order is correct. This is
-an exploratory check with no ground-truth accuracy score. Use the frozen evaluators
-for reproducible development/reserved scores. This script never overwrites their
-fixtures or labels, never enables the feature in the web app, and is not run by
-unittest discovery. Model loading occurs only when main() runs on a valid file.
 """
 import argparse
 import copy

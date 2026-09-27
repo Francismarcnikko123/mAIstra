@@ -15,11 +15,9 @@ PIPELINE_PATH = Path(__file__).resolve().parent.parent / "core" / "ocr_pipeline.
 
 
 def build_layout_package():
-    """Build (unexecuted) module objects for the core.layout package and its
-    braces / format / columns / displacement submodules from disk. Returns
-    (specs, modules),
-    both dicts keyed by the sys.modules name. The caller registers `modules` in
-    a stubbed sys.modules and calls exec_layout_package to execute them."""
+    """Load the core.layout package and its submodules from disk without
+    running them. Returns (specs, modules), keyed by module name; the caller
+    runs them with exec_layout_package."""
     layout_dir = PIPELINE_PATH.parent / "layout"
     specs = {
         "core.continuation": importlib.util.spec_from_file_location(
@@ -79,10 +77,8 @@ def load_pipeline_without_models():
     core_pkg.preprocess = preprocess
     core_pkg.c_code_cleanup = c_code_cleanup
 
-    # core.numeric and core.debug_artifact are pure-stdlib (math / json +
-    # pathlib) and ocr_pipeline imports from both, so load the REAL modules
-    # rather than stub them — otherwise this file only passes when another
-    # test happens to import them first (i.e. it can't run in isolation).
+    # These modules use only the standard library, so load the real ones;
+    # this file then also runs on its own.
     def load_real(name):
         spec = importlib.util.spec_from_file_location(
             f"core.{name}", PIPELINE_PATH.parent / f"{name}.py"
@@ -100,16 +96,8 @@ def load_pipeline_without_models():
     spec = importlib.util.spec_from_file_location(module_name, PIPELINE_PATH)
     module = importlib.util.module_from_spec(spec)
 
-    # The reading-order/indentation geometry lives in core.layout, which
-    # ocr_pipeline imports (and re-exports) at module load. layout is pure --
-    # it only pulls core.numeric / core.c_literals (registered below) -- so it
-    # loads without the recognizer. Exec it inside the patched sys.modules,
-    # before ocr_pipeline, so its `from core.numeric import ...` and
-    # ocr_pipeline's `from core.layout import ...` both resolve to real modules.
-    # core.layout is a package (2026-09-17): __init__ re-exports from submodules
-    # braces / format / columns / displacement. Build the package from disk,
-    # register every module in stubbed sys.modules, and execute leaves before
-    # the coordinator so ocr_pipeline imports the real package surface.
+    # The real core.layout package (pure geometry, no recognizer) is loaded
+    # before ocr_pipeline, so ocr_pipeline imports the real functions.
     layout_specs, layout_modules = build_layout_package()
 
     stubs = {
@@ -134,13 +122,9 @@ def load_pipeline_without_models():
 
 
 def load_layout():
-    """Load core.layout (the pure reading-order / indentation geometry) in
-    isolation, without the recognizer. layout imports only core.numeric and
-    core.c_literals, so no cv2/numpy/paddleocr stubs are needed.
-
-    Returns the core.layout package, which owns the grouping coordinator.
-    Geometry tests patch this package because _group_detection_records resolves
-    its detector and displaced-region helpers in this namespace."""
+    """Load core.layout on its own, without the recognizer (it needs only
+    core.numeric and core.c_literals). Returns the package; tests patch
+    helpers on it, because _group_detection_records looks them up there."""
     core_pkg = types.ModuleType("core")
 
     def load_real(name):
@@ -155,8 +139,7 @@ def load_layout():
     numeric = load_real("numeric")
     c_literals = load_real("c_literals")
 
-    # core.layout is a package (2026-09-17). Build and execute its leaf modules
-    # before the coordinator and return the coordinator's public package surface.
+    # Run the core.layout submodules before the package itself.
     layout_specs, layout_modules = build_layout_package()
     stubs = {
         "core": core_pkg,
@@ -174,12 +157,8 @@ def box(x, y_center):
 
 
 def wide_box(x, y_center):
-    """Like box(), but realistically word-scale (100px wide) rather than
-    10px. Needed for tests whose x-positions must stay merge-eligible under
-    the real, evidence-based REGION_GAP_MULTIPLIER=0.75 -- box()'s tiny 10px
-    width makes any nonzero gap exceed that threshold (0.75 * 10 = 7.5px),
-    which has nothing to do with what these particular tests are actually
-    checking (vertical-tolerance/slope/sort logic, not gap-severance)."""
+    """Like box(), but 100 px wide (word-sized), so small gaps stay under
+    REGION_GAP_MULTIPLIER x width. For tests about line grouping, not gaps."""
     return [x, y_center - 5, x + 100, y_center + 5]
 
 
@@ -215,17 +194,11 @@ def recognition_attempt(text, score=0.8, y_min=0.1, y_max=0.2):
     }
 
 
-# Frozen detection boxes from real pipeline debug artifacts, geometry only:
-# each is [x0, y0, x1, y1] with recognition content stripped and labeled by
-# index, so reading-order tests assert the GEOMETRIC split, never CER. Shared
-# by DisplacedSeveranceTests and BandedColumnDetectionTests so the two families
-# exercise the same real pages without duplicating the fixtures.
-#
-# WRITER18_BOXES: green_writer18_B2_2 (39 boxes) -- a two-page / side-by-side
-# capture whose right block (the 13 boxes with x0 >= 798) occupies only the
-# top-right quadrant; the correct reading order is left column fully then right
-# column fully (banded two-column). WRITER27_BOXES: green_writer27_B1_3 (10
-# boxes) -- a page whose short right cluster must NOT be banded-split.
+# Box positions [x0, y0, x1, y1] from real pages, without the text, so the
+# reading-order tests check geometry only.
+# WRITER18_BOXES (39 boxes): a right block (13 boxes, x0 >= 798) covering only
+# the top right of the page; read the left column, then the right.
+# WRITER27_BOXES (10 boxes): a short right cluster that must not be split off.
 WRITER18_BOXES = [
     [17, 61, 69, 111], [822, 110, 904, 155], [25, 120, 250, 166],
     [829, 147, 939, 189], [25, 193, 160, 237], [828, 178, 1151, 231],
@@ -313,11 +286,8 @@ class GroupDetectionRecordsTests(unittest.TestCase):
         self.assertEqual(expected_y, 10)
 
     def test_identical_x_boxes_within_tolerance_do_not_merge(self):
-        # End-to-end guard for the same-x case: two boxes with identical
-        # x-ranges are 100% horizontally overlapped, so even though their
-        # vertical centers are within line_tol they must be treated as stacked
-        # rows and kept separate. (This is the scenario the direct
-        # _expected_line_y test above can no longer cover through grouping.)
+        # Two boxes with the same x range are stacked rows, even though their
+        # centers are within line_tol.
         lines = self.group_texts(["a", "b"], [box(0, 10), box(0, 13)])
 
         self.assertEqual(lines, [["a"], ["b"]])
@@ -385,15 +355,9 @@ class GroupDetectionRecordsTests(unittest.TestCase):
         self.assertEqual(lines, [["a", "b"]])
 
     def test_sorts_members_left_to_right_within_a_line(self):
-        # Input list order is scrambled (right, left, middle) to test the
-        # final within-line sort -- but y-values are distinct (not tied) so
-        # the sweep processes them in genuine spatial order (left, then
-        # middle, then right), not input-list order. With tied y-values,
-        # same-y ties break by input order, which would compare "right"
-        # directly against "left" (the farthest pair) before "middle" ever
-        # joins the line -- fine under the old 600px threshold, but exceeds
-        # the real 75px one even though every *adjacent* pair is well within
-        # it.
+        # The words are listed out of order to test the final left-to-right
+        # sort. Their y values differ slightly, so the sweep meets them left
+        # to right and each one is close enough to its neighbor to join.
         lines = self.group_texts(
             ["right", "left", "middle"],
             [wide_box(325, 11), wide_box(0, 10), wide_box(163, 10.5)],
@@ -450,12 +414,8 @@ class GroupDetectionRecordsTests(unittest.TestCase):
         )
 
     def test_end_to_end_severs_and_reassembles_a_displaced_case_body(self):
-        # End-to-end wiring test. Geometry hand-traced before writing this,
-        # and picked SPECIFICALLY so the well-formedness search is
-        # unambiguous (only one block length yields a valid reordering) --
-        # a smaller "case 0:" flavored fixture was tried first and rejected
-        # because two block lengths both yielded well-formed sequences,
-        # which the algorithm's ambiguity guard correctly declined.
+        # End to end. The fixture has exactly one block length that balances
+        # the braces, so the move is made.
         #
         # Raw geometric sweep (y then x, gap-check on same-y merge):
         #   struct (y=10, x=[0,100])
@@ -558,10 +518,7 @@ class DynamicGutterGroupingTests(unittest.TestCase):
         self.assertEqual(flagged, ["right", "wider right"])
 
     def test_full_height_two_column_page_is_split_into_sequential_columns(self):
-        # A genuine two-column page (two independent programs side by side)
-        # must read as the left column in full, then the right column in full
-        # -- never interleaved by the y-sweep. The persistent uncrossed gutter
-        # plus substantial content on both sides triggers the split.
+        # Two programs side by side: the whole left column, then the right.
         texts, boxes = [], []
         for row in range(24):
             texts.extend([f"L{row}", f"R{row}"])
@@ -620,11 +577,7 @@ class DynamicGutterGroupingTests(unittest.TestCase):
         self.assertEqual(flagged, ["right"])
 
     def test_confirms_a_block_with_no_bridging_line_at_all(self):
-        # A displaced block isn't guaranteed to be followed by a line that
-        # straddles back across the gutter -- it can simply be followed by
-        # more single-column content, or nothing further at all. This is
-        # the exact shape that broke test_end_to_end_severs_and_reassembles
-        # _a_displaced_case_body under the first cut of the dynamic trace.
+        # A margin block needs no line crossing back over the gap after it.
         _, flagged = self.inspect_grouping(
             ["left0", "right0", "left1"],
             [[0, 0, 100, 20], [300, 0, 400, 20], [0, 30, 100, 50]],
@@ -632,13 +585,9 @@ class DynamicGutterGroupingTests(unittest.TestCase):
         self.assertEqual(flagged, ["right0"])
 
     def test_right_side_resuming_after_a_gap_is_not_excluded(self):
-        # No fixed-distance inactivity trigger exists (see
-        # _trace_displaced_region's docstring for why one was tried and
-        # removed) -- a RIGHT match that resumes after a quiet stretch is
-        # still a legitimate candidate, not treated as a new/separate
-        # window. Reaching the end of the page with RIGHT still matching
-        # means "not yet confirmed", so the whole run is discarded here,
-        # not partially confirmed up to the gap.
+        # A right side that resumes after a gap and runs to the end of the
+        # page is a column, so nothing is flagged (not even the part before
+        # the gap).
         _, flagged = self.inspect_grouping(
             ["left0", "right0", "left1", "right1"],
             [[0, 0, 100, 20], [300, 0, 400, 20],
@@ -1164,10 +1113,7 @@ class DisplacedSeveranceTests(unittest.TestCase):
                  self._line(("L2", 0, 150), ("R2", 340, 440))]
         self.assertIs(self.pipeline._sever_displaced_regions(lines, 200), lines)
 
-    # green_writer18 end-to-end is now handled by the banded column detector
-    # (the partial-height right block is read left-fully-then-right-fully, all
-    # 13 right boxes trailing), not by the partial severance subset this class
-    # used to assert. That behavior is covered by
+    # green_writer18 end to end is covered by
     # BandedColumnDetectionTests.test_group_detection_reads_writer18_left_then_right.
 
     def test_real_writer27_geometry_retains_baseline_grouping(self):
@@ -1191,13 +1137,9 @@ class DisplacedSeveranceTests(unittest.TestCase):
 
 
 class BandedColumnDetectionTests(unittest.TestCase):
-    """Pure-geometry unit tests for _detect_banded_column: a persistent
-    right-side block occupying a contiguous y-band with a clean uncrossed
-    gutter WITHIN that band is read left column fully, then right column fully
-    -- even when the block spans less than half the page and a stray wide line
-    elsewhere bridges the full-page x-projection. Grade-safety: any
-    degenerate/ambiguous geometry returns None (today's behavior). See
-    docs/superpowers/specs/2026-09-12-banded-column-detection-design.md."""
+    """_detect_banded_column: a right block covering only part of the page,
+    with a clear gap beside it, is read after the left column. Missing or
+    unclear geometry returns None."""
 
     @classmethod
     def setUpClass(cls):
@@ -1275,12 +1217,8 @@ class BandedColumnDetectionTests(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_far_right_stray_does_not_hide_a_real_column(self):
-        # Robustness: a lone stray detection farther right than the true column
-        # (a page-edge mark whose x0 is beyond band_x_align of the column) must
-        # NOT hide the column. Seeding from the single largest x0 would seed a
-        # one-row cluster on the stray and decline; the seed-iteration folds the
-        # stray into the right cluster instead, so banded still fires and no box
-        # is dropped.
+        # A stray mark further right than the real column must not hide it:
+        # the stray joins the right block, and no box is dropped.
         left = [[0, r * 40, 100, r * 40 + 20] for r in range(6)]
         right = [[400, r * 40, 500, r * 40 + 20] for r in range(4)]
         stray = [[650, 0, 750, 20]]
@@ -1311,10 +1249,8 @@ class BandedColumnDetectionTests(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_group_detection_reads_writer18_left_then_right(self):
-        # Wired end-to-end through _group_detection_records: green_writer18 now
-        # reads as the 26 left boxes fully, then the 13 right boxes fully (the
-        # banded split), superseding the partial severance subset the
-        # single-column path produced before. No detection is added or dropped.
+        # End to end: green_writer18 reads its 26 left boxes, then its 13
+        # right boxes, with no box added or dropped.
         texts = [str(i) for i in range(len(WRITER18_BOXES))]
         grouped, safe = self.pipeline._group_detection_records(
             texts, [0.9] * len(texts), WRITER18_BOXES)
@@ -1412,14 +1348,9 @@ class ReassembleDisplacedRegionsTests(unittest.TestCase):
         )
 
     def test_relocates_past_a_multiline_struct_in_the_main_flow(self):
-        # Real scenario (reassemble_example_isolate_2): a merge function whose
-        # else-branch was written in the top-right margin, so in the y-sweep it
-        # appears early -- interleaved with a struct written across several
-        # lines that ends in a standalone `};` in the main flow. The `};`
-        # closing the struct is a definition close, not a control close -- the
-        # displaced executable block can't belong inside a struct -- so the
-        # guard must let this reorder through. Before the definition-close
-        # exemption, the standalone `};` blocked every such page.
+        # An else branch written in the margin, after a multi-line struct that
+        # ends in `};`. The `};` closes a type definition, not an if or loop,
+        # so the move is allowed.
         lines = [
             _line("Question 1:"),
             _line("} else {", severed=True),
@@ -1474,13 +1405,10 @@ class ReassembleDisplacedRegionsTests(unittest.TestCase):
         )
 
     def test_refuses_when_normal_contains_a_closer(self):
-        # The severed block ("work(); }") belongs inside the switch, with
-        # after_switch() following it outside the switch. Appending the block
-        # is brace-well-formed but puts both statements in the wrong scopes.
-        # The unique winning L=2 gives depths 0, 1, 2, 2, 2, 1, 1, 0;
-        # longer blocks leave a negative depth and cannot qualify. The
-        # winning normal contains its own plain "}" (delta -1, a control
-        # close, NOT a definition close), so reject it.
+        # The block ("work(); }") belongs inside the switch, before
+        # after_switch(). Moving it to the end balances the braces but puts
+        # both statements in the wrong scope. The main code keeps a plain "}"
+        # of its own, so the move is refused.
         lines = [
             _line("struct S { int x; };"),
             _line("work();", severed=True),

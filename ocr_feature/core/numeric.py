@@ -1,11 +1,5 @@
-"""Small numeric guard shared across the OCR modules.
-
-`ocr_pipeline.py` takes confidence scores straight from PaddleOCR / caller-
-supplied dicts, where a value may be missing, a non-numeric string, or a
-non-finite float (NaN/inf), and needs a "coerce to a real finite float, or
-give up" rule. Defining it once here keeps it in its own leaf module rather
-than duplicated inline.
-"""
+"""Safe number conversion for values from PaddleOCR, which may be missing,
+text, NaN or infinite."""
 
 import math
 

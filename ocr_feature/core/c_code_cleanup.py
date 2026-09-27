@@ -1,3 +1,8 @@
+"""Fix common OCR misreads of C keywords and #include lines.
+
+Only the fixed list below is corrected; strings and character literals are
+never changed.
+"""
 import re
 
 from core.c_literals import C_LITERAL
@@ -34,25 +39,11 @@ FIXES = {
     "std1ib": "stdlib",
 }
 
-# Standard headers are a small closed set, so an #include line is safe to
-# normalize even when OCR mangles the extension ('.h' -> '.n') or the closing
-# '>' (often read as '7') -- only a line that already looks like an #include
-# with a known header gets touched. A stray '7' or '>' elsewhere is left
-# alone since it could be real content.
+# An #include line naming one of these headers is rewritten in full, which
+# also fixes a misread extension (".n") or closing ">" (read as "7").
 _KNOWN_HEADERS = ("stdio", "stdlib", "stddef", "string", "math", "ctype", "time")
-# '#' is optional in the pattern: OCR sometimes drops it, but "include
-# <stdio.h>" is still unambiguous, so it gets added back.
-#
-# The tail after the header name is bounded to just a (possibly garbled) file
-# extension and closing bracket -- an optional '.', an optional single letter
-# ('.h', or '.n' when 'h' is misread), and an optional close ('>' or a '7'
-# misread of it). It deliberately does NOT end in '.*': a broad tail would let
-# a line that merely STARTS like an include but continues with real student
-# code (a fused OCR row such as "#include <stdio.h> printf(...)") match, and the
-# canonical replacement below would then silently drop everything after the
-# header. Bounding the tail means such a line simply fails to match and is
-# returned untouched -- never normalized, but never truncated either, keeping
-# the module's promise to leave content outside literals intact.
+# The "#" may be missing. After the header name only an extension and ">"
+# may follow, so a line with more code after it is left alone, not cut off.
 _INCLUDE_LINE = re.compile(
     r"^\s*#?\s*[Ii]nclude\s*<\s*(" + "|".join(_KNOWN_HEADERS)
     + r")\b\s*\.?\s*[A-Za-z]?\s*[>7]?\s*$"
@@ -73,10 +64,8 @@ def _fix_segment(segment: str) -> str:
         # \b won't help around '#', so match the token bounded by non-word chars.
         before = r"(?<![\w#])"
         if wrong[0].isdigit():
-            # A misread starting with a digit ("1f", "1nt") must start a
-            # statement or declaration, so it is only fixed after whitespace,
-            # a brace, ';', '(' or ','. Otherwise the float suffix in
-            # "1.1f" or "b-1f" would be rewritten to "1.if" / "b-if".
+            # A misread starting with a digit ("1f", "1nt") is only fixed at
+            # the start of a statement, so "1.1f" doesn't become "1.if".
             before = r"(?<![^\s{};(,])"
         pattern = before + re.escape(wrong) + r"(?![\w])"
         segment = re.sub(pattern, right, segment)
@@ -84,11 +73,8 @@ def _fix_segment(segment: str) -> str:
 
 
 def clean_c_code(text: str) -> str:
-    """
-    Return a lightly cleaned copy of `text`: known #include lines are snapped to
-    canonical form and garbled C keywords are corrected. String/char literals
-    are left exactly as extracted.
-    """
+    """Return `text` with known keyword misreads fixed and #include lines
+    rewritten in standard form. Strings and character literals are unchanged."""
     if not text:
         return text
 
@@ -103,7 +89,5 @@ def clean_c_code(text: str) -> str:
     out.append(_fix_segment(text[last:]))
     fixed = "".join(out)
 
-    # 2) Then normalize #include lines. Running this after the keyword pass means
-    # a header already corrected to a known name (e.g. std1o -> stdio) is now
-    # recognized and snapped to its canonical "#include <stdio.h>" form.
+    # 2) Then #include lines, so a header fixed above (std1o -> stdio) counts.
     return "\n".join(_fix_include_line(line) for line in fixed.split("\n"))

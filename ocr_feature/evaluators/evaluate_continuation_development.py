@@ -1,10 +1,9 @@
-"""Replay annotated development detections; never open reserved photographs.
+"""Score the reading order on the annotated development pages, using saved
+OCR detections (no photos, no OCR run). The reserved test pages are never
+used. With --prototype, also score the experimental continuation matcher.
 
-This measures ordering only. The current pipeline emits no answer-membership
-decision, so association accuracy is unavailable, not inferred from line order.
-With --prototype, also measure experimental association edges separately.
-Run from ocr_feature: PYTHONPATH=. .venv/bin/python -m
-evaluators.evaluate_continuation_development
+Run from ocr_feature/:
+    PYTHONPATH=. .venv/bin/python -m evaluators.evaluate_continuation_development
 """
 from collections import Counter, defaultdict, deque
 from contextlib import ExitStack
@@ -35,6 +34,8 @@ def pairwise_order_accuracy(expected, actual):
 
 
 def replay(records):
+    """Run the live line grouping on saved detections and record which
+    reordering steps fired. Returns (rows of detection ids, events)."""
     events = []
     def instrument(name):
         implementation = getattr(layout, name)
@@ -90,11 +91,8 @@ def replay(records):
 
 
 def score_association(page, prediction):
-    """Score predicted edges against labels, which never enter the prototype.
-
-    A predicted region must match a complete annotated block to earn edge credit.
-    Correct flat ordering alone earns no association credit.
-    """
+    """Score the prototype's continuation links against the annotations. A
+    link counts only if both of its blocks match annotated blocks exactly."""
     blocks = page['blocks']
     by_ids = {frozenset(b['detection_ids']): b for b in blocks}
     gold = {tuple(edge) for edge in page['continuation_edges']}

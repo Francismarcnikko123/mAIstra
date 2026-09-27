@@ -103,7 +103,7 @@ class FakeDownload:
 
 
 class WhoMayCallTests(unittest.TestCase):
-    # Review 2026-09-26 #8: other websites and internal addresses.
+    # Calls from other websites, and photo URLs pointing to other hosts.
 
     def load(self, **env):
         with patch.dict(os.environ, {"OCR_ALLOWED_ORIGINS": "", **env}):

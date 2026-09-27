@@ -7,11 +7,9 @@ import unittest
 
 
 def load_builder():
-    """Import the crop builder without loading the real OCR model.
-
-    Only the core.ocr_pipeline entry is swapped and restored. patch.dict on
-    sys.modules would also drop every module imported meanwhile (cv2's
-    submodules included) and break the next test module that imports cv2."""
+    """Import the crop builder without loading the OCR model. Only the
+    core.ocr_pipeline entry is swapped (not all of sys.modules), so cv2 stays
+    loaded for the tests that run after this one."""
     fake_pipeline = types.ModuleType("core.ocr_pipeline")
     fake_pipeline.ocr = None
     fake_pipeline._filter_low_confidence = lambda *args, **kwargs: None

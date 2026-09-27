@@ -1,29 +1,16 @@
-"""Cross-writer (writer-disjoint) evaluation for the mAIstra OCR fine-tune.
+"""Measure a recognizer on the 15 pages of the 4 held-out writers (see
+build_crosswriter_dataset.py), i.e. on handwriting it has never seen.
 
-Runs the CURRENTLY-CONFIGURED recognizer on the held-out greenbook pages
-(writers 7, 8, 20, 27 -- fully excluded from the cross-writer retrain's
-training data) and reports page-level CER + WER. The same-writer samples/
-recognition-only fine-tune result was CER 0.126 / WER 0.359; current end-to-end
-results after the two-column split are CER 0.099 / WER 0.328 / token accuracy
-0.716. This measures generalization to writers NEVER seen in training.
-Build the dataset + manifest first with
-evaluators.build_crosswriter_dataset.
+Choose the model with MAISTRA_REC_MODEL_DIR:
 
-Select which recognizer to evaluate via the MAISTRA_REC_MODEL_DIR env var
-(read by core/ocr_pipeline.py) -- no source editing needed:
+    MAISTRA_REC_MODEL_DIR=models/fine_tuned_rec_crosswriter/inference \
+        .venv/bin/python -m evaluators.crosswriter_eval
 
-  # the cross-writer fine-tuned model (the retrained one):
-  MAISTRA_REC_MODEL_DIR=models/fine_tuned_rec_crosswriter/inference \
-      .venv/bin/python -m evaluators.crosswriter_eval
+For the stock model, temporarily set text_recognition_model_name=
+"PP-OCRv6_medium_rec" in core/ocr_pipeline.py instead.
 
-  # stock baseline on the same pages: leave the model dir at a valid path but
-  # the stock recognizer is a NAME not a dir, so for the stock number use the
-  # documented temporary swap in ocr_pipeline (text_recognition_model_name=
-  # "PP-OCRv6_medium_rec"), run this, then revert.
-
-Result on 2026-09-01 (cross-writer fine-tuned model): CER 0.123 / WER 0.397 on
-15 never-seen-writer pages; stock on the same pages CER 0.296 / WER 0.792
-(fine-tuning improved new-writer CER by -58%). See docs/ocr/EVALUATION.md.
+Result: CER 0.123 / WER 0.397 with the cross-writer model, against
+0.296 / 0.792 for the stock model on the same pages (CER -58%).
 """
 import json
 from pathlib import Path
