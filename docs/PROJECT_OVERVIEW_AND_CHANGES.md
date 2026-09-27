@@ -607,7 +607,7 @@ The review questions are tracked in [the adviser-review task](plans/2026-09-09-a
 
 - **OCR server access (`ocr_feature/main.py`):** CORS allows only the web app (`localhost` / `127.0.0.1` on ports 4200 and 4201; `OCR_ALLOWED_ORIGINS` in `ocr_feature/.env` replaces the list), still without credentials. Before, any website the teacher had open could make the server download URLs of its choosing. `download_image()` now also accepts only the host of `SUPABASE_URL` (or `OCR_ALLOWED_IMAGE_HOSTS`) and doesn't follow redirects; other URLs get a 400 before any download. All 214 cloud photo URLs are on that host and load without a redirect (checked read-only). Setup docs now start the OCR server with `--host 127.0.0.1`.
 - **Save label (`submissions-list.ts` / `.html`):** on a database without `submission_programs`, the label says "✓ Program 1 saved" instead of a permanent "New changes need to be saved" (only Program 1 can be pending there; the close pop-up still counts every tab). The template computes the tone once per check (`@let saveTone`).
-- **Question labels:** the program-tab picker and View question show `Section · Q# · Name` (`questionOptionLabel()`). The Details dropdown is Jayrald's and is requested in TEAM_SYNC.
+- **Question labels:** the program-tab picker and View question show `Section · Q# · Name` (`questionOptionLabel()`). The Details dropdown is Jayrald's; it shows the same label since `33e35d2` (2026-09-27).
 - **`.gitignore`:** only Nombrado's local notes (`docs/ocr/`, `docs/superpowers/`, `docs/web/VERIFICATION_UI.md`) and `.DS_Store` are ignored, instead of all of `docs/`; new shared docs no longer need `git add -f`.
 - **Docs:** `web/WEB_CODEBASE_GUIDE.md` now describes the revision-guarded save through `save_submission_programs`.
 - **Not changed:** the OCR pipeline, models and `evaluate_cer`; save and grading logic; the database.
@@ -728,6 +728,11 @@ handwriting.
 - **Cloud project is at `20260926001300`** (the review fixes and follow-ups
   `000700`–`001300` included; applied 2026-09-27). Nombrado's `answers` migration and
   Nikko's sections migration were applied along with these.
+- **Automatic OCR against the cloud (decided 2026-09-27):** `AUTO_EXTRACT` may
+  stay on against the cloud; it only fills `extracted_text` on new, empty
+  papers. Only one machine runs it (Nombrado's); everyone else keeps it off.
+  When teacher logins and stricter RLS arrive, Jayrald issues an
+  `sb_secret_…` key for the OCR server's `.env` only.
 - **Branches (decided in `TEAM_SYNC.md`):** everyone builds on
   `judge0-integration`, which now contains `feature/question-linking-v2` and
   `feature/pre-extraction` ([note](changes/2026-09-26-merges-into-judge0-integration.md)).
