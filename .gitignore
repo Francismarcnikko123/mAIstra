@@ -1,9 +1,21 @@
-# Nombrado's local notes (OCR investigations, plans and specs), not pushed.
-# Shared docs anywhere else under docs/ are tracked normally, and files in
-# these folders that are already tracked stay tracked.
+# Nombrado's personal notes: local only, never pushed, never force-added
+# (git add -f) either. Shared docs are the ones Jayrald and Nikko write
+# (overview, setup guides, plans/, changes/, reviews/), TEAM_SYNC.md and a
+# proposal Nombrado shares on purpose (already tracked, so ignoring its
+# folder doesn't affect it). New shared docs elsewhere under docs/ need no -f.
+docs/CLAUDE.md
+docs/CODEX_HANDOFF.md
+docs/CODE_REVIEW_*.md
+docs/COMMANDS_REFERENCE.md
+docs/NEXT_STEPS.md
+docs/PENDING_FIXES.md
+docs/PROJECT_STATUS_AUDIT.md
+docs/README.md
+docs/handoffs/
 docs/ocr/
+docs/setup/RUNNING_LOCALLY.md
 docs/superpowers/
-docs/web/VERIFICATION_UI.md
+docs/web/
 .DS_Store
 
 # Quality-gate accuracy test scratch: re-captured images and their labels copy.
