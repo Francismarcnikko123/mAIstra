@@ -739,18 +739,13 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     );
   }
 
-  // Describes the editor as it is now, not just the last request: after an
-  // edit made during or after a save, the code on screen is not saved yet.
+  // The warning shown when another teacher changed the paper during an edit.
+  // Every other save state is shown by the label beside Save
+  // (saveStatusLabel), which uses this text for the conflict case.
   saveStatusMessage(id: string): string {
-    const status = this.saveStatus[id];
-    if (status === 'error') return '✕ Save failed—please try again';
-    if (status === 'conflict') {
-      return 'Someone else changed this submission while you were editing. Save again to keep your code, or close to keep their version.';
-    }
-    if (status !== 'saved') return '';
-    return this.hasUnsavedCode(id)
-      ? 'New changes need to be saved.'
-      : '✓ Verified code saved';
+    return this.saveStatus[id] === 'conflict'
+      ? 'Someone else changed this submission while you were editing. Save again to keep your code, or close to keep their version.'
+      : '';
   }
 
   // Compares the editor with the stored code rather than tracking edits, so

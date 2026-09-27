@@ -1563,7 +1563,7 @@ describe('SubmissionsListComponent save feedback', () => {
       await save;
 
       expect(component.reviewStep).toBe(2);
-      expect(component.saveStatusMessage('submission-1')).toBe(
+      expect(component.saveStatusLabel('submission-1')).toBe(
         'New changes need to be saved.',
       );
 
@@ -1576,8 +1576,8 @@ describe('SubmissionsListComponent save feedback', () => {
         4,
       );
       expect(component.reviewStep).toBe(3);
-      expect(component.saveStatusMessage('submission-1')).toBe(
-        '✓ Verified code saved',
+      expect(component.saveStatusLabel('submission-1')).toBe(
+        '✓ All programs saved',
       );
     });
 
@@ -1597,7 +1597,7 @@ describe('SubmissionsListComponent save feedback', () => {
       await save;
       await vi.advanceTimersByTimeAsync(3000);
 
-      expect(component.saveStatusMessage('submission-1')).toBe(
+      expect(component.saveStatusLabel('submission-1')).toBe(
         'New changes need to be saved.',
       );
     });
@@ -1609,13 +1609,13 @@ describe('SubmissionsListComponent save feedback', () => {
       component.setReviewStep(2);
       component.updateSubmissionCode('submission-1', 'edited code');
       await component.saveVerifiedText();
-      expect(component.saveStatusMessage('submission-1')).toBe(
-        '✓ Verified code saved',
+      expect(component.saveStatusLabel('submission-1')).toBe(
+        '✓ All programs saved',
       );
 
       component.updateSubmissionCode('submission-1', 'edited again');
 
-      expect(component.saveStatusMessage('submission-1')).toBe(
+      expect(component.saveStatusLabel('submission-1')).toBe(
         'New changes need to be saved.',
       );
     });
@@ -2213,7 +2213,7 @@ describe('SubmissionsListComponent save feedback', () => {
       switchTo(component, 0);
 
       expect(component.editableText['submission-a']).toBe('edited A');
-      expect(component.saveStatusMessage('submission-a')).toBe('');
+      expect(component.saveStatusLabel('submission-a')).toBe('');
     });
 
     it('keeps B busy when A’s OCR finishes after switching to B', async () => {
@@ -2263,7 +2263,7 @@ describe('SubmissionsListComponent save feedback', () => {
       switchTo(component, 0);
 
       expect(component.editableText['submission-a']).toBe('edited A');
-      expect(component.saveStatusMessage('submission-a')).toBe('');
+      expect(component.saveStatusLabel('submission-a')).toBe('');
     });
 
     it('does not apply OCR text to a submission that was closed meanwhile', async () => {
@@ -2356,7 +2356,7 @@ describe('SubmissionsListComponent save feedback', () => {
         undefined,
         3,
       );
-      expect(component.saveStatusMessage('submission-1')).toBe(CODE_CONFLICT);
+      expect(component.saveStatusLabel('submission-1')).toBe(CODE_CONFLICT);
       expect(component.editableText['submission-1']).toBe('my code');
       expect(component.stepBlocker(3)).toBe('Save the code first');
 
@@ -2368,8 +2368,8 @@ describe('SubmissionsListComponent save feedback', () => {
         undefined,
         4,
       );
-      expect(component.saveStatusMessage('submission-1')).toBe(
-        '✓ Verified code saved',
+      expect(component.saveStatusLabel('submission-1')).toBe(
+        '✓ All programs saved',
       );
     });
 
@@ -2387,7 +2387,7 @@ describe('SubmissionsListComponent save feedback', () => {
       await component.saveVerifiedText();
 
       expect(getSubmission).toHaveBeenCalledWith('submission-1');
-      expect(component.saveStatusMessage('submission-1')).toBe(CODE_CONFLICT);
+      expect(component.saveStatusLabel('submission-1')).toBe(CODE_CONFLICT);
       expect(component.editableText['submission-1']).toBe('my code');
 
       component.closeModal();
@@ -2402,13 +2402,13 @@ describe('SubmissionsListComponent save feedback', () => {
       component.setReviewStep(2);
       component.updateSubmissionCode('submission-1', 'my code');
       await component.saveVerifiedText();
-      expect(component.saveStatusMessage('submission-1')).toBe(CODE_CONFLICT);
+      expect(component.saveStatusLabel('submission-1')).toBe(CODE_CONFLICT);
 
       component.closeModal();
       component.openModal(component.submissions[0]);
 
       expect(component.editableText['submission-1']).toBe('their code');
-      expect(component.saveStatusMessage('submission-1')).toBe('');
+      expect(component.saveStatusLabel('submission-1')).toBe('');
     });
 
     it('shows no conflict for a save that failed after its submission was closed', async () => {
@@ -2426,7 +2426,7 @@ describe('SubmissionsListComponent save feedback', () => {
       component.openModal(component.submissions[0]);
 
       expect(component.editableText['submission-1']).toBe('their code');
-      expect(component.saveStatusMessage('submission-1')).toBe('');
+      expect(component.saveStatusLabel('submission-1')).toBe('');
     });
 
     it('builds on another teacher’s change that arrived before any edit', async () => {
@@ -2445,8 +2445,8 @@ describe('SubmissionsListComponent save feedback', () => {
         undefined,
         4,
       );
-      expect(component.saveStatusMessage('submission-1')).toBe(
-        '✓ Verified code saved',
+      expect(component.saveStatusLabel('submission-1')).toBe(
+        '✓ All programs saved',
       );
     });
 
