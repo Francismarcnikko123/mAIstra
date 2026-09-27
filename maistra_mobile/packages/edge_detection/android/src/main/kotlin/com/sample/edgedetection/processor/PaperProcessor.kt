@@ -12,9 +12,32 @@ import kotlin.math.sqrt
 
 const val TAG: String = "PaperProcessor"
 
+// Width the live preview detects at (1080p frame rotated, then halved). The
+// blur, dilate and close sizes in findContours are in pixels and tuned for it.
+private const val DETECT_WIDTH = 540.0
+
 fun processPicture(previewFrame: Mat): Corners? {
-    val contours = findContours(previewFrame)
-    return getCorners(contours, previewFrame.size())
+    // A captured photo is ~2300 px wide. At that size the 15 px close can't
+    // join the paper outline, no contour reaches the 10 % area minimum, and
+    // the crop screen fell back to a default 10-90 % box although the
+    // preview had found the paper. Detect on a preview-sized copy and scale
+    // the corners back; the crop itself still uses the full photo.
+    val scale = DETECT_WIDTH / previewFrame.width()
+    if (scale >= 1.0) {
+        val contours = findContours(previewFrame)
+        return getCorners(contours, previewFrame.size())
+    }
+    val small = Mat()
+    Imgproc.resize(
+        previewFrame, small,
+        Size(DETECT_WIDTH, previewFrame.height() * scale),
+        0.0, 0.0, Imgproc.INTER_AREA
+    )
+    val found = getCorners(findContours(small), small.size())
+    small.release()
+    return found?.let { c ->
+        Corners(c.corners.map { p -> p?.let { Point(it.x / scale, it.y / scale) } }, previewFrame.size())
+    }
 }
 
 fun cropPicture(picture: Mat, pts: List<Point>): Mat {
