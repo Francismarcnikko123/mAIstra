@@ -33,3 +33,4 @@ One file per update, newest last. Each note says what changed, why, which files,
 | 2026-09-27 | [Program 1 follows the page's code; a stale tab list can't delete tabs](2026-09-27-mirror-sync-and-stale-tabs.md) | Jayrald | `575474e`, `bcb0fea` |
 | 2026-09-27 | [Review of the pulled changes in Jayrald's files, and the save-reminder fix](2026-09-27-teammates-review.md) | Jayrald | `8c11129` |
 | 2026-09-27 | [Live test: renaming keeps grades; a stale edit is refused](2026-09-27-live-rename-test.md) | Nikko | `a7fcf76`, `5577a7a`, `7ff8977`, `d139ef2`, this commit |
+| 2026-09-27 | [Details dropdown labels; automatic OCR decisions](2026-09-27-details-label-and-auto-extract-decisions.md) | Jayrald | `33e35d2` |

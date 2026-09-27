@@ -17,13 +17,13 @@
 | 1 | ✅ Fixed (Nikko, 2026-09-27) | Saving a question rewrites its test cases even for a rename, so old questions lose their graded papers' grades with no warning | `supabase.ts` `updateQuestion` + `question-form.ts` | Nikko |
 | 2 | ✅ Fixed (Nikko, 2026-09-27) | Editing a question has no check for a newer version: a second teacher's edit is overwritten silently | `supabase.ts` `updateQuestion` / `markQuestionValidated` | Nikko (Jayrald can add a revision column if wanted) |
 | 3 | ✅ Fixed `8c11129` | "New changes need to be saved" disappears after 3 s while a program tab is still unsaved | `submissions-list.ts` `saveVerifiedText` timer | **Jayrald** |
-| 4 | Medium (design) | Without the `submission_programs` table, the Save label always says "New changes need to be saved" | `submissions-list.ts` `saveStatusLabel` (merge `fefbf9e`) | Nombrado (decide) |
+| 4 | ✅ Fixed `12e4108` (Nombrado) | Without the `submission_programs` table, the Save label always says "New changes need to be saved" | `submissions-list.ts` `saveStatusLabel` (merge `fefbf9e`) | Nombrado (decide) |
 | 5 | ✅ Fixed (Nikko, 2026-09-27) | If "mark validated" fails, a retry warns about grades that are already cleared | `question-form.ts` `saveEdit` | Nikko |
 | 6 | ✅ Fixed (Nikko, 2026-09-27) | A live photo badge can be wiped by a reload that was already running | `submissions-list.ts` `loadSectionFolders` | Nikko |
 | 7 | Low (not reachable today; unchanged) | A typed topic that matches a section name is silently replaced with "Uncategorized" | `submissions-list.ts` `isSectionName` | Nikko |
 | 8 | ✅ Fixed (Nikko, 2026-09-27) | The fake backend's question PATCHes don't behave like the database | `tests/e2e/support/fake-backend.ts` | Nikko |
 | 9 | ✅ Fixed (Nikko, 2026-09-27) | `countGradedPapers` downloads every program row and makes two round trips | `supabase.ts` | Nikko |
-| 10 | Low | Leftover code: most of `saveStatusMessage` is dead, and the label's tone is computed three times per render | `submissions-list.ts` / `.html` | Jayrald + Nombrado |
+| 10 | Low (half fixed: Nombrado's template part in `12e4108`; Jayrald's `saveStatusMessage` trim still open) | Leftover code: most of `saveStatusMessage` is dead, and the label's tone is computed three times per render | `submissions-list.ts` / `.html` | Jayrald + Nombrado |
 
 ---
 

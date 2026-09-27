@@ -16,7 +16,7 @@
 | 5 | ✅ Fixed `24aafe8` | DB + Web | A question edit that clears a Program 2+ grade sends no realtime event for pages that weren't `graded`, so the old grade stays on screen | Jayrald |
 | 6 | ✅ Fixed `f3c3a69` | Web | A fast Submit right after "Continue to grading" can grade stale program rows | Jayrald |
 | 7 | ✅ Fixed `719dac1` | DB | Nothing on the server resets `can_publish` when a question's answer or test cases change | Jayrald (+ Nikko's edit form) |
-| 8 | Low | OCR | `ocr_feature/main.py` is back to `allow_origins=["*"]` (Nombrado's version, as they asked) | Nombrado |
+| 8 | ✅ Fixed `8fc33e8` (Nombrado) | OCR | `ocr_feature/main.py` is back to `allow_origins=["*"]` (Nombrado's version, as they asked) | Nombrado |
 | 9 | ✅ Fixed `0c1dc8c` | Web + DB | Clearing a middle tab renumbers the later tabs, which wipes their grades | Jayrald (+ Nombrado's `answersToSave`) |
 
 Two claims in the docs (`2d31248`) were wrong because of #1 and #2; the fixes make them true (see [Docs accuracy](#docs-accuracy)).
