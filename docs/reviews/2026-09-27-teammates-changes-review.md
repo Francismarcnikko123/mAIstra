@@ -23,7 +23,7 @@
 | 7 | Low (not reachable today; unchanged) | A typed topic that matches a section name is silently replaced with "Uncategorized" | `submissions-list.ts` `isSectionName` | Nikko |
 | 8 | ✅ Fixed (Nikko, 2026-09-27) | The fake backend's question PATCHes don't behave like the database | `tests/e2e/support/fake-backend.ts` | Nikko |
 | 9 | ✅ Fixed (Nikko, 2026-09-27) | `countGradedPapers` downloads every program row and makes two round trips | `supabase.ts` | Nikko |
-| 10 | Low (half fixed: Nombrado's template part in `12e4108`; Jayrald's `saveStatusMessage` trim still open) | Leftover code: most of `saveStatusMessage` is dead, and the label's tone is computed three times per render | `submissions-list.ts` / `.html` | Jayrald + Nombrado |
+| 10 | ✅ Fixed `12e4108` (Nombrado, template) and `52b4dee` (Jayrald, `saveStatusMessage` trim) | Leftover code: most of `saveStatusMessage` is dead, and the label's tone is computed three times per render | `submissions-list.ts` / `.html` | Jayrald + Nombrado |
 
 ---
 

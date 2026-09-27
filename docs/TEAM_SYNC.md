@@ -270,6 +270,7 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 ### Open questions
 
 ### Done
+- (2026-09-27, `judge0-integration`) My half of review #10 (`52b4dee`): `saveStatusMessage()` now returns only the conflict text, and the tests check the visible Save label instead. Nothing the teacher sees changes; `npx ng test` 339/339. The 2026-09-27 review now has only #7 open (Nikko: not reachable today).
 - (2026-09-27, `judge0-integration`) Pulled Nikko's and Nombrado's review fixes (up to `5ee842e`). Review 2026-09-27: #1, #2, #4, #5, #6, #8, #9 fixed by them, and #3 by me. Only #7 (not reachable today) and my half of #10 (trimming `saveStatusMessage()`) are left. Review 2026-09-26 #8 (OCR CORS) fixed in `8fc33e8`. Details dropdown label done (`33e35d2`): `npx ng test` 339/339, `npx playwright test` 38/38 twice-each.
 - (2026-09-27, `judge0-integration`) Nombrado's Save-label fixes (conflict and unsaved states), the kept `readOnly` input and the reworded `answers` message resolve my three 2026-09-26 requests; moved here from Needs from others.
 - (2026-09-27, `judge0-integration`) Reviewed the 26 pulled commits in my files (`docs/reviews/2026-09-27-teammates-changes-review.md`); fixed #3 (`8c11129`): `npx ng test` 329/329, `npx playwright test` 15/15 (Nikko's flaky test excluded).
