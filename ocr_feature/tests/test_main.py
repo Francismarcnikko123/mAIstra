@@ -137,17 +137,23 @@ class WhoMayCallTests(unittest.TestCase):
         self.assertIn("http://localhost:4200", main.allowed_origins({}))
 
     def test_json_sent_without_a_preflight_is_not_read(self):
-        # A site can skip the preflight only with a "simple" content type;
-        # the endpoint must then refuse the body instead of fetching the URL.
+        # A site can skip the preflight only with a "simple" content type.
+        # Its request is refused by origin (403), and such a body is never
+        # read as JSON even without an Origin (422): the URL isn't fetched.
         from fastapi.testclient import TestClient
         main = self.load()
+        body = '{"submission_id": "s1", "image_url": "http://169.254.169.254/"}'
         with patch.object(main, "download_image", side_effect=AssertionError("fetched")):
-            response = TestClient(main.app).post(
-                "/api/ocr/extract-from-url",
-                content='{"submission_id": "s1", "image_url": "http://169.254.169.254/"}',
+            client = TestClient(main.app)
+            from_site = client.post(
+                "/api/ocr/extract-from-url", content=body,
                 headers={"Content-Type": "text/plain", "Origin": "https://some-other-site.example"},
             )
-        self.assertEqual(response.status_code, 422)
+            no_origin = client.post(
+                "/api/ocr/extract-from-url", content=body, headers={"Content-Type": "text/plain"},
+            )
+        self.assertEqual(from_site.status_code, 403)
+        self.assertEqual(no_origin.status_code, 422)
 
     def test_image_hosts_come_from_supabase_url_unless_listed(self):
         main = self.load()
@@ -197,6 +203,45 @@ class WhoMayCallTests(unittest.TestCase):
             main.download_image("https://abc.supabase.co/storage/v1/object/public/submissions/1.jpg",
                                 Path("unused.jpg"))
 
+
+    def test_supabase_url_without_scheme_or_with_a_default_port_still_matches(self):
+        main = self.load()
+        for supabase_url in ("abc.supabase.co", "https://ABC.supabase.co/", "https://abc.supabase.co:443"):
+            self.assertEqual(main.allowed_image_hosts({"SUPABASE_URL": supabase_url}), {"abc.supabase.co"})
+        self.assertEqual(main.host_key("https://abc.supabase.co:443/storage/x.jpg"), "abc.supabase.co")
+        self.assertEqual(main.host_key("http://127.0.0.1:54321/x.jpg"), "127.0.0.1:54321")
+
+    def test_an_image_url_with_a_user_part_is_refused(self):
+        main = self.load()
+        env = {"SUPABASE_URL": "https://abc.supabase.co", "OCR_ALLOWED_IMAGE_HOSTS": ""}
+        with patch.dict(os.environ, env), \
+                patch.object(main.requests, "get", side_effect=AssertionError("fetched")), \
+                self.assertRaises(main.HTTPException):
+            main.download_image("https://evil.example@abc.supabase.co/x.jpg", Path("unused.jpg"))
+
+    def test_other_sites_cannot_post_an_upload(self):
+        # A form upload needs no preflight, so CORS alone can't stop it.
+        from fastapi.testclient import TestClient
+        calls = []
+
+        def extract(image_path, output_dir):
+            calls.append(image_path)
+            return {"raw_text": "r", "cleaned_text": "c", "average_confidence": 1.0}
+
+        with patch.dict(os.environ, {"OCR_ALLOWED_ORIGINS": ""}):
+            main = load_main(extract)
+        client = TestClient(main.app)
+        photo = {"file": ("page.jpg", b"img", "image/jpeg")}
+
+        refused = client.post("/api/ocr/extract-upload", files=photo,
+                              headers={"Origin": "https://some-other-site.example"})
+        self.assertEqual(refused.status_code, 403)
+        self.assertEqual(calls, [])
+
+        for headers in ({}, {"Origin": "http://localhost:4200"}, {"Origin": "http://testserver"}):
+            # curl/scripts (no Origin), the web app, and this server's /docs.
+            self.assertEqual(client.post("/api/ocr/extract-upload", files=photo, headers=headers).status_code, 200)
+        self.assertEqual(len(calls), 3)
 
 if __name__ == "__main__":
     unittest.main()
