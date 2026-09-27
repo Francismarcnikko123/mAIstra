@@ -100,31 +100,34 @@ double computeBlurScore(img.Image grayscale) {
 
 double computeDarkClipFraction(img.Image grayscale, {int threshold = 40}) {
   int clipped = 0;
-  for (int y = 0; y < grayscale.height; y++)
+  for (int y = 0; y < grayscale.height; y++) {
     for (int x = 0; x < grayscale.width; x++) {
       if (grayscale.getPixel(x, y).r <= threshold) clipped++;
     }
+  }
   return clipped / (grayscale.width * grayscale.height);
 }
 
 double computeBrightClipFraction(img.Image grayscale, {int threshold = 240}) {
   int clipped = 0;
-  for (int y = 0; y < grayscale.height; y++)
+  for (int y = 0; y < grayscale.height; y++) {
     for (int x = 0; x < grayscale.width; x++) {
       if (grayscale.getPixel(x, y).r >= threshold) clipped++;
     }
+  }
   return clipped / (grayscale.width * grayscale.height);
 }
 
 double computeContrastScore(img.Image grayscale) {
   double sum = 0, sumSq = 0;
   final count = grayscale.width * grayscale.height;
-  for (int y = 0; y < grayscale.height; y++)
+  for (int y = 0; y < grayscale.height; y++) {
     for (int x = 0; x < grayscale.width; x++) {
       final v = grayscale.getPixel(x, y).r.toDouble();
       sum += v;
       sumSq += v * v;
     }
+  }
   final mean = sum / count;
   return math.sqrt(((sumSq / count) - (mean * mean)).clamp(0, double.maxFinite));
 }
@@ -137,11 +140,12 @@ double computeShadowScore(img.Image grayscale, {int rows = 3, int cols = 3}) {
     for (int col = 0; col < cols; col++) {
       double total = 0;
       int count = 0;
-      for (int y = row * cellH; y < (row + 1) * cellH; y++)
+      for (int y = row * cellH; y < (row + 1) * cellH; y++) {
         for (int x = col * cellW; x < (col + 1) * cellW; x++) {
           total += grayscale.getPixel(x, y).r.toDouble();
           count++;
         }
+      }
       if (count == 0) continue;
       final avg = total / count;
       minAvg = (minAvg == null || avg < minAvg) ? avg : minAvg;
@@ -223,14 +227,16 @@ QualityResult evaluateMetrics(QualityMetrics m, {bool autoFixed = false}) {
 
   if (m.darkClipFraction > kDarkRetake) {
     flag('Too dark — move to a brighter area', QualityDecision.retake);
-  } else if (m.darkClipFraction > kDarkFixable)
+  } else if (m.darkClipFraction > kDarkFixable) {
     flag('Slightly dark — brightness will be auto-adjusted', QualityDecision.fixable);
+  }
 
   if (m.brightClipFraction > kBrightRetake) {
     flag('Severely overexposed — reduce glare or move away from light',
         QualityDecision.retake);
-  } else if (m.brightClipFraction > kBrightFixable)
+  } else if (m.brightClipFraction > kBrightFixable) {
     flag('Overexposed — brightness will be auto-adjusted', QualityDecision.fixable);
+  }
 
   if (m.contrastScore < kContrastFixable) {
     flag('Low contrast / faded ink — contrast will be auto-enhanced',
@@ -240,19 +246,21 @@ QualityResult evaluateMetrics(QualityMetrics m, {bool autoFixed = false}) {
   if (m.shadowScore > kShadowRetake) {
     flag('Extreme shadow across page — reposition or use even lighting',
         QualityDecision.retake);
-  } else if (m.shadowScore > kShadowFixable)
+  } else if (m.shadowScore > kShadowFixable) {
     flag('Uneven lighting / shadow — will be auto-corrected',
         QualityDecision.fixable);
+  }
 
   final absSkew = m.skewAngleDeg.abs();
   if (absSkew > kSkewRetake) {
     flag(
         'Page too tilted (${m.skewAngleDeg.toStringAsFixed(1)}°) — straighten and rescan',
         QualityDecision.retake);
-  } else if (absSkew > kSkewPass)
+  } else if (absSkew > kSkewPass) {
     flag(
         'Page tilted ${m.skewAngleDeg.toStringAsFixed(1)}° — will be auto de-skewed',
         QualityDecision.fixable);
+  }
 
   return QualityResult(
     decision: decision,
