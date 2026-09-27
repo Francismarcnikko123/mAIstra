@@ -1,3 +1,9 @@
+"""The OCR server (FastAPI).
+
+GET  /                          status, and whether automatic OCR is running
+POST /api/ocr/extract-upload    read an uploaded photo
+POST /api/ocr/extract-from-url  read a photo from Supabase storage
+"""
 import os
 import shutil
 import tempfile
@@ -23,8 +29,8 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     # Load the OCR models on startup so the first real request is fast.
     warmup()
-    # Pre-extraction on arrival: off unless AUTO_EXTRACT=true in .env
-    # (see core/auto_extract.py). Uses the same extraction as the endpoint.
+    # Automatic OCR of new papers; off unless AUTO_EXTRACT=true
+    # (core/auto_extract.py).
     worker = start_auto_extract(os.environ, extract_image_url)
     app.state.auto_extract = worker
     yield
@@ -35,10 +41,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MaestrAI OCR Backend", lifespan=lifespan)
 
-# Only the web app may call this server from a browser. With "*", any website
-# the teacher had open could make it download URLs of that site's choosing
-# (review 2026-09-26 #8). The ng serve ports by default; OCR_ALLOWED_ORIGINS
-# in .env (comma-separated) replaces the list, e.g. for another port.
+# Only the web app may call this server from a browser; otherwise any website
+# the teacher has open could use it. Defaults to the web app's dev ports;
+# OCR_ALLOWED_ORIGINS in .env (comma-separated) replaces the list.
 DEFAULT_ALLOWED_ORIGINS = (
     "http://localhost:4200,http://127.0.0.1:4200,"
     "http://localhost:4201,http://127.0.0.1:4201"
@@ -46,6 +51,7 @@ DEFAULT_ALLOWED_ORIGINS = (
 
 
 def allowed_origins(env=os.environ) -> list[str]:
+    """The browser origins allowed to call this server."""
     raw = env.get("OCR_ALLOWED_ORIGINS") or DEFAULT_ALLOWED_ORIGINS
     return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
 
@@ -62,11 +68,9 @@ app.add_middleware(
 )
 
 
-# CORS only stops a browser from reading the answer. A plain form upload
-# (multipart/form-data) is sent without asking first, so another website
-# could still make this server run OCR. Browsers always send Origin on a
-# POST: refuse any site other than the web app or this server's own /docs
-# page. Tools without a browser (curl, scripts) send no Origin and still work.
+# CORS doesn't stop another website from sending a plain form upload, so
+# POSTs from other sites are refused here. The web app and this server's
+# /docs page are allowed; curl and scripts send no Origin and still work.
 @app.middleware("http")
 async def refuse_posts_from_other_sites(request: Request, call_next):
     origin = (request.headers.get("origin") or "").rstrip("/")
@@ -82,6 +86,8 @@ class ImageUrlRequest(BaseModel):
 
 @app.get("/")
 def health_check():
+    """Server status, plus whether automatic OCR is running, since when, and
+    which papers it gave up on."""
     worker = getattr(app.state, "auto_extract", None)
     auto_extract = {"enabled": worker is not None, "since": None, "failed": []}
     if worker is not None:
@@ -93,11 +99,10 @@ def health_check():
     return {"status": "MaestrAI OCR Backend is running", "auto_extract": auto_extract}
 
 
-# Each request works in its own temporary folder, deleted afterwards: student
-# photos, preprocessed copies and debug dumps are never kept on this machine,
-# and no client-supplied name ever becomes part of a file path.
-# Plain `def` (not async): extraction is seconds of blocking CPU work, so
-# FastAPI must run it in its threadpool instead of on the event loop.
+# Each request works in a temporary folder that is deleted afterwards, so
+# student photos are never kept and no uploaded file name becomes a path.
+# Plain `def`, not async: OCR is blocking CPU work, so FastAPI runs it in a
+# thread pool.
 @app.post("/api/ocr/extract-upload")
 def extract_from_upload(file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
@@ -117,9 +122,8 @@ def extract_from_upload(file: UploadFile = File(...)):
     }
 
 
-# Mobile captures run 3-5MB; a slow connection plus TLS handshake can blow
-# past a short timeout, so give the read phase real room and retry transient
-# failures instead of failing the whole extraction on one bad attempt.
+# Phone photos are 3-5 MB: allow time for slow connections and retry
+# network errors.
 DOWNLOAD_CONNECT_TIMEOUT = 15   # seconds to establish the connection
 DOWNLOAD_READ_TIMEOUT = 120     # seconds to finish reading the body
 DOWNLOAD_RETRIES = 3

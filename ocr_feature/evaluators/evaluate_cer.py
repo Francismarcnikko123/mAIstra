@@ -1,25 +1,13 @@
-"""
-Recognition accuracy against samples/labels.csv, reported as three metric
-families (thesis objective 7: CER, WER, and token-level accuracy):
+"""Measure OCR accuracy on the test set (samples/labels.csv).
 
-  - CER  -- character error rate (edit distance / reference length). Lower is
-    better. Reported strict and whitespace-normalized.
-  - WER  -- word error rate over whitespace-split tokens. Lower is better.
-    (No separate _ws variant: str.split() already ignores whitespace runs.)
-  - token-level recognition accuracy -- 1 - (edit distance over C-lexical
-    tokens / reference token count). HIGHER is better. Token boundaries follow
-    C syntax, so operator spacing (`x=5` vs `x = 5`) never counts as an error.
+Reports, for the raw and the cleaned OCR text:
+- CER, character error rate (lower is better), strict and ignoring whitespace;
+- WER, word error rate (lower is better);
+- token accuracy over C tokens (higher is better), where "x=5" and "x = 5"
+  count as the same.
 
-CER and WER/token-accuracy print as two separate tables because their
-"good direction" differs (lower vs. higher). Each metric is reported for both
-raw and cleaned OCR output.
-
-Dev tool, not used by the live backend. Run it after any pipeline change,
-and before/after fine-tuning to measure the actual difference. Run from the
-ocr_feature/ directory (module path, not the file path -- this file does
-`from evaluators.evaluation import ...`, which only resolves as a package
-import):
-
+Run it after any pipeline change and before and after fine-tuning. From
+ocr_feature/:
     .venv/bin/python -m evaluators.evaluate_cer
 """
 import csv
@@ -39,7 +27,7 @@ LABELS_CSV = SAMPLES_DIR / "labels.csv"
 
 
 def _load_extractor():
-    """Import the model-owning OCR pipeline only after label preflight."""
+    """Load the OCR pipeline (slow) only after the labels have been checked."""
     from core.ocr_pipeline import extract_text_from_image
 
     return extract_text_from_image

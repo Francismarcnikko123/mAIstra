@@ -1,33 +1,12 @@
-"""
-Terminal comparison: run one image through the production preprocessing
-(grayscale + denoise) and through adaptive binarization, side by side, with
-each stage's OCR output and confidence. Built to demonstrate -- not just
-claim -- why the pipeline ships with threshold=False (see
-core/preprocess.py's PreprocessConfig.threshold and docs/ocr/DEFENSE_PREP.md
-section 14).
+"""Compare the shipped preprocessing (grayscale + denoise) with black-and-white
+thresholding on one photo: the OCR text, confidence and, if the photo is in
+a labels.csv, the CER of each. Shows why thresholding is off.
 
-Not part of the pipeline and not imported by anything.
+    python compare_config.py                           # default photo
+    python compare_config.py path/to/photo.jpg
+    python compare_config.py path/to/photo.jpg --show  # also open both images in VS Code
 
-    python compare_config.py                          # default IMAGE
-    python compare_config.py path/to/photo.jpg         # any image
-    python compare_config.py path/to/photo.jpg --show  # also open both
-                                                         # preprocessed images
-                                                         # as VS Code tabs
-
-Ground truth for CER is resolved from the project's labels.csv by image name
-(samples/labels.csv or datasets/verified/labels.csv) -- the canonical
-in-repo ground truth, built from the verified .txt transcriptions that live
-outside the repo. labels.csv is the only source consulted: a loose .txt
-beside the image is intentionally ignored, because it would be redundant with
-labels.csv (which is derived from those same verified transcriptions) and
-lives outside the project root. If the image is in neither labels.csv, the
-comparison runs without CER (text and confidence only).
-
---show requires the `code` CLI on PATH (VS Code: Cmd+Shift+P ->
-"Shell Command: Install 'code' command in PATH"). It opens each image as a
-tab in the current window (-r); VS Code doesn't auto-split editor groups from
-the CLI, so drag one tab to the side once for a side-by-side view -- it stays
-split for the rest of the session.
+--show needs VS Code's `code` command on PATH.
 """
 import csv
 import shutil
@@ -54,12 +33,8 @@ VARIANTS = [
 SHOW = "--show" in sys.argv
 
 
-# The project's canonical ground truth is labels.csv (built from the verified
-# .txt transcriptions, which live outside the repo). Look references up here by
-# image basename; a loose .txt beside the image is intentionally not consulted
-# (redundant with labels.csv, and outside the project root). Each labels.csv
-# has its own schema: (script-relative path, filename-column, text-column),
-# independent of the caller's working directory.
+# Where the correct text is looked up by file name:
+# (csv path, filename column, text column).
 _LABEL_SOURCES = [
     ("samples/labels.csv", "filename", "ground_truth_text"),
     ("datasets/verified/labels.csv", "image_path", "verified_text"),
@@ -67,14 +42,7 @@ _LABEL_SOURCES = [
 
 
 def _load_reference(image_path: str) -> tuple[str, str] | None:
-    """Return (reference_text, source_description), or None if not found.
-
-    The image is looked up in the project's labels.csv files by basename.
-    labels.csv is the single ground-truth source; a loose .txt beside the
-    image is deliberately NOT consulted, since those .txt transcriptions live
-    outside the repo and labels.csv is already built from them (see module
-    docstring).
-    """
+    """(correct text, where it was found) for the photo, or None."""
     base = Path(image_path).name
     for csv_path, name_col, text_col in _LABEL_SOURCES:
         p = _SCRIPT_DIR / csv_path
@@ -114,10 +82,8 @@ def main() -> None:
             metrics = evaluate_text_pair(
                 result["raw_text"], result["cleaned_text"], reference
             )
-        # extract_text_from_image() always writes to the same
-        # "<stem>_preprocessed.jpg" path regardless of config, so each
-        # variant would overwrite the last one's output. Copy it to a
-        # variant-tagged name immediately so both survive to the end.
+        # Every run writes the same <name>_preprocessed.jpg, so keep a copy
+        # per variant.
         preprocessed_src = Path(result["preprocessed_image"])
         preprocessed_copy = preprocessed_src.with_name(
             f"{Path(IMAGE).stem}_{tag}{preprocessed_src.suffix}"

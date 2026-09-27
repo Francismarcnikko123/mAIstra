@@ -115,13 +115,8 @@ class ContinuationAssociationTests(unittest.TestCase):
         self.assertFalse(result["changed_order"])
 
     def test_if_else_continuation_survives_unsafe_unrelated_left_row(self):
-        # The if/else branch intentionally does NOT require left_safe: _code_rows
-        # blanks any unsafe row, so a `\bif\b` match can only come from a safe
-        # row. Here the left block's first row is an unterminated string literal
-        # (left_safe becomes False), but the `if` on the next row is clean, so
-        # the continuation must still fire. Guards against re-adding a left_safe
-        # check to this branch (see core/continuation.py's comment there and the
-        # writerX two-question fixture, which has the same shape).
+        # The if/else check doesn't need left_safe: the unreadable row (an
+        # unclosed string) is blanked, and the `if` on the next row still links.
         records = [
             detection('printf("oops);', 0, 0),   # 0: unterminated -> unsafe row
             detection("if (x > 0) {", 0, 40),     # 1: clean `if`, safe row

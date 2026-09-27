@@ -1,6 +1,5 @@
-# Library module, not runnable on its own (no __main__) -- imported by
-# evaluate_cer.py and evaluate_robustness.py. Run those instead.
-"""Pure evaluation helpers shared by real and synthetic OCR measurements."""
+"""OCR accuracy metrics: CER, WER and C-token accuracy. Used by
+evaluate_cer.py and evaluate_robustness.py."""
 
 import re
 from collections import defaultdict
@@ -20,7 +19,8 @@ LITERAL_PROVENANCE_FIELDS = (
 
 
 def literal_provenance_issues(rows: list[dict]) -> list[str]:
-    """Return failures in human source-paper transcription provenance."""
+    """List rows missing proof that a person checked the text against the
+    paper (literal_verified=true, plus who and when)."""
     issues = []
     for row_number, row in enumerate(rows, 2):
         filename = str(row.get("filename") or "").strip()
@@ -139,14 +139,8 @@ def evaluate_text_pair(
 
 
 def wer(prediction: str, reference: str) -> float:
-    """Word error rate: edit distance over whitespace-split tokens, relative
-    to the reference's token count. Unlike cer(), there is no separate
-    whitespace-normalized variant to report -- str.split() already treats any
-    run of whitespace as one separator and ignores leading/trailing
-    whitespace, so a raw split and a normalize_ws()'d split produce identical
-    tokens. edit_distance() works unchanged on lists (it compares elements
-    with !=, not just characters), so this reuses the same algorithm as cer().
-    """
+    """Word error rate: edit distance over whitespace-separated words,
+    divided by the reference's word count."""
     reference_tokens = reference.split()
     prediction_tokens = prediction.split()
     if not reference_tokens:
@@ -154,13 +148,9 @@ def wer(prediction: str, reference: str) -> float:
     return edit_distance(prediction_tokens, reference_tokens) / len(reference_tokens)
 
 
-# A lightweight C lexer for token-level scoring -- NOT a full standards-
-# compliant tokenizer (no hex/octal/suffix number forms, no wide/prefixed
-# string literals like L"..." or u8"..."). Good enough to make "x=5" and
-# "x = 5" tokenize identically, which is the point: token boundaries come
-# from C syntax, not from the incidental spacing OCR/the transcriber used.
-# Longest-match-first ordering matters here: multi-character operators are
-# listed longest-first so e.g. "<<=" isn't cut short into "<<" plus "=".
+# A simple C tokenizer for token accuracy, so "x=5" and "x = 5" give the same
+# tokens. Longer operators come first, so "<<=" isn't split. Not a full C
+# lexer (no hex numbers or L"..." strings).
 _MULTI_CHAR_OPERATORS = (
     r"<<=|>>=|<<|>>|<=|>=|==|!=|&&|\|\||"
     r"\+=|-=|\*=|/=|%=|&=|\|=|\^=|->|\+\+|--"
@@ -176,20 +166,14 @@ _C_TOKEN = re.compile(
 
 
 def tokenize_c(text: str) -> list[str]:
-    """Split C source into lexical tokens: string/char literals stay atomic
-    (via the same C_LITERAL pattern the cleanup layer uses to shield them),
-    multi-character operators are matched before single characters, and
-    identifiers/keywords/numbers are whole tokens. Whitespace carries no
-    information and is a pure separator, exactly like in C itself."""
+    """Split C code into tokens: string and character literals, operators,
+    numbers, names and single symbols. Whitespace only separates tokens."""
     return _C_TOKEN.findall(text)
 
 
 def token_accuracy(prediction: str, reference: str) -> float:
-    """Token-level recognition accuracy: 1 - (edit distance over C-lexical
-    tokens / reference token count), floored at 0. Distinct from wer(): token
-    boundaries follow C syntax rather than whitespace, so a difference in
-    spacing around an operator never counts as an error -- only genuinely
-    different tokens do."""
+    """1 - (edit distance over C tokens / reference token count), at least 0.
+    Unlike wer(), spacing around an operator never counts as an error."""
     reference_tokens = tokenize_c(reference)
     prediction_tokens = tokenize_c(prediction)
     if not reference_tokens:
@@ -220,10 +204,9 @@ def summarize_metrics(
     metric_keys: tuple[str, ...] = METRIC_KEYS,
     metrics_field: str = "metrics",
 ) -> dict[str, dict[str, float]]:
-    """Average available metrics by a metadata field. `metric_keys`/
-    `metrics_field` default to the CER metrics for backward compatibility;
-    pass `WORD_TOKEN_METRIC_KEYS, metrics_field="word_token_metrics"` to
-    summarize those instead."""
+    """Average each metric per group, e.g. per paper type. Defaults to the
+    CER metrics; pass WORD_TOKEN_METRIC_KEYS and
+    metrics_field="word_token_metrics" for WER and token accuracy."""
     grouped: dict[str, dict[str, list[float]]] = defaultdict(
         lambda: {key: [] for key in metric_keys}
     )

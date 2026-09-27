@@ -1,8 +1,9 @@
-"""Conservative association of spatially separated code continuations.
+"""Move a block written beside another block to where it continues.
 
-This module decides only the order of existing OCR detections. It does not
-recognize, repair, split, merge, insert, or remove characters. Ambiguous or
-unsafe evidence preserves the supplied baseline order.
+On a two-column page, a right-hand block is moved after a left-hand block
+only when the code shows it continues it: an if/else split across the gap,
+or braces opened on the left and closed on the right. Only the order of
+detections changes. When the evidence is unclear, the order is kept.
 """
 
 import math
@@ -10,32 +11,15 @@ import re
 from statistics import median
 
 
+# In median line heights: blocks must be at least 2 apart horizontally, and a
+# vertical gap over 1.2 starts a new block.
 GUTTER_HEIGHTS = 2.0
 BAND_GAP_HEIGHTS = 1.2
 
-# Recognizes a heading line standing alone on its own detection row, used to
-# split blocks and to tell independent answers apart by number. Calibrated
-# against every heading format observed in datasets/verified/labels.csv as of
-# 2026-09-17 ("Question N:", "QUESTION NO. N.", "test Case N", "Test case N:",
-# and a bare numbered heading "N." / "N)" / "N.)"). This is closed-vocabulary
-# on purpose, the same way c_code_cleanup.py only fixes known keywords: a
-# heading style not seen in real papers is not guessed at. An unrecognized
-# heading never causes a wrong reorder -- it only loses this shortcut and
-# falls back to geometry/brace evidence, which is more conservative. Add a
-# new alternative here only after finding it in real, newly collected papers.
-# A trailing [.):;]{0,2} lets a PREFIXED heading carry ordinary closing
-# punctuation ("Test case 5:") without accidentally matching a heading fused
-# with the code that follows it on the same OCR'd line (e.g. "1. #include ..."
-# still fails to match, because leftover text after the number is not
-# whitespace).
-#
-# The prefix group is conditional (?(pre)...): when a heading word IS present it
-# already disambiguates, so trailing punctuation is optional. When the prefix is
-# ABSENT (a bare numbered heading) we require at least one "." or ")" -- this is
-# what separates a real heading like "1." / "2)" / "3.)" from a stray code
-# fragment misdetected on its own row like "5", "0;", or "1;", which must NOT be
-# treated as a heading (a bare digit or a digit+semicolon is statement text, not
-# a question label). The number is captured as the named group "num".
+# A question heading on its own row, such as "Question 1:", "QUESTION NO. 2.",
+# "Test case 3" or a bare "4." / "5)". Only formats seen in real papers are
+# matched; an unknown format just falls back to the brace checks. A bare
+# number needs "." or ")", so a stray "5" or "0;" isn't read as a heading.
 QUESTION = re.compile(
     r"^\s*(?P<pre>q[a-z]{3,10}\s*(?:no\.?)?|test\s*case)?\s*"
     r"(?P<num>\d+)\s*(?(pre)[.):;]{0,2}|[.)]{1,2})\s*$",
@@ -44,7 +28,8 @@ QUESTION = re.compile(
 
 
 def _code_only(text):
-    """Mask C literals and comments used as structural evidence."""
+    """Blank out strings, character literals and comments, leaving only code.
+    Returns (code, ok); ok is False if a string or comment is left open."""
     output = []
     index = 0
     while index < len(text):
@@ -78,6 +63,7 @@ def _code_only(text):
 
 
 def _scope(code):
+    """The final brace depth and the lowest depth reached."""
     depth = 0
     lowest = 0
     for character in code:
@@ -87,7 +73,8 @@ def _scope(code):
 
 
 def _code_rows(text_rows):
-    """Return safe row evidence plus whether every row was lexically safe."""
+    """The rows' code joined by newlines (see _code_only), and whether every
+    row could be read. A row that can't is left blank."""
     output = []
     fully_safe = True
     for text in text_rows:
@@ -101,6 +88,8 @@ def _code_rows(text_rows):
 
 
 def _blocks(identifiers, records, height, side):
+    """Split one side's detections into blocks. Detections are grouped into
+    rows; a new block starts after a vertical gap or at a question heading."""
     ordered = sorted(
         identifiers,
         key=lambda identifier: (
@@ -148,6 +137,7 @@ def _blocks(identifiers, records, height, side):
 
 
 def _fallback_result(baseline_ids, reason):
+    """A result that keeps the original order."""
     return {
         "baseline_ids": list(baseline_ids),
         "ordered_ids": list(baseline_ids),
@@ -160,10 +150,13 @@ def _fallback_result(baseline_ids, reason):
 
 
 def associate_continuation(records, baseline_ids):
-    """Return supported detection order and inspectable evidence.
+    """Decide which right-hand blocks continue left-hand ones. Returns the
+    new detection order and the evidence for each decision.
 
-    ``records`` are treated as immutable and identified by their list index.
-    ``baseline_ids`` must be a complete permutation of those indices.
+    `records` are the detections (text, score, box), identified by list
+    index; they aren't modified. `baseline_ids` is the current order and must
+    list every index once. A block is moved only on unique, clear evidence;
+    otherwise the order is kept and the status is "ambiguous".
     """
     natural = list(range(len(records)))
     try:
@@ -293,18 +286,9 @@ def associate_continuation(records, baseline_ids):
             if candidate["top"] > left_block["bottom"]
             for text in candidate["text_rows"]
         )
-        # Unlike the main() branch above and the scope branch below, this branch
-        # intentionally does NOT require left_safe. _code_rows already blanks any
-        # lexically-unsafe row before building left_code, so a `\bif\b` match can
-        # only come from a SAFE row -- an unsafe row can only remove evidence
-        # (under-fire), never inject a false `if`. The scope branch needs both
-        # sides fully safe because it counts braces across the whole block, where
-        # a blanked row's missing braces would corrupt the depth math; keyword
-        # presence has no such dependency. See the writerX two-question fixture
-        # (tests/test_continuation_planning.py) and
-        # test_if_else_continuation_survives_unsafe_unrelated_left_row: the Q1
-        # left block has an unterminated string on one row, yet the if/else
-        # continuation is the correct outcome. Do not add left_safe here.
+        # No left_safe check here, on purpose: an unreadable row is already
+        # blanked, so it can only hide an `if`, never add one. The brace check
+        # below does need it, because a blanked row would lose its braces.
         if (right_safe
                 and later_numbered_question
                 and re.search(r"\bif\b", left_code)

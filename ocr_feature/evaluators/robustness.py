@@ -1,6 +1,5 @@
-# Library module, not runnable on its own (no __main__) -- imported by
-# evaluate_robustness.py. Run that instead.
-"""Deterministic image transforms for OCR robustness diagnostics."""
+"""Fixed image changes (blur, shadow, paper texture, show-through, slight
+rotation) for testing OCR robustness. Used by evaluate_robustness.py."""
 
 import cv2
 import numpy as np

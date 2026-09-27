@@ -1,10 +1,8 @@
-"""Measure OCR sensitivity to deterministic synthetic image stressors.
+"""Measure how OCR accuracy changes when the test photos are blurred,
+shadowed, rotated and so on (see robustness.py). A diagnostic only; real
+accuracy comes from evaluate_cer.py.
 
-These results are diagnostics, not real-paper accuracy. The original labeled
-images remain the only primary acceptance set.
-
-Run from the ocr_feature/ directory (module path, not the file path):
-
+Run from ocr_feature/:
     .venv/bin/python -m evaluators.evaluate_robustness
 """
 

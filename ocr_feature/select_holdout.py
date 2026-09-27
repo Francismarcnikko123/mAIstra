@@ -1,19 +1,17 @@
-"""Pick a stratified test-set holdout from datasets/verified/labels.csv,
-move the chosen rows' images into samples/, and remove them from
-datasets/verified/ (train) so the same page never appears in both.
+"""Choose the test set: move some verified pages from datasets/verified/
+(train) to samples/ (test), so no page is in both.
 
-Selection rules:
-  - greenbook: multi-page "B<n>" groups (e.g. green_writer13_B2_1/_2) are
-    moved as a whole unit, never split across train/test.
-  - bond/yellow_pad: only 4 distinct writers each, so holding out a writer's
-    entire set would remove a quarter of that paper type's train diversity.
-    Individual pages are held out instead, leaving each writer represented
-    in both train and test.
-  - yellow_pad gets a higher fraction (currently zero real test coverage).
+- Greenbook: a writer's group of pages (e.g. green_writer13_B2_1 and _2)
+  moves together.
+- Bond and yellow pad have only 4 writers each, so single pages are held
+  out and every writer stays in both train and test.
+- Picks are spread across writers, and every writer keeps at least one
+  training page.
+- A page split into several programs is never picked.
 
 Run from ocr_feature/:
-    python select_holdout.py            # dry run, prints the picks
-    python select_holdout.py --apply    # actually moves files + rewrites CSVs
+    python select_holdout.py            # dry run: shows the picks
+    python select_holdout.py --apply    # moves the files and rewrites both CSVs
 """
 import csv
 import re
@@ -40,6 +38,8 @@ SAMPLES_FIELDNAMES = [
 
 
 def group_key(paper_type: str, submission_id: str) -> str:
+    """The unit that moves together: a greenbook writer's page group
+    (green_writerN_Bk), otherwise the page itself."""
     if paper_type == "greenbook":
         m = re.match(r"(green_writer\d+_B\d+)_\d+$", submission_id)
         if m:
@@ -135,9 +135,7 @@ def main() -> int:
         dest = dest_dir / Path(r["image_path"]).name
         shutil.move(str(src), str(dest))
         new_sample_rows.append({
-            # keep the paper-type subfolder in the label so samples/ mirrors
-            # datasets/verified/images/<paper_type>/; evaluate_cer resolves
-            # each image as samples/<filename>, so this path just works.
+            # Includes the paper-type folder; evaluate_cer reads samples/<filename>.
             "filename": f"{paper_type}/{Path(r['image_path']).name}",
             "ground_truth_text": r["verified_text"],
             "writer": r["student_name"],

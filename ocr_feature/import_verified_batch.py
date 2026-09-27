@@ -1,25 +1,19 @@
-"""Import a physically-verified writer-named batch (bond/greenbook/yellow_pad,
-from ~/Downloads/image_to_transcribe_verified/) into
-datasets/verified/images/<paper_type>/ and add its .txt content to
-datasets/verified/labels.csv.
+"""Import a batch of pages checked against the paper (bond, greenbook,
+yellow_pad) from ~/Downloads/image_to_transcribe_verified/ into
+datasets/verified/images/<paper_type>/ and datasets/verified/labels.csv.
 
-Safe to re-run for each new batch (2026-09-27): pages already imported keep
-their row, their place in labels.csv and who verified them, even when they're
-not in the source folder; test pages in samples/ and new pages from greenbook
-test writers are never imported; a paper type the batch doesn't have is
-skipped. Run with --dry-run first: it prints everything and writes nothing.
+Safe to re-run for each new batch:
+- pages already imported keep their row, position and verifier, even if
+  they aren't in this batch;
+- test pages in samples/, and new pages from greenbook test groups, are
+  never imported;
+- a paper type missing from the batch is skipped.
 
-Named "_verified" specifically to not be confused with the *other*,
-separate, still-unverified `submission_*`-named batch that lives in
-~/Desktop/image_to_transcribe/ -- that one hasn't been checked against
-physical paper yet and must never be imported by this script.
+Writers are stored as pseudonyms ("writer<N>"), never real names; the same
+number in two paper types is two different students. The unverified batch
+in ~/Desktop/image_to_transcribe/ must never be imported.
 
-Writer identity is stored as a bare "writer<N>" pseudonym per
-writer-pseudonyms-no-real-names -- never a real name -- scoped per
-paper_type (the same number in different paper types is not the same
-student).
-
-Run from ocr_feature/:
+Run from ocr_feature/, dry run first (it prints everything and writes nothing):
     python import_verified_batch.py --verified-by "Name of verifier" --dry-run
     python import_verified_batch.py --verified-by "Name of verifier"
 """
@@ -43,17 +37,9 @@ WRITER_RE = re.compile(r"writer(\d+)")
 
 
 def _holdout_stems() -> set:
-    """Filename stems already held out as the test set in samples/ -- these
-    must NEVER be copied into datasets/verified/ (train). samples/ = test,
-    datasets/verified/ = train, never overlap -- a hard project rule. A prior
-    run of this script violated it by copying 20 held-out images into train
-    before this guard existed; see the 2026-08-30 fix.
-
-    select_holdout.py keeps each paper type in its own folder
-    (samples/bond/, ...), so images are found at any depth, and every
-    filename in samples/labels.csv counts too. Until 2026-09-27 only
-    top-level samples/*.jpg was checked, which matched none of the 20 test
-    pages."""
+    """File names (without extension) of the test pages: every image under
+    samples/ and every file in samples/labels.csv. These must never be
+    copied into datasets/verified/ (train)."""
     if not SAMPLES_DIR.exists():
         return set()
     stems = {p.stem for p in SAMPLES_DIR.rglob("*") if p.suffix.lower() in (".jpg", ".jpeg")}
@@ -87,9 +73,8 @@ def main(verified_by: str, dry_run: bool = False) -> int:
         if is_writer_batch_id(sid)
     }
     holdout = _holdout_stems()
-    # Greenbook's test set holds out whole writers (green_writerN_Bk, the
-    # select_holdout.py group), so a NEW page from one of them is a
-    # test-writer page too. Bond/yellow are held out per page.
+    # Greenbook test pages are held out by group (select_holdout.group_key),
+    # so a new page from a test group is a test page too.
     test_groups = {group_key("greenbook", stem) for stem in holdout}
 
     def is_test(stem: str) -> bool:
@@ -137,9 +122,7 @@ def main(verified_by: str, dry_run: bool = False) -> int:
 
             previous = existing_full.get(stem)
             if previous is not None and previous["verified_text"] == verified_text:
-                # Already imported with this exact text: keep its row, so who
-                # verified it and when stay as recorded. Only new pages and
-                # changed text (a re-verification) get this run's verifier.
+                # Same text as before: keep the old row, with its verifier and date.
                 if not dry_run and not dest_image_path.exists():
                     shutil.copy2(image_path, dest_image_path)
                 rows.append(previous)
@@ -162,10 +145,8 @@ def main(verified_by: str, dry_run: bool = False) -> int:
                 "correction_edit_distance": "",
             })
 
-    # Rows keep their place in labels.csv, so its diff shows only real
-    # changes; new pages go at the end. Supabase-exported rows are untouched.
-    # Pages imported earlier stay even if this source folder doesn't have
-    # them (it may hold only the new batch). A test page never stays in train.
+    # Existing rows keep their order and new pages go at the end. Rows from
+    # Supabase and pages imported earlier are kept; test pages are removed.
     own_new = {row["submission_id"]: row for row in rows}
     merged = {}
     preserved = kept = 0
@@ -197,8 +178,7 @@ def main(verified_by: str, dry_run: bool = False) -> int:
         for name, reason in skipped:
             print(f"  {name}: {reason}")
 
-    # Sanity check: does this source actually align with what's already in
-    # labels.csv, or did it just silently change/lose data underneath us?
+    # Report what changed compared with the previous labels.csv.
     new_ids = {row["submission_id"] for row in rows}
     old_ids = set(existing)
     added = sorted(new_ids - old_ids)

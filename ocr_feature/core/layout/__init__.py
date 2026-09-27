@@ -1,11 +1,11 @@
-"""Reading-order and indentation geometry for the OCR pipeline.
+"""Put OCR detections into lines, in reading order.
 
-Pure geometry, no recognition runtime. ``columns`` identifies full-height and
-partial-height columns; ``displacement`` traces and reassembles displaced
-regions; ``braces`` supplies C brace-depth primitives; and ``format`` restores
-paper-faithful indentation and blank lines. This module owns the grouping
-orchestration and remains the compatibility surface for ``core.ocr_pipeline``
-and tests.
+Groups detection boxes into lines, handles two-column pages and blocks
+written in the margin, and restores indentation. Whole detections are
+reordered; recognized text is never changed.
+
+Submodules: columns (two-column pages), displacement (margin blocks),
+braces (brace counting), format (indentation and blank lines).
 """
 
 import math
@@ -34,12 +34,12 @@ from .format import (
 )
 
 def _sever_displaced_regions(lines, median_width):
-    """Append aligned right clusters from consecutive rows using geometry only.
+    """Move a block written to the right of the main code to the end.
 
-    Reconstruct visual rows when boxes are available, because the baseline
-    sweep may already have separated the right fragments. Apply accepted
-    moves to the original lines so unrelated grouping and metadata survive.
-    X-only callers retain the existing pre-grouped-row contract.
+    A block counts when at least MIN_SEVER_ROWS consecutive rows have a wide
+    gap at the same x and no box crosses it. Rows are rebuilt from the boxes
+    first when y positions are available. Returns `lines` unchanged if there
+    is no such block or any geometry is invalid.
     """
     width = finite_float(median_width)
     if width is None or width <= 0 or not isinstance(lines, (list, tuple)):
@@ -123,8 +123,8 @@ def _sever_displaced_regions(lines, median_width):
                 for geometry, _split, _right_x in candidates[start:end]
                 for _member, x, x_max in geometry
             )
-            # A shared gutter needs positive width, including when a left
-            # fragment touches or lies entirely beyond the right boundary.
+            # The gap must be clear: all left fragments end before it and no
+            # box crosses it.
             if left_max < gutter and not crossed:
                 accepted.update((index, candidates[index])
                                 for index in range(start, end))
@@ -147,11 +147,12 @@ def _sever_displaced_regions(lines, median_width):
 
 
 def _reassemble_margin_candidates(lines, median_width):
-    """Brace-assisted fallback for missed right-margin continuation blocks.
+    """Fallback for a margin block that no gap marked.
 
-    This deliberately does not correct symbols. It only marks whole existing
-    lines as a candidate displaced block, then reuses _reassemble_displaced_regions
-    to accept a unique brace-balanced move.
+    Looks for aligned lines shifted well to the right that close more braces
+    than they open, with a clear gap beside them. Moves them to the end only
+    if exactly one such group gives balanced braces (checked by
+    _reassemble_displaced_regions); otherwise returns `lines` unchanged.
     """
     width = finite_float(median_width)
     if width is None or width <= 0 or not isinstance(lines, (list, tuple)):
@@ -271,7 +272,11 @@ def _original_detection_records(rec_texts, rec_scores):
 
 
 def _associate_continuation(rows, records, detection_ids_by_member):
-    """Apply only a complete, row-preserving continuation permutation."""
+    """Reorder rows with the continuation matcher (core.continuation).
+
+    The new order is used only if it keeps every detection exactly once and
+    keeps each row's detections together; otherwise `rows` is returned
+    unchanged."""
     try:
         row_ids = [
             [detection_ids_by_member[id(member)] for member in row]
@@ -308,7 +313,8 @@ def _associate_continuation(rows, records, detection_ids_by_member):
 
 def _finalize_grouped_lines(lines, median_char_width, records,
                             detection_ids_by_member):
-    """Apply safe association to lines whose column indentation is assigned."""
+    """Sort each line's detections left to right, then apply the
+    continuation matcher."""
     rows = [
         sorted(line["members"], key=lambda member: member["x"])
         for line in lines
@@ -319,10 +325,11 @@ def _finalize_grouped_lines(lines, median_char_width, records,
 
 def _order_column_items(items, line_tol, region_gap_threshold,
                         baseline_gap_threshold):
-    """Order one column while resolving its own displaced regions.
+    """Group one column's detections into lines and move a margin block
+    inside it, if one is confirmed.
 
-    Kept at package scope because grouping tests patch the helpers by this
-    namespace and must observe the calls made by the live coordinator.
+    Defined here, not in displacement.py, because the tests patch its
+    helpers through this module.
     """
     lines, seed = _sweep_detection_records(
         items, line_tol, region_gap_threshold, baseline_gap_threshold, set())
@@ -339,12 +346,11 @@ def _order_column_items(items, line_tol, region_gap_threshold,
     return _reassemble_displaced_regions(lines)
 
 def _group_detection_records(rec_texts, rec_scores, rec_boxes):
-    """Group detections and retain the box geometry used for ordering.
+    """Group detections into lines, in reading order.
 
-    The boolean return value indicates whether every detection had safe,
-    finite geometry. Unsafe geometry falls back to one detection per line in
-    original order so callers never infer coordinates that Paddle did not
-    provide reliably.
+    Returns (lines, geometry_ok). If any box is missing or invalid, each
+    detection becomes its own line in PaddleOCR's order and geometry_ok is
+    False, so no positions are guessed.
     """
     if not rec_boxes or len(rec_boxes) != len(rec_texts):
         return _original_detection_records(rec_texts, rec_scores), False
@@ -357,18 +363,18 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
             x_min, y_min, x_max, y_max = (float(box[0]), float(box[1]),
                                           float(box[2]), float(box[3]))
         except (TypeError, IndexError, ValueError, OverflowError):
-            # Malformed box -> don't risk regrouping; keep original order.
+            # Invalid box: keep the original order.
             return _original_detection_records(rec_texts, rec_scores), False
         width = x_max - x_min
         height = y_max - y_min
         if (not all(math.isfinite(value)
                     for value in (x_min, y_min, x_max, y_max, width, height))
                 or width <= 0 or height <= 0):
-            # Invalid geometry -> don't risk regrouping; keep original order.
+            # Invalid box: keep the original order.
             return _original_detection_records(rec_texts, rec_scores), False
         y_center = y_min + height / 2.0
         if not math.isfinite(y_center):
-            # Invalid geometry -> don't risk regrouping; keep original order.
+            # Invalid box: keep the original order.
             return _original_detection_records(rec_texts, rec_scores), False
         score = rec_scores[i] if i < len(rec_scores) else 0.0
         items.append({"text": rec_texts[i], "score": score,
@@ -389,9 +395,7 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
         id(item): identifier for identifier, item in enumerate(items)
     }
 
-    # Two boxes belong to the same visual line if their vertical centers are
-    # within ~60% of a typical line height. Using the median height keeps this
-    # robust to one unusually tall/short detection.
+    # Boxes whose centers are within 60% of the median box height share a line.
     heights.sort()
     median_h = heights[len(heights) // 2] if heights else 0.0
     line_tol = max(median_h * 0.6, 1.0)
@@ -400,9 +404,7 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
     median_width = widths[len(widths) // 2] if widths else 0.0
     region_gap_threshold = max(REGION_GAP_MULTIPLIER * median_width, 1.0)
 
-    # Character-scale width (box width / text length) is the unit for indent
-    # reconstruction -- see INDENT_STEP_CHARS. Box width alone spans a whole
-    # word, so it is far too coarse to resolve a few-character indent.
+    # Indentation is measured in character widths (box width / characters).
     char_widths = sorted(
         (it["x_max"] - it["x"]) / len(it["text"].strip())
         for it in items if it["text"] and it["text"].strip()
@@ -411,16 +413,12 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
         char_widths[len(char_widths) // 2] if char_widths else 0.0
     )
 
-    # Sort by vertical position first so we can sweep top-to-bottom.
+    # Sweep from top to bottom.
     items.sort(key=lambda it: it["y"])
 
     baseline_gap_threshold = max(BASELINE_REGION_GAP_MULTIPLIER * median_width, 1.0)
 
-    # A genuine two-column page (two independent programs side by side) reads
-    # as left column fully, then right column fully -- NOT interleaved by the
-    # y-sweep. Detect it, and if found, order each column on its own and
-    # concatenate. Only applied when detection is confident (see
-    # _detect_two_columns); every other page takes the single-column path.
+    # Two programs side by side: read the whole left column, then the right.
     page_top = min(it["y_min"] for it in items)
     page_bot = max(it["y_max"] for it in items)
     gutter_x = _detect_two_columns(items, page_top, page_bot)
@@ -440,14 +438,10 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
                 left_lines + right_lines, median_char_width, records,
                 detection_ids_by_member)
             return ordered_lines, True
-        # Either column had unsafe geometry -- fall through to single-column.
+        # Invalid geometry in a column: read the page as one column.
     else:
-        # No full-height split. Try the banded generalization: a partial-height
-        # right column (a two-page / side-by-side capture whose continuation
-        # fills only the top-right quadrant). Read it left column fully, then
-        # right column fully -- the same rule as the full-height split, applied
-        # to a right block that spans less than half the page. If it fires,
-        # severance is skipped; otherwise the single-column path runs unchanged.
+        # No full-height column: check for a right column covering only part
+        # of the page (for example a continuation in the top-right corner).
         banded = _detect_banded_column(items, median_width, line_tol)
         if banded is not None:
             _gutter_b, left, right = banded
@@ -462,7 +456,7 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
                     left_lines + right_lines, median_char_width, records,
                     detection_ids_by_member)
                 return ordered_lines, True
-            # Either column had unsafe geometry -- fall through to single-column.
+            # Invalid geometry in a column: read the page as one column.
 
     lines = _order_column_items(
         items, line_tol, region_gap_threshold, baseline_gap_threshold)
@@ -473,8 +467,8 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
         lines = _sever_displaced_regions(lines, median_width)
         if _line_identity_order(lines) == before_severance:
             lines = _reassemble_margin_candidates(lines, median_width)
-    # The single-column mechanisms may already have made a higher-confidence
-    # brace-balanced move. Do not let column association override that result.
+    # One column: no continuation matcher, so it can't undo a brace-checked
+    # move made above.
     _assign_indent_levels(lines, median_char_width)
     ordered_lines = [
         sorted(line["members"], key=lambda member: member["x"])
@@ -484,7 +478,9 @@ def _group_detection_records(rec_texts, rec_scores, rec_boxes):
 
 
 def _group_structured_lines(rec_texts, rec_scores, rec_boxes, image_height):
-    """Return nonempty OCR lines with confidence and normalized geometry."""
+    """Build the final OCR lines: indented text, per-line confidence, and
+    vertical position as a fraction of the image height. Empty lines are
+    dropped."""
     grouped, geometry_safe = _group_detection_records(
         rec_texts, rec_scores, rec_boxes
     )

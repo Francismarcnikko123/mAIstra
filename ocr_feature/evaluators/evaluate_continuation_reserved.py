@@ -1,7 +1,8 @@
-"""Explicit frozen-rule evaluation on reserved fixtures, never development input.
+"""Score the frozen continuation prototype on the reserved test pages.
 
-Run only after freezing the prototype. Reject changed rules or fixture hashes.
-This replays the recorded first reserved evaluation; it does not run recognition.
+Refuses to run if continuation_prototype.py or a reserved fixture has changed
+since the freeze (checked by SHA-256), so the result stays a true held-out
+test. Uses saved detections; no OCR is run.
 """
 import hashlib
 import json
