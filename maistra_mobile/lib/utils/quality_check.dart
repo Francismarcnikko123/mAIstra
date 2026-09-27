@@ -178,7 +178,6 @@ double computeSkewAngle(img.Image grayscale) {
       for (int x = 0; x < small.width; x++) {
         if (!binary[y][x]) continue;
         // Rotate point around centre
-        final nx = cosA * (x - cx) + sinA * (y - cy) + cx;
         final ny = -sinA * (x - cx) + cosA * (y - cy) + cy;
         final row = ny.round();
         if (row >= 0 && row < small.height) proj[row]++;

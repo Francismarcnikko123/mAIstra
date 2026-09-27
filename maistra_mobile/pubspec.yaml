@@ -13,7 +13,6 @@ dependencies:
   cupertino_icons: ^1.0.8
   supabase_flutter: ^2.3.4
   image_picker: ^1.0.7
-  flutter_dotenv: ^6.0.1
   image: ^4.0.7
   edge_detection:
     path: packages/edge_detection
