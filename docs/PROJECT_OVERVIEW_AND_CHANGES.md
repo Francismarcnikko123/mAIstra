@@ -613,6 +613,20 @@ The review questions are tracked in [the adviser-review task](plans/2026-09-09-a
 - **Not changed:** the OCR pipeline, models and `evaluate_cer`; save and grading logic; the database.
 - **Verification:** OCR 256/256 (6 new tests; 5 fail on the old `main.py`), web 339/339, both TypeScript checks, `ng build` (existing CSS budget warning), Playwright 19/19 twice. On the real server (auto-extract off): the web app's preflight passes, another site's is refused, an internal address is refused, a cloud photo extracts.
 
+## Verified-batch import is safe to re-run (2026-09-27, branch `feature/import-fixes`)
+
+> **Owner:** Nombrado (`ocr_feature/import_verified_batch.py`). Prep for the bond / yellow / greenbook B4 papers; no papers needed.
+
+- **Test pages can't leak into training:** the guard now finds the test images in `samples/<paper_type>/` and every page listed in `samples/labels.csv`. It used to look only at top-level `samples/*.jpg` and matched none of the 20 test pages, so the next import would have copied all 20 into train (they are still in the source folder) and invalidated the before/after CER comparison.
+- **Provenance stays true:** a page already imported with the same text keeps its row, so earlier pages aren't re-stamped with the new verifier and date; changed text counts as a new verification.
+- **No silent deletion:** earlier pages stay in `labels.csv` when the source folder holds only the new batch; a row that is a test page is removed from train and reported.
+- **After the code review (same day):** a new page from a greenbook test writer (`green_writerN_Bk`) is skipped too; rows keep their place in `labels.csv` (new pages last); a batch without some paper type still imports; unchanged images aren't recopied; `--dry-run` shows the whole report and writes nothing.
+- **OCR server follow-ups (`ocr_feature/main.py`):** host matching ignores case and default ports and accepts a `SUPABASE_URL` without `https://`; a URL with a `user@` part is refused; any POST from another website gets 403, which also stops plain form uploads that CORS alone couldn't block (curl and the server's `/docs` still work).
+- **Held for the papers, with reasons, in Nombrado's local notes:** the `select_holdout.py` re-run risk and its hard-coded verifier, and three export fixes (test-page check, stable paging, split-page guard).
+- **Deferred until the papers arrive:** `writer_id`, whole-writer holdout, export date cutoff (Nombrado's local notes, 2026-09-27).
+- **Not changed:** the OCR pipeline, models, `samples/`, `datasets/`, `evaluate_cer`.
+- **Verification:** OCR 270/270 (14 new tests; each fails on the code before its fix, except two that pin behaviour that already held). `--dry-run` on the real source folder and test set: 20 test pages skipped, 168 earlier pages unchanged, nothing written. Real OCR server (auto-extract off): an upload from another site gets 403, curl and the web app's preflight still work.
+
 ## Code cleanup completed
 
 > **Owner:** Shared (Jayrald + Nombrado)
@@ -799,6 +813,7 @@ handwriting.
 
 > **Owner:** Shared
 
+- **2026-09-27 import fixes and code-review follow-ups (`feature/import-fixes`):** OCR 270/270; `--dry-run` on the real data skips the 20 test pages and writes nothing; live OCR server check with auto-extract off. No pipeline change, so `evaluate_cer` is unaffected.
 - **2026-09-27 review follow-ups (`feature/nombrado-review-followups`, from `judge0-integration` `7335d91`):** web 339/339, OCR 256/256, both TypeScript checks, `ng build` (existing CSS budget warning), Playwright 19/19 twice. Live OCR server check with auto-extract off; nothing written to the cloud.
 - **2026-09-27 `judge0-integration` checkpoint (after the Save-label follow-ups and the OCR export):** web 309/309, OCR 250/250, `evaluate_cer` unchanged (clean_ws CER 0.099, WER 0.328, token accuracy 0.716), Playwright e2e 9/9 on the local machine (fake backend), `ng build` passes with the existing `submissions-list.list.css` budget warning. Only `judge0-integration` should be run against the cloud; older branches are kept for diffs.
 - **2026-09-26 program-tabs Save checkpoint:** web 121/121; Angular application and spec TypeScript checks and `ng build` pass with the existing CSS budget warning. No OCR code changed, so the OCR suite was not re-run (last run 231/231 on 2026-09-24).

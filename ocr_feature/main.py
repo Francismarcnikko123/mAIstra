@@ -7,7 +7,8 @@ from urllib.parse import urlparse
 
 import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -49,14 +50,30 @@ def allowed_origins(env=os.environ) -> list[str]:
     return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
 
 
+ALLOWED_ORIGINS = allowed_origins()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins(),
+    allow_origins=ALLOWED_ORIGINS,
     # No cookies or auth headers are used, so never let other sites send them.
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+# CORS only stops a browser from reading the answer. A plain form upload
+# (multipart/form-data) is sent without asking first, so another website
+# could still make this server run OCR. Browsers always send Origin on a
+# POST: refuse any site other than the web app or this server's own /docs
+# page. Tools without a browser (curl, scripts) send no Origin and still work.
+@app.middleware("http")
+async def refuse_posts_from_other_sites(request: Request, call_next):
+    origin = (request.headers.get("origin") or "").rstrip("/")
+    own_origin = f"{request.url.scheme}://{request.url.netloc}"
+    if request.method == "POST" and origin and origin not in ALLOWED_ORIGINS and origin != own_origin:
+        return JSONResponse(status_code=403, content={"detail": "This site may not use the OCR server."})
+    return await call_next(request)
 
 class ImageUrlRequest(BaseModel):
     submission_id: str
@@ -111,14 +128,28 @@ DOWNLOAD_RETRIES = 3
 DOWNLOAD_MAX_BYTES = 25 * 1024 * 1024
 
 
+def host_key(url_or_host: str) -> str:
+    """"host" or "host:port" of a URL or a bare host[:port], lower-case, with
+    the scheme's default port dropped, so "abc.supabase.co",
+    "https://abc.supabase.co/" and "https://abc.supabase.co:443/x" all give
+    "abc.supabase.co". Raises ValueError for a malformed port."""
+    value = url_or_host.strip()
+    parsed = urlparse(value if "//" in value else f"//{value}")
+    host = (parsed.hostname or "").lower()
+    port = parsed.port
+    if port is None or (parsed.scheme, port) in (("https", 443), ("http", 80)):
+        return host
+    return f"{host}:{port}"
+
+
 def allowed_image_hosts(env=os.environ) -> set[str]:
     """Hosts an image URL may point to: OCR_ALLOWED_IMAGE_HOSTS if set
     (comma-separated host[:port]), else the host of SUPABASE_URL, where every
     paper's photo is stored. Empty (no .env yet) accepts any host."""
     raw = env.get("OCR_ALLOWED_IMAGE_HOSTS", "")
-    hosts = {host.strip().lower() for host in raw.split(",") if host.strip()}
-    if not hosts and env.get("SUPABASE_URL"):
-        hosts.add(urlparse(env["SUPABASE_URL"]).netloc.lower())
+    hosts = {host_key(host) for host in raw.split(",") if host.strip()}
+    if not hosts and env.get("SUPABASE_URL", "").strip():
+        hosts.add(host_key(env["SUPABASE_URL"]))
     return hosts
 
 
@@ -131,7 +162,12 @@ def download_image(url: str, dest: Path) -> None:
     # Other devices on the network may reach this server, so it must not
     # download internal addresses for whoever asks.
     hosts = allowed_image_hosts()
-    if hosts and parsed.netloc.lower() not in hosts:
+    try:
+        host = host_key(url)
+    except ValueError:
+        host = ""
+    # A user@ part is never needed for storage and hides the real host.
+    if hosts and (host not in hosts or parsed.username or parsed.password):
         raise HTTPException(
             status_code=400,
             detail="Image URL must point to this project's Supabase storage "
