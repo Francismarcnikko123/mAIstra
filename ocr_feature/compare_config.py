@@ -1,6 +1,10 @@
 """Compare the shipped preprocessing (grayscale + denoise) with black-and-white
-thresholding on one photo: the OCR text, confidence and, if the photo is in
-a labels.csv, the CER of each. Shows why thresholding is off.
+thresholding on one photo: the OCR text, confidence and, if the correct text
+is known, the CER of each. Shows why thresholding is off.
+
+The correct text comes from samples/labels.csv or
+datasets/verified/labels.csv. For a photo in neither, a .txt with the same
+name beside it (photo.jpg -> photo.txt) is used instead.
 
     python compare_config.py                           # default photo
     python compare_config.py path/to/photo.jpg
@@ -58,6 +62,10 @@ def _load_reference(image_path: str) -> tuple[str, str] | None:
                     text = row.get(text_col)
                     if text:
                         return text, f"{csv_path} ({name_col}={base})"
+    # Checked last, so a loose unverified .txt never overrides a verified label.
+    beside = Path(image_path).with_suffix(".txt")
+    if beside.exists():
+        return beside.read_text(encoding="utf-8"), str(beside)
     return None
 
 
