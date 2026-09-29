@@ -337,6 +337,34 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 When you finish an item: tick it, add the date and commit, and note anything that affects others under **Changed (affects others)**.
 
 ### Status
+- (2026-09-29) **Gate test: real photos vs OCR error rate** (Nombrado's rules). App and `compare_config.py` at `e2d1ca1`, phone M2101K6G. 3 hand-written pages (white bond, yellow ruled, green ruled), each shot in good light, dim light, with a shadow, with motion blur and tilted: 17 photos. Photos pulled from the app cache (nothing submitted), answer files typed by me from the paper, all kept in `~/gate_test/` (not committed). CER = "grayscale + denoise (shipped default)", clean, ws; every run's `ground truth:` line named the photo's own `.txt`.
+
+  | Photo | Condition | Gate | Reason (value) | CER |
+  |---|---|---|---|---|
+  | gate_bond_goodlight | good light | FIXABLE | contrast 6.7 → 9.6 after fix | 0.108 |
+  | gate_bond_tilted1 | tilted | FIXABLE | contrast 5.0 → 6.6 | 0.108 |
+  | gate_bond_tilted2 | tilted | FIXABLE | contrast 5.7 → 7.2 | 0.108 |
+  | gate_bond_dim | dim | RETAKE | blur 175.3 | 0.117 |
+  | gate_bond_shadow | shadow | RETAKE | shadow 69.9 | 0.125 |
+  | gate_bond_blur | blur | RETAKE | blur 32.1, shadow 32.0 | 0.975 |
+  | gate_yellow_goodlight | good light | PASS | – | 0.150 |
+  | gate_yellow_tilted | tilted | FIXABLE | contrast 10.6 → 13.0 | 0.106 |
+  | gate_yellow_dim | dim | RETAKE | blur 199.6, shadow 32.9 | 0.144 |
+  | gate_yellow_shadow | shadow | RETAKE | shadow 55.0 | 0.169 |
+  | gate_yellow_blur1 | blur (shake stopped) | RETAKE | shadow 25.9 (blur 216.5 passed) | 0.144 |
+  | gate_yellow_blur2 | blur | RETAKE | blur 112.5 | 0.544 |
+  | gate_green_goodlight | good light | FIXABLE → PASS | contrast 13.6 → 17.2 | 0.008 |
+  | gate_green_tilted | tilted | PASS | – | 0.008 |
+  | gate_green_dim | dim | RETAKE | blur 104.4 | 0.033 |
+  | gate_green_shadow | shadow | RETAKE | shadow 61.3 | 0.008 |
+  | gate_green_blur | blur | RETAKE | blur 197.6 | 0.287 |
+
+  - **No bad photo got through:** every PASS/FIXABLE page read as well as that page's good-light photo.
+  - **Motion blur is a correct RETAKE:** CER 0.975, 0.544, 0.287.
+  - **Shadow and dim light are rejected although the OCR still reads them:** 7 of the 10 RETAKEs are within 0.03 CER of their page's good-light photo (green shadow: same 0.008 at shadow 61.3). In dim light the blur score falls below 200 from camera noise reduction, not real blur.
+  - **Blur 200 is a narrow line:** green blur (197.6, CER 0.287) and yellow dim (199.6, CER 0.144) score almost the same.
+  - **Crop:** I moved the corners by hand on 9 of 17; on 3 yellow pages the automatic box cut off text at the left edge (text written close to the edge).
+  - **No gate or crop value changed:** 17 photos from one phone are too few to set thresholds. The photo set stays fixed; later gate/crop changes are re-run on it.
 - (2026-09-28) **Two pages in one submit share one `batch_id`: confirmed on a phone** (M2101K6G, app from `judge0-integration` `d3123d5`). Submitted 2 pages for *E2E TEST · Q1*: two `submissions` rows with the same `batch_id` (`b5914eb7…`, different from the earlier single-page test's), both with `question_id` set, `gate_result = FIXABLE` (shown as "Photo auto-corrected" on the web) and `status = pending`. This also confirms the tidied app (`ba3ec39`) still connects and uploads. I now work on `judge0-integration` directly. Left in the cloud: those 2 test pages, in the E2E TEST folder.
 - (2026-09-27) **Working branch: `feature/nikko-edit-and-batch`**, made from `judge0-integration` (`1c9c716`) with all of my v2 work merged in (`fefbf9e`). **Pushed 2026-09-27** to `origin/feature/nikko-edit-and-batch` (`d30215b`): `judge0-integration` `b8c3279` + 15 commits, merges without conflicts. Ready for whoever merges into `judge0-integration`. `feature/question-linking-v2` is retired. Web 322/322, e2e 15/15, mobile 60/60.
 - (2026-09-26) **End-to-end test passed against the live database.** Web: created *Basic · Q1 · Sum of Two Integers*, validated 3/3, saved. Phone: picked it, captured one page (PASS), submitted. Web: filed in the **Basic** folder; question page shows 1 linked paper with ✓ Photo good. DB row: `question_id` set, `gate_result = PASS`, `batch_id` set, `status = pending`, OCR fields empty. Details: `docs/changes/2026-09-26-end-to-end-test.md`. Left in the cloud: section Basic, that question, one test submission.
