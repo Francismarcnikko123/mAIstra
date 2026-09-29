@@ -139,8 +139,16 @@
       <span>
         Test Cases
         <small>Each test case is worth 1 point.</small>
+        <small *ngIf="!canAddTestCase">At most {{ maxTestCases }} test cases.</small>
       </span>
-      <button class="btn-add" (click)="addTestCase()">+ Add</button>
+      <button
+        class="btn-add"
+        (click)="addTestCase()"
+        [disabled]="!canAddTestCase"
+        [attr.title]="canAddTestCase ? null : 'At most ' + maxTestCases + ' test cases'"
+      >
+        + Add
+      </button>
     </div>
 
     <div
@@ -235,6 +243,9 @@
         </ng-container>
       </div>
 
+      <!-- After "Validate Test Cases": what the teacher expected, what the model
+           answer printed on Judge0, and pass/fail. Compiler errors and stderr
+           appear below the row when there are any. -->
       <div
         class="test-result-row"
         *ngIf="validationResults[i]"
@@ -288,7 +299,8 @@
   </div>
 </div>
 <div>
-  <!-- Validate Button -->
+  <!-- Validate Button: runs the model answer on Judge0 for every test case
+       (validateModelAnswer in question-form.ts). -->
   <button
     class="btn-save"
     type="button"

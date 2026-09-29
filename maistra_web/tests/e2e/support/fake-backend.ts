@@ -757,7 +757,15 @@ export class FakeBackend {
       return route.fulfill({ status: 204, headers: cors() });
     }
     if (this.judge0FailureStatus !== null) {
-      return this.json(route, { detail: 'Judge0 unavailable' }, this.judge0FailureStatus);
+      // The wrapper's own 502 text when the Judge0 VM is down.
+      return this.json(
+        route,
+        {
+          detail:
+            'Judge0 is unreachable at http://127.0.0.1:2358. Start Judge0 or update JUDGE0_BASE_URL.',
+        },
+        this.judge0FailureStatus,
+      );
     }
 
     const body = request.postDataJSON();

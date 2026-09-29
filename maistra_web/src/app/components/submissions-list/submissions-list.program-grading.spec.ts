@@ -187,6 +187,25 @@ describe('SubmissionsListComponent grading several programs', () => {
     );
   });
 
+  it('refuses to grade a program with more test cases than one Judge0 batch can run', async () => {
+    const ctx = setup();
+    const { component, runCCodeBatch, saveProgramGrade } = ctx;
+    component.questions[0].test_cases = Array.from({ length: 31 }, () => ({
+      test_code: '',
+      test_input: '1 2',
+      expected_output: '3',
+    }));
+    const selected = await open(ctx, [programRow(1, 'q-sum', 'sum code')]);
+
+    await component.checkSubmission(selected);
+
+    expect(runCCodeBatch).not.toHaveBeenCalled();
+    expect(saveProgramGrade).not.toHaveBeenCalled();
+    expect(component.checkError).toBe(
+      'This question has 31 test cases, but grading can run at most 30. Remove some in the question form.',
+    );
+  });
+
   it('refuses a grade the database no longer accepts', async () => {
     const ctx = setup({ saveProgramGrade: vi.fn().mockResolvedValue(null) });
     const { component } = ctx;

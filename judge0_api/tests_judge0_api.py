@@ -376,3 +376,67 @@ def test_run_code_reports_a_busy_judge0_when_the_queue_wait_runs_out(monkeypatch
     assert response.json()["detail"] == (
         "Judge0 is busy and did not start the run in time. Try again."
     )
+
+
+class OddReplyJudge0Client:
+    """Replies to the submit (post) or the poll (get) with a scripted body."""
+
+    post_json = None
+    get_json = None
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return False
+
+    async def post(self, *args, **kwargs):
+        return SimpleNamespace(status_code=201, text="", json=type(self).post_json)
+
+    async def get(self, *args, **kwargs):
+        return SimpleNamespace(status_code=200, text="", json=type(self).get_json)
+
+
+def not_json():
+    # What httpx's Response.json() raises for an HTML page from a proxy.
+    raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+
+def test_run_code_reports_a_reply_that_is_not_json(monkeypatch):
+    OddReplyJudge0Client.post_json = staticmethod(not_json)
+    monkeypatch.setattr(main.httpx, "AsyncClient", OddReplyJudge0Client)
+
+    client = TestClient(main.app, raise_server_exceptions=False)
+    response = client.post(
+        "/api/judge0/run",
+        json={"source_code": "int main(void) { return 0; }", "stdin": ""},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Judge0 sent a reply that is not JSON."
+
+
+def test_batch_run_reports_a_result_without_status_in_its_own_slot(monkeypatch):
+    OddReplyJudge0Client.post_json = staticmethod(lambda: {"token": "submission-token"})
+    OddReplyJudge0Client.get_json = staticmethod(
+        lambda: {"stdout": None, "stderr": None, "compile_output": None,
+                 "message": None, "status": None}
+    )
+    monkeypatch.setattr(main.httpx, "AsyncClient", OddReplyJudge0Client)
+
+    client = TestClient(main.app, raise_server_exceptions=False)
+    response = client.post(
+        "/api/judge0/run-batch",
+        json={
+            "runs": [{"source_code": "int main(void) { return 0; }"}],
+            "stop_on_error": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"error": {"status_code": 502, "detail": "Judge0 sent a result without a status."}}
+    ]

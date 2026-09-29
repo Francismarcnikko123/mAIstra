@@ -170,6 +170,31 @@ describe('Judge0', () => {
     expect(component.hasErrorStatus).toBe(true);
   });
 
+  it("shows the wrapper's reason when the sample could not be run", () => {
+    const component = new Judge0(
+      {
+        runCCode: vi.fn().mockReturnValue(
+          throwError(() => ({
+            status: 504,
+            error: {
+              detail: 'Judge0 is busy and did not start the run in time. Try again.',
+            },
+          })),
+        ),
+      } as unknown as Judge0Service,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    component.executeCode();
+
+    expect(component.displayedOutput).toBe(
+      'Judge0 is busy and did not start the run in time. Try again.',
+    );
+    expect(component.displayedStatus).toBe('Execution failed');
+    expect(component.hasErrorStatus).toBe(true);
+  });
+
   it('shows a new successful run instead of a previously failed grade', () => {
     const runCCode = vi.fn().mockReturnValue(
       of({

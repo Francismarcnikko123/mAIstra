@@ -1,3 +1,6 @@
+<!-- Grader panel (Step 3). Top to bottom: header, code, the two buttons, and
+     the results. Run Sample results and Submit Code results share the area
+     below the buttons; resultMode in judge0.ts picks which one shows. -->
 <div>
   <div class="runner-header">
     <p class="runner-title">{{ codeReadOnly ? 'Saved code' : 'Code Execution' }}</p>
@@ -19,6 +22,8 @@
   ></app-code-editor>
 
 
+  <!-- Run Sample: one run with the first test case, nothing saved.
+       Submit Code: grade every test case and save the grade. -->
   <div class="runner-actions">
     <button
       class="execute-button"
@@ -53,6 +58,8 @@
   </div>
 
   <div class="terminal-results" *ngIf="shouldShowTerminalResults">
+    <!-- Run Sample result: a pass/fail banner, then the first test case's
+         input, what the code printed, and what it should print. -->
     <ng-container *ngIf="shouldShowRunResultPanel">
       <section
         class="run-result-summary"
@@ -105,6 +112,8 @@
       </section>
     </ng-container>
 
+    <!-- Submit Code result: the score, then one card per test case
+         (1 point each) from testCaseResults. -->
     <section
       class="testcase-results submit-results"
       *ngIf="shouldShowSubmitResults"

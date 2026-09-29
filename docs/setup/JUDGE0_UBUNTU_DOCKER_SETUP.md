@@ -335,6 +335,10 @@ Avoid `docker compose down -v` unless you intentionally want to delete Judge0's 
 - **Judge0 returns HTTP 401:** make sure the request includes `X-Auth-Token` with the exact `AUTHN_TOKEN` value from `judge0.conf`.
 - **Judge0 rejects a protected operation:** include both `X-Auth-Token: YOUR_AUTHN_TOKEN` and `X-Auth-User: YOUR_AUTHZ_TOKEN`.
 - **Wrapper cannot connect:** test `/about` with the authentication header from the same machine or container as the wrapper, confirm `JUDGE0_API_KEY` matches `AUTHN_TOKEN`, and verify `JUDGE0_BASE_URL` has no trailing path.
+- **The web app shows "Judge0 is unreachable at …":** the wrapper is running but cannot reach Judge0. Check the address it names against `JUDGE0_BASE_URL`, then see "Port `2358` is unreachable" above.
+- **The web app shows "Judge0 is busy and did not start the run in time":** runs waited longer than `JUDGE0_MAX_QUEUE_WAIT_SECONDS` in Judge0's queue. Check that the workers are up (`docker compose ps`, `docker compose logs workers`); raise the setting only if the box is simply slow.
+- **The web app shows "Judge0 sent a reply that is not JSON" or "… a result without a status":** something other than Judge0's API answered, e.g. a proxy page or the wrong port in `JUDGE0_BASE_URL`.
+- **The web app shows only "Failed to execute code." or "Failed to execute test cases.":** the wrapper gave no reason, which usually means the browser could not reach the wrapper itself. Start `judge0_api` on port 8001; the browser console has the full error.
 - **Browser reports a CORS error:** add the frontend's exact origin to `allow_origins` in `judge0_api/main.py`.
 - **After a reboot:** Docker and Judge0 containers should restart automatically. If they do not, run `docker compose up -d` from the Judge0 directory.
 

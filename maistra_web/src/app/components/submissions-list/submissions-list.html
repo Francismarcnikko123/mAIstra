@@ -122,6 +122,11 @@
       <button type="button" class="review-close" (click)="requestCloseModal()" aria-label="Close review">✕</button>
     </header>
 
+    <!-- The review has three steps:
+         1 Details: link the paper to a question (it supplies the test cases).
+         2 Review code: read the photo with OCR, correct the code, save it.
+         3 Run & grade: run the saved code on Judge0 against the test cases.
+         stepBlocker() says why a later step can't be opened yet. -->
     <nav class="review-steps" aria-label="Submission review progress">
       <button type="button" [class.active]="reviewStep === 1" [class.complete]="reviewStep > 1" (click)="setReviewStep(1)">
         <span>1</span>
@@ -533,6 +538,15 @@
 
         <!-- Recreated per program so a sample run never shows another program's
              output; the chips above stay locked while a sample run is going. -->
+        <!-- The grader (components/judge0). What goes in:
+             - initialCode: the saved code shown read-only.
+             - runCode, stdin, expectedOutput: the first test case, for Run Sample.
+             - submittedOutput, submitStatus, isSubmitting, testCaseResults: the
+               last grade, filled in by checkSubmission().
+             What comes out:
+             - submitCode: "Submit Code" was pressed, so grade every test case.
+             - editCode: "Edit in Review code" goes back to Step 2.
+             - runningChange: a sample run started/ended (locks the chips). -->
         <ng-container *ngFor="let key of [gradingKey(selectedSubmission)]">
           <app-judge0
             [initialCode]="gradingCode(selectedSubmission)"
@@ -553,6 +567,8 @@
           ></app-judge0>
         </ng-container>
 
+        <!-- Why grading didn't run or didn't save, e.g. "Save the edited code
+             before grading." -->
         <div class="grading-error" *ngIf="checkError">{{ checkError }}</div>
       </ng-container>
     </div>

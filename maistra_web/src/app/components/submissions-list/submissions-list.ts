@@ -15,7 +15,11 @@ import { HttpClient } from '@angular/common/http';
 import { SubmissionProgramRow, SupabaseService } from '../../services/supabase';
 import { CodeEditorComponent } from '../code-editor/code-editor';
 import { Judge0, TestCaseResult } from '../judge0/judge0';
-import { Judge0Service } from '../../services/judge0.service';
+import {
+  Judge0Service,
+  MAX_TEST_CASES,
+  judge0ErrorMessage,
+} from '../../services/judge0.service';
 import { firstValueFrom, timeout } from 'rxjs';
 import { buildCQuestionSource } from '../../utils/c-question';
 import { normalizeOutput } from '../../utils/normalize-output';
@@ -1528,10 +1532,27 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  /**
+   * "Submit Code" in Step 3: grades the paper on Judge0 and saves the grade.
+   *
+   * 1. Refuse to grade unsaved work: the question and the code must be the
+   *    ones stored in Supabase.
+   * 2. Run the saved code once per test case (runTestCases).
+   * 3. Save the results. The database refuses the write if the code or the
+   *    question changed meanwhile (grading_revision), and we show an error.
+   * 4. Update the copies on screen so the grade appears without a reload.
+   *
+   * A paper with program rows grades the selected program instead
+   * (gradeSelectedProgram); the steps are the same.
+   */
   async checkSubmission(submission: Submission | null) {
     if (!submission) return;
 
     const submissionId = submission.id;
+    // Numbers this grading run. If the teacher edits the code, changes the
+    // question, discards changes or leaves the page meanwhile,
+    // isCurrentGrading() turns false and this run's late results are
+    // dropped instead of overwriting newer ones.
     const generation = this.startGradingGeneration(submissionId);
     // Grade exactly what is stored in Supabase: the saved code, paired with
     // the revision it was saved at. The database re-checks both on the write.
@@ -1576,10 +1597,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       }
       const studentCode = saved?.verified_text ?? '';
 
-      const testCases = question.test_cases || [];
-
-      if (testCases.length === 0) {
-        this.checkError = 'No test case found for this question.';
+      const testCasesError = this.testCasesError(question);
+      if (testCasesError) {
+        this.checkError = testCasesError;
         return;
       }
 
@@ -1592,10 +1612,13 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         return;
       }
 
+      // Step 2: Judge0 runs every test case.
       const testResults = await this.runTestCases(question, studentCode);
 
       if (!this.isCurrentGrading(submissionId, generation)) return;
 
+      // Step 3: save the grade. null means the database refused it because
+      // the code or question changed after grading started.
       let gradedRevision: number;
       try {
         const newGradingRevision = await this.supabase.updateSubmissionGrade(
@@ -1626,6 +1649,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         return;
       }
 
+      // Step 4: show the results in the grader (these feed app-judge0's
+      // testCaseResults, submittedOutput and submitStatus inputs).
       this.submissionTestResults[submission.id] = testResults;
       this.submissionRunOutput[submission.id] =
         testResults.at(-1)?.actualOutput || '';
@@ -1666,7 +1691,9 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       if (storedSubmission) this.rememberPersistedSubmission(storedSubmission);
     } catch (error) {
       if (!this.isCurrentGrading(submissionId, generation)) return;
-      this.checkError = 'Failed to execute test cases.';
+      console.error('Grading failed:', error);
+      // The wrapper says why, e.g. Judge0 busy (504) or unreachable (502).
+      this.checkError = judge0ErrorMessage(error, 'Failed to execute test cases.');
       this.submissionCheckStatus[submission.id] = 'Error';
     } finally {
       if (!this.isCurrentGrading(submissionId, generation)) return;
@@ -1703,12 +1730,34 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     return this.questions.find((q) => q.id === this.selectedQuestionId) || null;
   }
 
-  /** Runs the code against every test case of the question on Judge0. */
+  /**
+   * Why the question's test cases can't be graded, or '' when they can.
+   * Every test case is one run of a single Judge0 batch, which holds at most
+   * MAX_TEST_CASES; past that the wrapper would refuse the whole batch.
+   */
+  private testCasesError(question: SubmissionQuestion): string {
+    const count = (question.test_cases || []).length;
+    if (!count) return 'No test case found for this question.';
+    if (count > MAX_TEST_CASES) {
+      return `This question has ${count} test cases, but grading can run at most ${MAX_TEST_CASES}. Remove some in the question form.`;
+    }
+    return '';
+  }
+
+  /**
+   * Runs the code against every test case of the question on Judge0.
+   *
+   * All test cases go in one batch request (all-or-nothing: if one run can't
+   * be done, the whole call throws and no grade is saved). Then each result
+   * is checked: a test case passes when the code ran normally (status 3) and
+   * its output equals the expected output after normalizeOutput().
+   */
   private async runTestCases(
     question: SubmissionQuestion,
     studentCode: string,
   ): Promise<TestCaseResult[]> {
     const testCases = question.test_cases || [];
+    // One complete C program per test case (see buildCQuestionSource).
     const runResults = await firstValueFrom(
       this.judge0Service.runCCodeBatch(
         testCases.map((testCase) => ({
@@ -1745,6 +1794,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
         stdin,
         expectedOutput: normalizedExpected,
         actualOutput: normalizedActual || actualOutput,
+        // Passed -> "Accepted". Ran but printed something else -> "Wrong
+        // Answer". Didn't compile or crashed -> Judge0's own description.
         status: passed
           ? 'Accepted'
           : compilationPassed
@@ -1941,11 +1992,13 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       this.checkError = 'Save the edited code before grading.';
       return;
     }
-    if (!(question.test_cases || []).length) {
-      this.checkError = 'No test case found for this question.';
+    const testCasesError = this.testCasesError(question);
+    if (testCasesError) {
+      this.checkError = testCasesError;
       return;
     }
 
+    // Judge0 runs every test case, then the grade is saved on the program row.
     const testResults = await this.runTestCases(question, program.verified_text);
     if (!this.isCurrentGrading(id, generation)) return;
 
@@ -2006,6 +2059,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.groupSubmissions();
   }
 
+  // ── Inputs for "Run Sample" in the grader ──
+  // Run Sample uses only the first test case: these build its program, its
+  // stdin and its expected output from the program being graded.
+
+  /** The complete C program Run Sample sends (the grader's `runCode`). */
   getExecutionSourceCode(submission: Submission | null): string {
     if (!submission) return '';
 
@@ -2045,6 +2103,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     return !!(submission && this.gradingTarget(submission).question);
   }
 
+  // Only a 'program' question reads stdin; a function question gets its
+  // inputs from Test Code, so it runs with empty stdin.
   private stdinFor(
     questionType: SubmissionQuestion['question_type'],
     input: string | null | undefined,

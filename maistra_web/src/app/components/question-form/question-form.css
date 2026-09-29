@@ -156,8 +156,13 @@
   transition: background 0.2s;
 }
 
-.btn-add:hover {
+.btn-add:hover:not(:disabled) {
   background: #e8e8e8;
+}
+
+.btn-add:disabled {
+  color: #999;
+  cursor: not-allowed;
 }
 
 .test-case-card {

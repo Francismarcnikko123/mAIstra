@@ -648,6 +648,82 @@ describe('SubmissionsListComponent save feedback', () => {
     expect(updateSubmissionGrade).toHaveBeenCalledOnce();
   });
 
+  // A saved paper linked to a program question with `testCaseCount` cases.
+  function gradingFixture(
+    runCCodeBatch: ReturnType<typeof vi.fn>,
+    testCaseCount = 1,
+  ) {
+    const updateSubmissionGrade = vi.fn().mockResolvedValue(1);
+    const { component } = createComponent(
+      vi.fn(),
+      { runCCodeBatch } as unknown as Partial<Judge0Service>,
+      updateSubmissionGrade,
+    );
+    const submission = {
+      id: 'submission-limits',
+      image_url: 'https://example.test/submission.png',
+      captured_at: '2026-09-30T00:00:00.000Z',
+      question_id: 'question-1',
+      verified_text: 'int main(void) { return 0; }',
+      grading_revision: 0,
+    };
+    component.submissions = [{ ...submission }];
+    component.selectedSubmission = submission;
+    component.editableText[submission.id] = submission.verified_text;
+    component.questions = [
+      {
+        id: 'question-1',
+        question_name: 'Limits',
+        question_type: 'program',
+        test_cases: Array.from({ length: testCaseCount }, (_, index) => ({
+          test_code: '',
+          test_input: `${index}`,
+          expected_output: `${index}`,
+        })),
+      },
+    ];
+    component.selectedQuestionId = 'question-1';
+    return { component, submission, updateSubmissionGrade };
+  }
+
+  it("shows the wrapper's reason when the test cases could not be run", async () => {
+    const { component, submission, updateSubmissionGrade } = gradingFixture(
+      vi.fn().mockReturnValue(
+        throwError(() => ({
+          status: 502,
+          error: {
+            detail:
+              'Judge0 is unreachable at http://100.64.0.1:2358. Start Judge0 or update JUDGE0_BASE_URL.',
+          },
+        })),
+      ),
+    );
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await component.checkSubmission(submission);
+
+    expect(component.checkError).toBe(
+      'Judge0 is unreachable at http://100.64.0.1:2358. Start Judge0 or update JUDGE0_BASE_URL.',
+    );
+    expect(updateSubmissionGrade).not.toHaveBeenCalled();
+  });
+
+  it('refuses to grade more test cases than one Judge0 batch can run', async () => {
+    const runCCodeBatch = vi.fn();
+    const { component, submission, updateSubmissionGrade } = gradingFixture(
+      runCCodeBatch,
+      31,
+    );
+
+    await component.checkSubmission(submission);
+
+    expect(runCCodeBatch).not.toHaveBeenCalled();
+    expect(updateSubmissionGrade).not.toHaveBeenCalled();
+    expect(component.checkError).toBe(
+      'This question has 31 test cases, but grading can run at most 30. Remove some in the question form.',
+    );
+  });
+
   it('does not publish a completed grade when persistence fails', async () => {
     const runCCode = vi.fn().mockReturnValue(
       of({

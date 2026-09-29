@@ -210,7 +210,12 @@ test('grading reports a failure and saves nothing when Judge0 is down', async ({
   await dialog.getByRole('button', { name: 'Continue to grading' }).click();
   await dialog.getByRole('button', { name: 'Submit Code' }).click();
 
-  await expect(dialog.getByText('Failed to execute test cases.')).toBeVisible();
+  // The wrapper's reason, not a generic "Failed to execute test cases."
+  await expect(
+    dialog.getByText(
+      'Judge0 is unreachable at http://127.0.0.1:2358. Start Judge0 or update JUDGE0_BASE_URL.',
+    ),
+  ).toBeVisible();
   // The button is usable again so the teacher can retry once Judge0 is back.
   await expect(dialog.getByRole('button', { name: 'Submit Code' })).toBeEnabled();
   expect(backend.requestsTo('POST', '/rpc/save_program_grade')).toHaveLength(0);

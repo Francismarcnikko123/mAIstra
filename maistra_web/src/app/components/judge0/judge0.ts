@@ -11,18 +11,37 @@ import {
 import { Subscription } from 'rxjs';
 import { CodeEditorComponent } from '../code-editor/code-editor';
 import { CommonModule } from '@angular/common';
-import { Judge0Service } from '../../services/judge0.service';
+import {
+  Judge0Service,
+  judge0ErrorMessage,
+} from '../../services/judge0.service';
 import { normalizeOutput } from '../../utils/normalize-output';
 
+/**
+ * The grade of one test case. SubmissionsListComponent.runTestCases builds
+ * these, and they are saved as `grading_results` in Supabase.
+ */
 export interface TestCaseResult {
-  caseNumber: number;
-  stdin: string;
-  expectedOutput: string;
-  actualOutput: string;
-  status: string;
-  passed: boolean;
+  caseNumber: number; // 1, 2, 3, ... in the question's order
+  stdin: string; // input given to scanf() ('' for function questions)
+  expectedOutput: string; // from the question, normalized
+  actualOutput: string; // what the student's code printed, normalized
+  status: string; // 'Accepted', 'Wrong Answer', or Judge0's error text
+  passed: boolean; // true = 1 point
 }
 
+/**
+ * The grader panel shown in Step 3 ("Run and grade") of the submission review.
+ *
+ * It shows the code and two buttons:
+ * - Run Sample: this component calls Judge0 itself, once, with the first test
+ *   case, and shows that single result. Nothing is saved.
+ * - Submit Code: this component only emits `submitCode`. The parent
+ *   (SubmissionsListComponent.checkSubmission) runs every test case, saves
+ *   the grade, and passes the results back in through `testCaseResults`.
+ *
+ * `resultMode` decides which of the two results is on screen.
+ */
 @Component({
   selector: 'app-judge0',
   standalone: true,
@@ -31,14 +50,22 @@ export interface TestCaseResult {
   styleUrl: './judge0.css',
 })
 export class Judge0 implements OnChanges, OnDestroy {
+  // ── Inputs from the parent ──
   @Input() initialCode = ''; // comes from parent
+  // The code shown in the editor is the student's code only. `runCode` is
+  // the complete program Run Sample sends (with #include and, for function
+  // questions, the generated main()). Empty means: run the editor's code.
   @Input() runCode = '';
+  // First test case's stdin and expected output, for Run Sample.
   @Input() stdin = '';
   @Input() expectedOutput = '';
+  // Results of the last Submit Code, filled in by the parent.
   @Input() submittedOutput = '';
   @Input() submitStatus = '';
   @Input() isSubmitting = false;
   @Input() testCaseResults: TestCaseResult[] = [];
+  // With requiresQuestion on, Run Sample refuses to run until a question is
+  // linked (no question means no test case to compare against).
   @Input() hasQuestion = true;
   @Input() requiresQuestion = false;
   // Show the code without letting it be edited, e.g. when grading must run on
@@ -47,6 +74,8 @@ export class Judge0 implements OnChanges, OnDestroy {
   // Offer "Edit in Review code" next to read-only code. The parent opts in
   // and handles editCode by opening that step.
   @Input() canEditCode = false;
+
+  // ── State of the last Run Sample ──
   codeToRun = ''; // editable copy
   stdout = '';
   stderr = '';
@@ -58,10 +87,16 @@ export class Judge0 implements OnChanges, OnDestroy {
   // failure (a program can compile with warnings, e.g. a missing include,
   // and still run correctly).
   statusId: number | null = null;
-  runNotification = '';
+  runNotification = ''; // e.g. "Please select a question before running code."
+  // Did the sample match the first test case? null = not run, the run could
+  // not be done (Judge0 down, timeout), or no expected output to compare with.
   firstRunTestCasePassed: boolean | null = null;
   isRunning = false;
+  // 'run' shows the Run Sample result; 'submit' shows the graded test cases.
   resultMode: 'run' | 'submit' = 'run';
+
+  // ── Events to the parent ──
+  // "Submit Code" was pressed: the parent grades every test case.
   @Output() submitCode = new EventEmitter<void>();
   @Output() codeChange = new EventEmitter<string>();
   @Output() editCode = new EventEmitter<void>();
@@ -114,10 +149,16 @@ export class Judge0 implements OnChanges, OnDestroy {
     );
   }
 
+  // One thing at a time: both buttons are disabled while either is running.
   get isExecutionBusy(): boolean {
     return this.isRunning || this.isSubmitting;
   }
 
+  /**
+   * "Run Sample": runs the code once on Judge0 with the first test case's
+   * stdin, then compares stdout with its expected output. Shown only here;
+   * nothing is saved and no grade changes.
+   */
   executeCode() {
     if (this.isExecutionBusy) return;
 
@@ -127,6 +168,7 @@ export class Judge0 implements OnChanges, OnDestroy {
       return;
     }
 
+    // Clear the previous run so old output never shows next to a new run.
     this.isRunning = true;
     this.resultMode = 'run';
     this.runNotification = '';
@@ -154,8 +196,11 @@ export class Judge0 implements OnChanges, OnDestroy {
 
           this.cdr.detectChanges();
         },
+        // The wrapper could not run the code at all (Judge0 down, timeout);
+        // its reason is shown in the output box. A compile error is not this
+        // case: it arrives in `next` above.
         error: (error) => {
-          this.stderr = 'Failed to execute code.';
+          this.stderr = judge0ErrorMessage(error, 'Failed to execute code.');
           this.statusDescription = 'Execution failed';
           this.firstRunTestCasePassed = null;
           this.isRunning = false;
@@ -178,6 +223,7 @@ export class Judge0 implements OnChanges, OnDestroy {
     this.codeChange.emit(value);
   }
 
+  // "Submit Code": the parent does the grading and sends the results back.
   requestSubmit() {
     if (this.isExecutionBusy) return;
 
@@ -191,6 +237,10 @@ export class Judge0 implements OnChanges, OnDestroy {
     this.editCode.emit();
   }
 
+  // ── What the template shows ──
+
+  // Text for the "Your Output" box: stdout first, else the error text, so a
+  // failed compile or crash still shows why.
   get displayedOutput(): string {
     if (this.resultMode === 'run') {
       return (
@@ -210,6 +260,7 @@ export class Judge0 implements OnChanges, OnDestroy {
     );
   }
 
+  // The "Processing code" spinner, while a sample run has no output yet.
   get shouldShowProcessingState(): boolean {
     return (
       this.isRunning && !this.stdout && !this.stderr && !this.compileOutput
@@ -224,6 +275,7 @@ export class Judge0 implements OnChanges, OnDestroy {
     return this.submitStatus;
   }
 
+  // The whole results area below the buttons, for either mode.
   get shouldShowTerminalResults(): boolean {
     if (this.isRunning) return false;
     if (this.resultMode === 'submit') return this.shouldShowSubmitResults;
@@ -237,6 +289,7 @@ export class Judge0 implements OnChanges, OnDestroy {
     );
   }
 
+  // Run Sample's Input / Your Output / Expected Output boxes.
   get shouldShowRunResultPanel(): boolean {
     return (
       this.resultMode === 'run' &&
@@ -248,10 +301,12 @@ export class Judge0 implements OnChanges, OnDestroy {
     );
   }
 
+  // Submit Code's list of test-case cards.
   get shouldShowSubmitResults(): boolean {
     return this.resultMode === 'submit' && this.testCaseResults.length > 0;
   }
 
+  // Colours the status label red.
   get hasErrorStatus(): boolean {
     return (
       (this.statusId !== null && this.statusId !== 3) ||
@@ -262,6 +317,7 @@ export class Judge0 implements OnChanges, OnDestroy {
     );
   }
 
+  // Score: every test case is worth 1 point, e.g. 2 of 3 passed = 66.67%.
   get passedTestCaseCount(): number {
     return this.testCaseResults.filter((result) => result.passed).length;
   }
@@ -288,6 +344,7 @@ export class Judge0 implements OnChanges, OnDestroy {
     return this.testCaseResults[0] ?? null;
   }
 
+  // Labels for the Run Sample result; '' hides them when nothing was compared.
   get firstTestCasePassedLabel(): string {
     const passed = this.firstRunTestCasePassed;
     if (passed === null) return '';
@@ -306,6 +363,8 @@ export class Judge0 implements OnChanges, OnDestroy {
     return passed ? '1/1 test case passed' : '1/1 test case failed';
   }
 
+  // Passed = ran normally (status 3) and the output matches once both are
+  // normalized (case, spaces, ':'), the same rule grading uses.
   private evaluateFirstRunTestCase(): boolean | null {
     if (!this.expectedOutput.trim()) {
       return null; // nothing configured to compare against

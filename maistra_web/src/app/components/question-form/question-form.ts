@@ -4,7 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { SupabaseService } from '../../services/supabase';
 import { CodeEditorComponent } from '../code-editor/code-editor';
 import { firstValueFrom } from 'rxjs';
-import { Judge0Service, Judge0RunResult } from '../../services/judge0.service';
+import {
+  Judge0Service,
+  Judge0RunResult,
+  MAX_TEST_CASES,
+  judge0ErrorMessage,
+} from '../../services/judge0.service';
 import {
   buildCQuestionSource,
   getFunctionCodeError,
@@ -60,9 +65,10 @@ interface ValidationResult {
   expected: string;
   actual: string;
   status?: string;
-  stderr?: string;
-  compile_output?: string;
-  message?: string;
+  // Judge0 sends null for an empty field.
+  stderr?: string | null;
+  compile_output?: string | null;
+  message?: string | null;
 }
 
 const DEFAULT_TEST_CASE: TestCase = {
@@ -230,6 +236,21 @@ export class QuestionFormComponent implements OnInit {
   toggleTestCase(index: number) {
     this.collapsedTestCases[index] = !this.collapsedTestCases[index];
   }
+
+  /**
+   * "Validate Test Cases": proves the teacher's test cases are right before
+   * the question can be saved.
+   *
+   * 1. Check the fields locally (model answer shape, Test Code, Expected
+   *    Output filled in). Any problem stops here, before Judge0.
+   * 2. Run the model answer on Judge0 once per test case (settled batch, so
+   *    one failed run doesn't hide the others' output).
+   * 3. A test case passes when the model answer ran normally and printed the
+   *    teacher's Expected Output. The Expected Output is compared, never
+   *    replaced by what Judge0 printed.
+   * 4. canPublish (which unlocks Save) turns on only when every test passes.
+   *    Editing the answer or a test case afterwards turns it off again.
+   */
   async validateModelAnswer() {
     if (this.isValidating) return;
     this.clearValidationResults();
@@ -238,6 +259,14 @@ export class QuestionFormComponent implements OnInit {
 
     if (this.testCases.length === 0) {
       this.errorMessage = 'Add at least one test case before validating.';
+      this.cdr.detectChanges();
+      return;
+    }
+    // A question saved before the cap can have more; Judge0 would refuse the
+    // whole batch with an error that looks like a connection problem.
+    if (this.testCases.length > MAX_TEST_CASES) {
+      const extra = this.testCases.length - MAX_TEST_CASES;
+      this.errorMessage = `A question can have at most ${MAX_TEST_CASES} test cases. Remove ${extra}, then validate again.`;
       this.cdr.detectChanges();
       return;
     }
@@ -273,6 +302,8 @@ export class QuestionFormComponent implements OnInit {
       return;
     }
 
+    // Remember what was validated. If the teacher edits anything while Judge0
+    // is running, isCurrent() turns false and these results are thrown away.
     const version = this.validationVersion;
     const inputKey = this.executionInputsKey();
     const isCurrent = () =>
@@ -322,6 +353,8 @@ export class QuestionFormComponent implements OnInit {
         result.passed ? 'passed' : 'failed',
       );
       this.canPublish = results.every((result) => result.passed);
+      // save() checks this again, so a question can't be saved with inputs
+      // that differ from the ones that passed.
       this.validatedInputs = this.canPublish ? this.executionInputsKey() : '';
     } finally {
       this.isValidating = false;
@@ -338,7 +371,15 @@ export class QuestionFormComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
+  readonly maxTestCases = MAX_TEST_CASES;
+
+  // Each test case is one Judge0 run, and one batch holds at most 30.
+  get canAddTestCase(): boolean {
+    return this.testCases.length < MAX_TEST_CASES;
+  }
+
   addTestCase() {
+    if (!this.canAddTestCase) return;
     this.testCases.push(this.createDefaultTestCase());
 
     this.clearValidationResults();
@@ -503,6 +544,8 @@ export class QuestionFormComponent implements OnInit {
     return expected.trim() ? '' : 'Expected Output is required.';
   }
 
+  // Everything that affects a Judge0 run, as one string. Two equal keys mean
+  // the same inputs were validated.
   private executionInputsKey(): string {
     return JSON.stringify({
       type: this.questionType,
@@ -517,6 +560,11 @@ export class QuestionFormComponent implements OnInit {
     });
   }
 
+  /**
+   * Turns one Judge0 result for the model answer into a pass/fail row.
+   * Fails when it didn't run normally (status not 3), printed nothing, or
+   * printed something other than the Expected Output (after normalizing).
+   */
   private executionValidation(
     result: Judge0RunResult,
     expected: string,
@@ -554,6 +602,7 @@ export class QuestionFormComponent implements OnInit {
     return type === 'program' ? input : '';
   }
 
+  // A failed row for a run that couldn't be done at all (Judge0 down, timeout).
   private requestFailedValidation(
     expected: string,
     error: unknown,
@@ -563,18 +612,11 @@ export class QuestionFormComponent implements OnInit {
       expected: expected.trim(),
       actual: '',
       status: 'Validation request failed',
-      message: this.validationRequestError(error),
+      message: judge0ErrorMessage(
+        error,
+        'Unable to validate this test case. Check the Judge0 connection and try again.',
+      ),
     };
-  }
-
-  // Reads `error.detail` from both an HttpErrorResponse and a settled batch
-  // run's { error: { detail } } outcome.
-  private validationRequestError(error: unknown): string {
-    const detail = (error as { error?: { detail?: unknown } } | null)?.error
-      ?.detail;
-    return typeof detail === 'string'
-      ? detail
-      : 'Unable to validate this test case. Check the Judge0 connection and try again.';
   }
 
   private createDefaultTestCase(): TestCase {

@@ -864,6 +864,61 @@ outputs, header, `ngOnDestroy()` drops an unfinished run). New specs:
 
 **Verification:** see Verification status (2026-09-30).
 
+## Judge0 error messages and the 30-test-case limit (2026-09-30, `judge0-integration`)
+
+> **Owner:** Jayrald. The question-form part is in Nikko's area; see `docs/TEAM_SYNC.md`.
+
+**Why:** a code review of the Judge0 path found three bugs.
+- A question with more than 30 test cases could never be validated or
+  graded. The wrapper takes at most 30 runs per batch (`MAX_BATCH_RUNS`), but
+  the form let a teacher add more, and the refusal showed up as "Check the
+  Judge0 connection and try again."
+- Grading and Run Sample replaced the wrapper's reason with "Failed to
+  execute test cases." / "Failed to execute code.", so a busy Judge0 and a
+  stopped VM looked the same to the teacher.
+- A Judge0 reply that wasn't JSON, or a result without a status, crashed the
+  wrapper with a 500. In Validate Test Cases (a settled batch) that also
+  failed the runs that had worked.
+
+**What changed (teacher's view):**
+- **Question form:** "+ Add" is disabled at 30 test cases, and the heading
+  says "At most 30 test cases." Validate refuses a loaded question with more
+  ("A question can have at most 30 test cases. Remove N, then validate
+  again.") without calling Judge0.
+- **Grading** refuses such a question too, for papers with and without
+  program rows: "This question has N test cases, but grading can run at most
+  30. Remove some in the question form."
+- **Grading, Run Sample and Validate show the wrapper's reason**, e.g. "Judge0
+  is busy and did not start the run in time. Try again." or "Judge0 is
+  unreachable at … Start Judge0 or update JUDGE0_BASE_URL." The old text is
+  the fallback when there is no reason (usually the wrapper itself isn't
+  running). Grading failures are also logged to the browser console.
+- **Wrapper:** a reply that isn't a JSON object is a 502 "Judge0 sent a reply
+  that is not JSON."; a result without a status is a 502 "Judge0 sent a
+  result without a status." Each fails only its own run, so it is never
+  scored as 0.
+
+**What did not change:** how test cases are scored, the all-or-nothing
+grading batch, save/grade guards, the database, OCR, and questions with 30
+or fewer test cases.
+
+**Code:** `services/judge0.service.ts` (`MAX_TEST_CASES`,
+`judge0ErrorMessage()`; `Judge0RunResult` text fields typed `string | null`,
+as the wrapper sends them), `submissions-list.ts` (`testCasesError()` for
+both grading paths; the grading catch), `judge0/judge0.ts` (Run Sample
+error), `question-form/` (`canAddTestCase`, the Validate check; its own
+`validationRequestError()` replaced by the shared helper), `judge0_api/main.py`
+(`judge0_json()`, the status check). Comments corrected where they disagreed
+with the code: what a 504 means, the poll budgets, `firstRunTestCasePassed`,
+`structuralCode()`. Tests added to `tests_judge0_api.py` (2),
+`judge0.spec.ts` (1), `submissions-list.spec.ts` (2),
+`submissions-list.program-grading.spec.ts` (1) and `question-form.spec.ts`
+(2). Playwright's fake backend now sends the wrapper's real 502 text, and
+`submission-grading.spec.ts` expects it. Troubleshooting for the new messages
+is in `docs/setup/JUDGE0_UBUNTU_DOCKER_SETUP.md`.
+
+**Verification:** see Verification status (2026-09-30, Judge0 error messages).
+
 ## Setup documentation
 
 > **Owner:** Jayrald
@@ -876,6 +931,7 @@ outputs, header, `ngOnDestroy()` drops an unfinished run). New specs:
 
 > **Owner:** Shared
 
+- **2026-09-30 Judge0 error messages and the 30-test-case limit (`judge0-integration`):** web 379/379 (6 new), `judge0_api` 14/14 (2 new), both TypeScript checks, `ng build` (existing `submissions-list.list.css` budget warning), Playwright 19/19 twice. One earlier full Playwright run had a one-off 5 s timeout in `question-bank.spec.ts` "renaming an older question…" (a test this change doesn't touch); it passed 3/3 alone and in both full reruns. Not tried in the running app against the real Judge0.
 - **2026-09-30 review and grading fixes for papers with several programs (`judge0-integration`):** web 373/373 (34 new), both TypeScript checks, `ng build` (existing `submissions-list.list.css` budget warning), Playwright 19/19. Checked in the running app against the cloud without saving: an unsaved Program 2 keeps Step 3 closed with "Save Program 2 first", the chips and card read `0/3 passed` / `P1 0/3 · P2 not graded · P3 not graded`, "Edit in Review code" opens the right tab for Programs 2 and 3, and during Run Sample every chip is disabled with its hover text, then unlocks when the run ends (tried with Judge0 down and up). No OCR or database change.
 - **2026-09-27 import fixes and code-review follow-ups (`feature/import-fixes`):** OCR 270/270; `--dry-run` on the real data skips the 20 test pages and writes nothing; live OCR server check with auto-extract off. No pipeline change, so `evaluate_cer` is unaffected.
 - **2026-09-27 review follow-ups (`feature/nombrado-review-followups`, from `judge0-integration` `7335d91`):** web 339/339, OCR 256/256, both TypeScript checks, `ng build` (existing CSS budget warning), Playwright 19/19 twice. Live OCR server check with auto-extract off; nothing written to the cloud.

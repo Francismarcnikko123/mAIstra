@@ -159,6 +159,42 @@ describe('QuestionFormComponent', () => {
     expect(component.canPublish).toBe(true);
   });
 
+  function testCases(count: number) {
+    return Array.from({ length: count }, (_, index) => ({
+      test_code: `printf("%d", add(${index}, 0));`,
+      test_input: '',
+      expected_output: `${index}`,
+    }));
+  }
+
+  it('stops adding test cases at what one Judge0 batch can run', () => {
+    const { component } = batchFixture(vi.fn());
+    component.testCases = testCases(29);
+
+    expect(component.canAddTestCase).toBe(true);
+    component.addTestCase();
+    expect(component.testCases.length).toBe(30);
+
+    expect(component.canAddTestCase).toBe(false);
+    component.addTestCase();
+    expect(component.testCases.length).toBe(30);
+  });
+
+  it('refuses to validate more test cases than one Judge0 batch can run', async () => {
+    const runCCodeBatchSettled = vi.fn();
+    const { component } = batchFixture(runCCodeBatchSettled);
+    // An older question loaded for editing can already have more.
+    component.testCases = testCases(31);
+
+    await component.validateModelAnswer();
+
+    expect(runCCodeBatchSettled).not.toHaveBeenCalled();
+    expect(component.canPublish).toBe(false);
+    expect(component.errorMessage).toBe(
+      'A question can have at most 30 test cases. Remove 1, then validate again.',
+    );
+  });
+
   it('keeps the other results when one test case run fails', async () => {
     const { component } = batchFixture(
       vi.fn().mockReturnValue(
