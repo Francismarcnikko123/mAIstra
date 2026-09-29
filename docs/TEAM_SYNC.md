@@ -198,7 +198,7 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 - (2026-09-26, `judge0-integration`) **Working branch: `judge0-integration`** (pushed). Everything of mine lands here. It contains `feature/question-linking-v2` (Nikko, merged in `138ef02`) and `feature/pre-extraction` up to `0f87354` (Nombrado, merged in `046b88c`). `code-similarity/duplicate` is parked. Cloud Supabase is at `20260926001300` (every migration applied, 2026-09-27; the Supabase security advisor shows no warning from our code).
 
 ### Changed (affects others)
-- (2026-09-30, `judge0-integration`, uncommitted) **Review and grading fixes for papers with several programs** (details in `PROJECT_OVERVIEW_AND_CHANGES.md`).
+- (2026-09-30, `judge0-integration`, `e1a717d`) **Review and grading fixes for papers with several programs** (details in `PROJECT_OVERVIEW_AND_CHANGES.md`).
   - **For Nombrado: I changed the tab strip and picker labels, which are in your area.** Tabs show only "Program N" (question on hover via `programTabTitle()`); the picker button and the Program 1 line use the full `Section · Q# · Name`. `getQuestionTitle()` is replaced by `tabQuestionLabel()`. The tab markup, keys, dots, "!", × and `program-tabs.css` are otherwise unchanged. Say if you'd rather own or change this.
   - **For Nombrado:** `stepBlocker(3)` now counts your extra tabs (via `isExtraAnswerUnsaved` / `hasUnsavedExtras`), so an unsaved Program 2+ keeps Step 3 closed ("Save Program 2 first").
   - **For everyone:** cards show `P1 3/4 · P2 not graded` instead of `Q1 3/4 · Q2 not graded`; Step 3 chips say "3/3 passed" instead of "✓ 3/3". `submission-grading.spec.ts` expects the new text.
