@@ -255,7 +255,7 @@ test('each program on a paper is graded against its own question', async ({
   await expect(dialog.locator('.grading-context')).toContainText('Sum of two numbers');
 
   await dialog.getByRole('button', { name: 'Submit Code' }).click();
-  await expect(first).toContainText('✓ 2/2');
+  await expect(first).toContainText('2/2 passed');
   // The view stays on the program just graded (review #3).
   await expect(first).toHaveAttribute('aria-selected', 'true');
   await expect(dialog.locator('.grading-context')).toContainText('Sum of two numbers');
@@ -265,7 +265,7 @@ test('each program on a paper is graded against its own question', async ({
   await second.click();
   await expect(dialog.locator('.grading-context')).toContainText('Product of two numbers');
   await dialog.getByRole('button', { name: 'Submit Code' }).click();
-  await expect(second).toContainText('✓ 2/2');
+  await expect(second).toContainText('2/2 passed');
 
   // Judge0 ran each program with its own question's inputs.
   const batches = backend.requestsTo('POST', '/run-batch').map((request) => request.body.runs);
@@ -294,7 +294,7 @@ ${program('a * b')}`, stdin: '2 3' },
   await dialog.getByRole('button', { name: 'Finish review' }).click();
   const card = submissionCard(page, CARD_TIME);
   await expect(card).toContainText('Graded');
-  await expect(card).toContainText('Program 1 2/2 · Program 2 2/2');
+  await expect(card).toContainText('P1 2/2 · P2 2/2');
 });
 
 test('a question changed on Details is the one Program 1 is graded against', async ({

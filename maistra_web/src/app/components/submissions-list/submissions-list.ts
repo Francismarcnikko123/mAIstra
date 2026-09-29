@@ -114,6 +114,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   questionPlaces = new Map<string, QuestionPlace>();
   // Step 3: the program row being graded on each paper.
   gradingProgramIds: Record<string, string> = {};
+  // Step 3: the grader (gradingKey) whose sample run is going, if any.
+  private sampleRunKey: string | null = null;
   // Papers saved this session whose program rows (ids, revisions) haven't
   // been re-read yet; grading re-reads them first.
   private staleProgramIds = new Set<string>();
@@ -662,6 +664,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     }
     this.selectedSubmission = null;
     this.reviewStep = 1;
+    this.sampleRunKey = null;
     this.detailsSaveError = '';
     this.closeConfirmOpen = false;
   }
@@ -711,6 +714,8 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   setReviewStep(step: ReviewStep) {
     // Going back is always allowed; going forward needs the earlier steps saved.
     if (step > this.reviewStep && this.stepBlocker(step)) return;
+    // Leaving Step 3 closes its grader, and a sample run with it.
+    if (step !== 3) this.sampleRunKey = null;
     this.reviewStep = step;
     if (step === 3 && this.selectedSubmission) {
       void this.prepareGradingStep(this.selectedSubmission.id);
@@ -725,8 +730,7 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     if (this.hasUnsavedDetails()) return 'Save the topic and question first';
     if (step === 2) return '';
     if (!this.canOpenGradingStep()) return 'Verify code and question first';
-    if (this.hasUnsavedCode(submission.id)) return 'Save the code first';
-    return '';
+    return this.unsavedProgramsBlocker(submission.id);
   }
 
   private hasUnsavedDetails(): boolean {
@@ -737,6 +741,28 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
       this.selectedQuestionId !== this.savedQuestionId(submission.id) ||
       this.editableTopic !== (saved?.topic || 'Uncategorized')
     );
+  }
+
+  // Names the programs still to save, so the teacher knows which tab to open.
+  // Every tab counts: Step 3 runs and grades each program's stored code.
+  // Without the programs table the tabs are a preview only and can't be
+  // saved, so there they don't keep Step 3 closed.
+  private unsavedProgramsBlocker(id: string): string {
+    const savable = this.extraProgramsSavable;
+    const tabs = savable ? this.getExtraAnswers(id) : [];
+    const unsaved: number[] = this.hasUnsavedCode(id) ? [1] : [];
+    tabs.forEach((answer, index) => {
+      if (this.isExtraAnswerUnsaved(id, answer)) unsaved.push(index + 2);
+    });
+    if (!unsaved.length) {
+      // Nothing on screen differs; only a removed tab can still be unsaved.
+      return savable && this.hasUnsavedExtras(id) ? 'Save the program tabs first' : '';
+    }
+    if (!tabs.length) return 'Save the code first';
+    const last = unsaved.pop();
+    return unsaved.length
+      ? `Save Programs ${unsaved.join(', ')} and ${last} first`
+      : `Save Program ${last} first`;
   }
 
   // The warning shown when another teacher changed the paper during an edit.
@@ -1186,10 +1212,11 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   getSubmissionGradeSummary(submission: Submission | null): string {
     const programs = submission?.submission_programs ?? [];
     if (programs.length > 1) {
-      // e.g. "Q1 3/4 · Q2 not graded"
+      // e.g. "P1 3/4 · P2 not graded", numbered by place on the paper
+      // because question numbers repeat across sections.
       return [...programs]
         .sort((a, b) => a.position - b.position)
-        .map((program) => `${this.programShortLabel(program)} ${this.programGradeLabel(program)}`)
+        .map((program) => `P${program.position} ${this.programGradeLabel(program)}`)
         .join(' · ');
     }
     if (programs.length === 1) {
@@ -1413,11 +1440,22 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     this.removeConfirmIndex = null;
   }
 
-  getQuestionTitle(questionId: string): string {
-    return (
-      this.questions.find((question) => question.id === questionId)?.question_name ||
-      'Unknown question'
+  /** "Basic · Q2 · Sum of two numbers" for the question linked to a Program 2..n tab. */
+  tabQuestionLabel(questionId: string): string {
+    const question = this.questions.find((item) => item.id === questionId);
+    return questionLabel(
+      question?.question_name || 'Unknown question',
+      this.questionPlaces.get(questionId),
     );
+  }
+
+  /** Hover text for a tab, which itself shows only "Program N". */
+  programTabTitle(tab: number): string {
+    if (!this.selectedSubmission) return '';
+    if (tab === 0) return `Program 1 · ${this.getQuestionLabel(this.selectedSubmission)}`;
+    const questionId = this.getSelectedExtraAnswer(tab - 1)?.question_id;
+    const question = questionId ? this.tabQuestionLabel(questionId) : 'No question yet';
+    return `Program ${tab + 1} · ${question}`;
   }
 
   questionPreview(question: SubmissionQuestion): string {
@@ -1738,10 +1776,58 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
   }
 
   selectGradingProgram(submission: Submission, programId: string) {
-    if (this.isChecking) return;
+    if (this.gradingLockReason(submission)) return;
     this.gradingProgramIds[submission.id] = programId;
     this.checkError = '';
     this.restorePersistedGrade(submission);
+  }
+
+  /** The grader (by gradingKey) reports that its sample run started or ended. */
+  onSampleRunChange(key: string, running: boolean) {
+    if (running) this.sampleRunKey = key;
+    else if (this.sampleRunKey === key) this.sampleRunKey = null;
+  }
+
+  /**
+   * A sample run is going on the grader shown now. Only that grader counts:
+   * one that was replaced never reports its end.
+   */
+  isSampleRunning(submission: Submission | null): boolean {
+    return (
+      !!submission &&
+      this.sampleRunKey !== null &&
+      this.sampleRunKey === this.gradingKey(submission)
+    );
+  }
+
+  /**
+   * Why the program chips can't be switched now (shown on hover), or null.
+   * Switching rebuilds the grader, which would drop a run still going.
+   */
+  gradingLockReason(submission: Submission | null): string | null {
+    if (this.isChecking) return 'Wait for grading to finish';
+    if (this.isSampleRunning(submission)) return 'Wait for the sample run to finish';
+    return null;
+  }
+
+  /**
+   * "Edit in Review code" in Step 3: back to Step 2 on the tab of the program
+   * being graded. Tabs are matched by question, not position: a blank tab is
+   * never saved, so tab numbers and program positions can differ.
+   */
+  editProgramInReview(submission: Submission) {
+    if (this.isChecking) return;
+    const program = this.selectedGradingProgram(submission);
+    const index =
+      program && program.position > 1
+        ? this.getExtraAnswers(submission.id).findIndex(
+            (answer) => answer.question_id === program.question_id,
+          )
+        : -1;
+    this.setReviewStep(2);
+    // Program 1, or a program whose tab is gone, opens the first tab.
+    // selectTab renders Step 2 before Ace re-measures the editor.
+    this.selectTab(index >= 0 ? index + 1 : 0);
   }
 
   /** "Basic · Q2 · Sum of two numbers" for a program's question. */
@@ -1753,16 +1839,22 @@ export class SubmissionsListComponent implements OnInit, OnDestroy {
     );
   }
 
-  /** "Q2" when the question has a number in its section, else "Program 2". */
-  programShortLabel(program: SubmissionProgramRow): string {
-    const place = this.questionPlaces.get(program.question_id);
-    return place ? `Q${place.number}` : `Program ${program.position}`;
-  }
-
   programGradeLabel(program: SubmissionProgramRow): string {
     return program.total_test_cases && program.passed_test_cases !== null
       ? `${program.passed_test_cases}/${program.total_test_cases}`
       : 'not graded';
+  }
+
+  /**
+   * Colour of a Step 3 chip's grade: green when every test case passed, amber
+   * when some did, red when none did. The chip's text says the same.
+   */
+  programGradeTone(program: SubmissionProgramRow): 'pending' | 'full' | 'partial' | 'none' {
+    const passed = program.passed_test_cases;
+    const total = program.total_test_cases;
+    if (!program.graded_at || !total || passed === null) return 'pending';
+    if (passed >= total) return 'full';
+    return passed > 0 ? 'partial' : 'none';
   }
 
   /** Question label shown above the grader in Step 3. */

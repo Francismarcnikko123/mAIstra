@@ -1,5 +1,17 @@
 <div>
-  <p class="runner-title">Code Execution</p>
+  <div class="runner-header">
+    <p class="runner-title">{{ codeReadOnly ? 'Saved code' : 'Code Execution' }}</p>
+    <span class="runner-hint" *ngIf="codeReadOnly">Read-only</span>
+    <button
+      *ngIf="codeReadOnly && canEditCode"
+      class="edit-code-link"
+      type="button"
+      (click)="requestEditCode()"
+      [disabled]="isExecutionBusy"
+    >
+      Edit in Review code
+    </button>
+  </div>
   <app-code-editor
     [value]="codeToRun"
     [readOnly]="codeReadOnly"

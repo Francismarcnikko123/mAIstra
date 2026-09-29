@@ -798,4 +798,115 @@ describe('SubmissionsListComponent program tabs', () => {
 
     expect(component.editableText['paper-1']).toBe('teacher typed this');
   });
+
+  describe('Run & grade step', () => {
+    // A saved paper on the Code step with saved Programs 2 and 3. Its question
+    // has test cases, so only unsaved code can keep Run & grade closed.
+    async function openSavedPaper() {
+      const { component, supabase } = createComponent({
+        getSubmissions: vi.fn().mockResolvedValue({
+          data: [{
+            id: 'paper-1', image_url: 'x', captured_at: 'y', question_id: 'q-1',
+            verified_text: 'int main() { return 0; }',
+            answers: [
+              { code: 'int two(void) { return 2; }', question_id: 'q-2' },
+              { code: 'int three(void) { return 3; }', question_id: 'q-3' },
+            ],
+          }],
+          error: null,
+        }),
+      });
+      component.questions = [{
+        id: 'q-1', question_name: 'One', question_type: 'program', model_answer: 'm',
+        test_cases: [{ test_code: '', test_input: '', expected_output: '0' }],
+      }];
+      await component.loadSubmissions();
+      component.openModal(component.submissions[0]);
+      component.setReviewStep(2);
+      expect(component.stepBlocker(3)).toBe('');
+      return { component, supabase };
+    }
+
+    it('stays closed while Program 2 has unsaved edits, and names it', async () => {
+      const { component } = await openSavedPaper();
+
+      component.updateExtraAnswerCode(0, ''); // cleared but not saved
+      component.setReviewStep(3);
+
+      // Step 3 would otherwise show and run Program 2's old saved code.
+      expect(component.reviewStep).toBe(2);
+      expect(component.stepBlocker(3)).toBe('Save Program 2 first');
+    });
+
+    it('names every program that is not saved', async () => {
+      const { component } = await openSavedPaper();
+
+      component.updateSubmissionCode('paper-1', 'int main() { return 1; }');
+      expect(component.stepBlocker(3)).toBe('Save Program 1 first');
+
+      component.updateExtraAnswerCode(1, 'int three(void) { return 33; }');
+      expect(component.stepBlocker(3)).toBe('Save Programs 1 and 3 first');
+
+      component.chooseExtraQuestion(0, 'q-4');
+      expect(component.stepBlocker(3)).toBe('Save Programs 1, 2 and 3 first');
+    });
+
+    it('stays closed after a saved tab is removed', async () => {
+      const { component } = await openSavedPaper();
+
+      component.requestRemoveExtraAnswer(0);
+      component.requestRemoveExtraAnswer(0);
+      component.setReviewStep(3);
+
+      expect(component.getExtraAnswers('paper-1')).toHaveLength(1);
+      expect(component.reviewStep).toBe(2);
+      expect(component.stepBlocker(3)).toBe('Save the program tabs first');
+    });
+
+    it('is not held back by an empty tab added by accident', async () => {
+      const { component } = await openSavedPaper();
+
+      component.addExtraAnswer();
+
+      expect(component.stepBlocker(3)).toBe('');
+      component.setReviewStep(3);
+      expect(component.reviewStep).toBe(3);
+    });
+
+    it('opens again once the edits are typed back or saved', async () => {
+      const { component } = await openSavedPaper();
+
+      component.updateExtraAnswerCode(0, 'int two(void) { return 22; }');
+      expect(component.stepBlocker(3)).toBe('Save Program 2 first');
+      component.updateExtraAnswerCode(0, 'int two(void) { return 2; }');
+      expect(component.stepBlocker(3)).toBe('');
+
+      component.updateExtraAnswerCode(0, 'int two(void) { return 22; }');
+      component.requestRemoveExtraAnswer(1);
+      component.requestRemoveExtraAnswer(1);
+      await component.saveVerifiedText();
+
+      expect(component.saveStatus['paper-1']).toBe('saved');
+      expect(component.stepBlocker(3)).toBe('');
+      component.ngOnDestroy();
+    });
+
+    it('ignores preview-only tabs on a database without the programs table', async () => {
+      const { component, supabase } = await openSavedPaper();
+      supabase.answersColumnAvailable = false; // tabs can't be saved here
+      component.addExtraAnswer();
+      component.updateExtraAnswerCode(2, 'int four(void) { return 4; }');
+      component.chooseExtraQuestion(2, 'q-4');
+
+      expect(component.stepBlocker(3)).toBe('');
+      component.updateSubmissionCode('paper-1', 'int main() { return 1; }');
+      expect(component.stepBlocker(3)).toBe('Save the code first');
+    });
+
+    it('tells the teacher on the Code step that every program is graded next', () => {
+      const template = readFileSync('src/app/components/submissions-list/submissions-list.html', 'utf8');
+      expect(template).toContain('Each program is graded against its own question in the next step.');
+      expect(template).not.toContain('Only Program 1 is graded');
+    });
+  });
 });

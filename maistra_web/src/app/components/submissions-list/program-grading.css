@@ -30,8 +30,21 @@
   font-size: 12px;
 }
 
-.grading-program.graded small {
+/* The grade's colour follows how many test cases passed (programGradeTone).
+   The text says the same, so colour is never the only cue. Not graded keeps
+   the gray above. */
+.grading-program[data-grade='full'] small {
   color: #15803d;
+  font-weight: 600;
+}
+
+.grading-program[data-grade='partial'] small {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.grading-program[data-grade='none'] small {
+  color: #991b1b;
   font-weight: 600;
 }
 

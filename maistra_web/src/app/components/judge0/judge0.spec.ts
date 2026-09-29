@@ -1,9 +1,18 @@
 import '@angular/compiler';
-import { ChangeDetectorRef, SimpleChange } from '@angular/core';
-import { of, throwError } from 'rxjs';
+import {
+  ChangeDetectorRef,
+  Component,
+  EventEmitter,
+  Input,
+  Output,
+  SimpleChange,
+} from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { of, Subject, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Judge0Service } from '../../services/judge0.service';
+import { CodeEditorComponent } from '../code-editor/code-editor';
 import { Judge0 } from './judge0';
 
 describe('Judge0', () => {
@@ -504,5 +513,142 @@ describe('Judge0', () => {
 
     expect(emit).not.toHaveBeenCalled();
     expect(component.isExecutionBusy).toBe(true);
+  });
+
+  it('tells the parent when a sample run starts and when it ends', () => {
+    const answer = new Subject<unknown>();
+    const component = new Judge0(
+      { runCCode: vi.fn().mockReturnValue(answer) } as unknown as Judge0Service,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+    const running: boolean[] = [];
+    component.runningChange.subscribe((value) => running.push(value));
+
+    component.executeCode();
+    expect(running).toEqual([true]);
+
+    answer.next({ stdout: '5\n', status: { id: 3, description: 'Accepted' } });
+    expect(running).toEqual([true, false]);
+  });
+
+  it('tells the parent the sample run ended when it fails', () => {
+    const component = new Judge0(
+      { runCCode: vi.fn().mockReturnValue(throwError(() => new Error('502'))) } as unknown as Judge0Service,
+      { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
+    );
+    const running: boolean[] = [];
+    component.runningChange.subscribe((value) => running.push(value));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    component.executeCode();
+
+    expect(running).toEqual([true, false]);
+  });
+
+  it('ignores the answer of a sample run whose grader was closed', () => {
+    const answer = new Subject<unknown>();
+    const detectChanges = vi.fn();
+    const component = new Judge0(
+      { runCCode: vi.fn().mockReturnValue(answer) } as unknown as Judge0Service,
+      { detectChanges } as unknown as ChangeDetectorRef,
+    );
+    component.executeCode();
+    detectChanges.mockClear();
+
+    component.ngOnDestroy();
+    answer.next({ stdout: '5\n', status: { id: 3, description: 'Accepted' } });
+
+    expect(component.stdout).toBe('');
+    expect(detectChanges).not.toHaveBeenCalled();
+  });
+});
+
+// Ace needs a real browser, so the header tests render a plain stand-in editor.
+@Component({ selector: 'app-code-editor', standalone: true, template: '' })
+class FakeCodeEditor {
+  @Input() value = '';
+  @Input() readOnly = false;
+  @Output() valueChange = new EventEmitter<string>();
+}
+
+function renderJudge0(inputs: Record<string, unknown> = {}) {
+  TestBed.configureTestingModule({
+    imports: [Judge0],
+    providers: [{ provide: Judge0Service, useValue: {} }],
+  });
+  TestBed.overrideComponent(Judge0, {
+    remove: { imports: [CodeEditorComponent] },
+    add: { imports: [FakeCodeEditor] },
+  });
+  const fixture = TestBed.createComponent(Judge0);
+  for (const [name, value] of Object.entries(inputs)) {
+    fixture.componentRef.setInput(name, value);
+  }
+  fixture.detectChanges();
+  const element = fixture.nativeElement as HTMLElement;
+  return {
+    fixture,
+    title: () => element.querySelector('.runner-title')?.textContent?.trim(),
+    hint: () => element.querySelector('.runner-hint')?.textContent?.trim(),
+    editButton: () => element.querySelector<HTMLButtonElement>('.edit-code-link'),
+  };
+}
+
+describe('Judge0 header', () => {
+  it('keeps the Code Execution heading when the code can be edited here', () => {
+    const view = renderJudge0();
+
+    expect(view.title()).toBe('Code Execution');
+    expect(view.hint()).toBeUndefined();
+  });
+
+  it('calls read-only code the saved code', () => {
+    const view = renderJudge0({ codeReadOnly: true });
+
+    expect(view.title()).toBe('Saved code');
+    expect(view.hint()).toBe('Read-only');
+  });
+
+  it('hides Edit in Review code unless the parent opts in', () => {
+    const view = renderJudge0({ codeReadOnly: true });
+
+    expect(view.editButton()).toBeNull();
+  });
+
+  it('offers Edit in Review code when the parent opts in', () => {
+    const view = renderJudge0({ codeReadOnly: true, canEditCode: true });
+
+    expect(view.editButton()?.textContent?.trim()).toBe('Edit in Review code');
+    expect(view.editButton()?.disabled).toBe(false);
+  });
+
+  it('never offers Edit in Review code for code that can be edited here', () => {
+    const view = renderJudge0({ canEditCode: true });
+
+    expect(view.editButton()).toBeNull();
+  });
+
+  it('asks the parent to open the code for editing', () => {
+    const view = renderJudge0({ codeReadOnly: true, canEditCode: true });
+    const editCode = vi.fn();
+    view.fixture.componentInstance.editCode.subscribe(editCode);
+
+    view.editButton()!.click();
+
+    expect(editCode).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not leave the grader while code is running or being graded', () => {
+    const view = renderJudge0({ codeReadOnly: true, canEditCode: true, isSubmitting: true });
+    const editCode = vi.fn();
+    view.fixture.componentInstance.editCode.subscribe(editCode);
+
+    expect(view.editButton()!.disabled).toBe(true);
+
+    view.fixture.componentRef.setInput('isSubmitting', false);
+    view.fixture.componentInstance.isRunning = true;
+    view.fixture.componentInstance.requestEditCode();
+
+    expect(editCode).not.toHaveBeenCalled();
   });
 });

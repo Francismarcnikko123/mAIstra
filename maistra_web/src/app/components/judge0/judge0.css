@@ -1,9 +1,40 @@
+.runner-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+/* Same dark text and muted hint as the headings in Review code. */
 .runner-title {
-  margin: 0 0 10px;
-  color: #e5e7eb;
+  margin: 0;
+  color: #172033;
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+
+.runner-hint {
+  color: #64748b;
+  font-size: 12px;
+}
+
+/* Looks like the "Change" and "View question" links in Review code. */
+.edit-code-link {
+  margin-left: auto;
+  padding: 0 2px;
+  border: 0;
+  color: #4f46e5;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.edit-code-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .runner-actions {

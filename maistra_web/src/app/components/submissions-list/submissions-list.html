@@ -116,7 +116,7 @@
         <p class="review-meta">
           {{ selectedSubmission.captured_at | date:'medium' }}
           <span>·</span>
-          {{ getQuestionName(selectedSubmission) }}
+          {{ getQuestionLabel(selectedSubmission) }}
         </p>
       </div>
       <button type="button" class="review-close" (click)="requestCloseModal()" aria-label="Close review">✕</button>
@@ -279,6 +279,8 @@
 
             <ng-container *ngIf="hasExtractedText(selectedSubmission.id)">
               <div class="program-tabs-bar">
+                <!-- Tabs say only "Program N" so several fit; hovering one shows its
+                     question, and the Question row below names the open tab's. -->
                 <div class="program-tabs" role="tablist" aria-label="Programs on this paper" #tabList>
                   <button
                     type="button"
@@ -286,14 +288,13 @@
                     class="program-tab"
                     [class.active]="activeTab === 0"
                     [attr.aria-selected]="activeTab === 0"
+                    [title]="programTabTitle(0)"
                     (click)="selectTab(0)"
                     (keydown.arrowright)="moveTab(1, $event)"
                     (keydown.arrowleft)="moveTab(-1, $event)"
                   >
                     <span class="program-tab-dot" *ngIf="isProgram1Unsaved(selectedSubmission.id)" title="Unsaved changes" aria-label="Unsaved changes"></span>
-                    <span class="program-tab-label">
-                      <strong>Program 1</strong> · {{ getQuestionName(selectedSubmission) }}
-                    </span>
+                    <strong class="program-tab-label">Program 1</strong>
                   </button>
 
                   <div
@@ -303,16 +304,14 @@
                     class="program-tab"
                     [class.active]="activeTab === i + 1"
                     [attr.aria-selected]="activeTab === i + 1"
+                    [title]="programTabTitle(i + 1)"
                     (click)="selectTab(i + 1)"
                     (keydown.enter)="selectTab(i + 1)"
                     (keydown.arrowright)="moveTab(1, $event)"
                     (keydown.arrowleft)="moveTab(-1, $event)"
                   >
                     <span class="program-tab-dot" *ngIf="isExtraAnswerUnsaved(selectedSubmission.id, answer)" title="Unsaved changes" aria-label="Unsaved changes"></span>
-                    <span class="program-tab-label">
-                      <strong>Program {{ i + 2 }}</strong>
-                      <ng-container *ngIf="answer.question_id"> · {{ getQuestionTitle(answer.question_id) }}</ng-container>
-                    </span>
+                    <strong class="program-tab-label">Program {{ i + 2 }}</strong>
                     <span class="program-tab-warn" *ngIf="!answer.question_id" title="No question linked yet" aria-label="No question linked yet">!</span>
                     <button
                       type="button"
@@ -367,7 +366,7 @@
                   <span>Question</span>
 
                   <span class="question-locked" *ngIf="activeTab === 0">
-                    {{ getQuestionName(selectedSubmission) }} · set in Details
+                    {{ getQuestionLabel(selectedSubmission) }} · set in Details
                   </span>
                   <button type="button" class="question-link" *ngIf="activeTab === 0" (click)="setReviewStep(1)">
                     Change
@@ -388,7 +387,7 @@
                       (click)="questionPickerOpen = !questionPickerOpen"
                     >
                       <span class="question-picker-value">
-                        {{ answer.question_id ? getQuestionTitle(answer.question_id) : 'Choose a question…' }}
+                        {{ answer.question_id ? tabQuestionLabel(answer.question_id) : 'Choose a question…' }}
                       </span>
                       <span aria-hidden="true">▾</span>
                     </button>
@@ -501,7 +500,8 @@
         </div>
 
         <!-- A paper with several programs grades them one at a time, each
-             against its own question (Jayrald). -->
+             against its own question (Jayrald). The grade is coloured by how
+             many test cases passed and always says it in words too. -->
         <div
           class="grading-programs"
           role="tablist"
@@ -514,14 +514,15 @@
             class="grading-program"
             *ngFor="let program of gradingPrograms(selectedSubmission)"
             [class.active]="program.id === selectedGradingProgram(selectedSubmission)?.id"
-            [class.graded]="!!program.graded_at"
+            [attr.data-grade]="programGradeTone(program)"
             [attr.aria-selected]="program.id === selectedGradingProgram(selectedSubmission)?.id"
-            [disabled]="isChecking"
+            [disabled]="!!gradingLockReason(selectedSubmission)"
+            [attr.title]="gradingLockReason(selectedSubmission)"
             (click)="selectGradingProgram(selectedSubmission, program.id)"
           >
             <strong>Program {{ program.position }}</strong>
             <span>{{ programQuestionLabel(program) }}</span>
-            <small>{{ program.graded_at ? '✓ ' + programGradeLabel(program) : 'Not graded' }}</small>
+            <small>{{ programGradeTone(program) === 'pending' ? 'Not graded' : programGradeLabel(program) + ' passed' }}</small>
           </button>
         </div>
 
@@ -530,7 +531,8 @@
           <strong>{{ gradingQuestionLabel(selectedSubmission) }}</strong>
         </div>
 
-        <!-- Recreated per program so a sample run never shows another program's output. -->
+        <!-- Recreated per program so a sample run never shows another program's
+             output; the chips above stay locked while a sample run is going. -->
         <ng-container *ngFor="let key of [gradingKey(selectedSubmission)]">
           <app-judge0
             [initialCode]="gradingCode(selectedSubmission)"
@@ -544,7 +546,10 @@
             [isSubmitting]="isChecking"
             [testCaseResults]="submissionTestResults[selectedSubmission.id] || []"
             [codeReadOnly]="true"
+            [canEditCode]="true"
             (submitCode)="checkSubmission(selectedSubmission)"
+            (editCode)="editProgramInReview(selectedSubmission)"
+            (runningChange)="onSampleRunChange(key, $event)"
           ></app-judge0>
         </ng-container>
 
@@ -564,7 +569,7 @@
         Go back to Details and select a question before grading.
       </div>
       <div class="footer-guidance" *ngIf="reviewStep === 2 && hasExtractedText(selectedSubmission.id) && getExtraAnswers(selectedSubmission.id).length">
-        Every program is saved with this paper. Only Program 1 is graded for now.
+        Each program is graded against its own question in the next step.
       </div>
 
       <button

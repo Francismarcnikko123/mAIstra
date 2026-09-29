@@ -769,7 +769,8 @@ handwriting.
 - **Grading:** Step 3 shows a chip per program when a paper has more than one.
   Each program is graded against its own question's test cases and saved with
   `save_program_grade()`. A page is Graded only when every program is. Cards
-  show `Q1 3/4 · Q2 not graded`; a single-program paper looks as before.
+  show `P1 3/4 · P2 not graded` (until 2026-09-30 `Q1 3/4 · Q2 not graded`;
+  see the next section); a single-program paper looks as before.
 - **Stale grades:** editing a program's code or question clears that program's
   grade; editing a question's test cases or type clears the grades of every
   program linked to it.
@@ -801,6 +802,68 @@ handwriting.
   instead of a browser-callable function (no security-advisor warning of ours
   left), and a leftover page-level grade is cleared once a page has programs.
 
+## Review and grading fixes for papers with several programs (2026-09-30, `judge0-integration`)
+
+> **Owner:** Jayrald. The tab labels are in Nombrado's review-editor area and are announced in `docs/TEAM_SYNC.md`.
+
+**Why:** on a real three-program paper, Program 2's tab in Review code was
+empty (edited, not saved) while Step 3 showed older code for Program 2. The
+"3 Run & grade" step button only checked Program 1 for unsaved edits, so it
+opened Step 3 on the stored code of the other programs. Grading itself already
+refused unsaved code, but Run Sample ran the old code and the screen didn't
+match what the teacher had just edited.
+
+**What changed (teacher's view):**
+- **Step 3 stays closed while any program is unsaved.** The step button names
+  the tab to save: "Save Program 2 first", "Save Programs 1 and 3 first", or
+  "Save the program tabs first" after removing a saved tab. A paper without
+  tabs still says "Save the code first". A blank "+" tab doesn't block. On a
+  database without `submission_programs` the extra tabs are preview-only and
+  can't be saved, so they don't block either.
+- **Step 3's code is labelled "Saved code · Read-only"** (the old "Code
+  Execution" heading was light gray on white). **"Edit in Review code"** next
+  to it opens Step 2 on the tab of the program being graded. Tabs are matched
+  by question, not position, because a blank tab is never saved. The link is
+  disabled while code runs.
+- **Program chips in Step 3** say "3/3 passed" (green), "1/3 passed" (amber),
+  "0/3 passed" (red) or "Not graded" (gray). A green "✓ 0/3" used to read as a
+  pass.
+- **The chips wait for a sample run**, as they already did for grading. Each
+  program gets its own grader, so switching during Run Sample used to drop the
+  run without a word. Hovering a locked chip says "Wait for the sample run to
+  finish" (or "Wait for grading to finish"). Leaving Step 3 or closing the
+  paper mid-run releases the lock, and a closed grader ignores the late
+  answer. With Judge0 down, the lock lasts until the wrapper gives up (up to
+  its 20 s timeout).
+- **Card summary:** `P1 0/3 · P2 not graded · P3 not graded`. Section
+  question numbers repeat across sections, so the old `Q1 0/3 · Q1 not graded
+  · Program 3 not graded` was ambiguous.
+- **Program tabs** show only "Program N" with the unsaved dot, "!" and ×;
+  hovering a tab shows its question. Three tabs no longer need a scrollbar.
+  The picker button, the Program 1 line ("… · set in Details") and the review
+  header use the full `Section · Q# · Name` label, like View question and
+  Step 3.
+- The Step 2 footer no longer says "Only Program 1 is graded for now".
+
+**What did not change:** save rules and save/grade guards, the database, OCR,
+`extracted_text` handling, and `programGradeLabel()` (still `3/4` /
+`not graded`). Grading still refuses unsaved code on its own.
+
+**Code:** `submissions-list.ts` (`unsavedProgramsBlocker()` under
+`stepBlocker`; `editProgramInReview()`; `programGradeTone()`;
+`tabQuestionLabel()` and `programTabTitle()` replace `getQuestionTitle()`;
+`programShortLabel()` removed; `onSampleRunChange()`, `isSampleRunning()` and
+`gradingLockReason()` for the chip lock), `submissions-list.html`,
+`program-grading.css`, `judge0/` (`canEditCode` input, `editCode` and `runningChange`
+outputs, header, `ngOnDestroy()` drops an unfinished run). New specs:
+`submissions-list.edit-from-grading.spec.ts`,
+`submissions-list.tab-labels.spec.ts`; tests added to `judge0.spec.ts`,
+`submissions-list.program-tabs.spec.ts` and
+`submissions-list.program-grading.spec.ts`. Playwright
+`submission-grading.spec.ts` expects the new chip and card text.
+
+**Verification:** see Verification status (2026-09-30).
+
 ## Setup documentation
 
 > **Owner:** Jayrald
@@ -813,6 +876,7 @@ handwriting.
 
 > **Owner:** Shared
 
+- **2026-09-30 review and grading fixes for papers with several programs (`judge0-integration`):** web 373/373 (34 new), both TypeScript checks, `ng build` (existing `submissions-list.list.css` budget warning), Playwright 19/19. Checked in the running app against the cloud without saving: an unsaved Program 2 keeps Step 3 closed with "Save Program 2 first", the chips and card read `0/3 passed` / `P1 0/3 · P2 not graded · P3 not graded`, "Edit in Review code" opens the right tab for Programs 2 and 3, and during Run Sample every chip is disabled with its hover text, then unlocks when the run ends (tried with Judge0 down and up). No OCR or database change.
 - **2026-09-27 import fixes and code-review follow-ups (`feature/import-fixes`):** OCR 270/270; `--dry-run` on the real data skips the 20 test pages and writes nothing; live OCR server check with auto-extract off. No pipeline change, so `evaluate_cer` is unaffected.
 - **2026-09-27 review follow-ups (`feature/nombrado-review-followups`, from `judge0-integration` `7335d91`):** web 339/339, OCR 256/256, both TypeScript checks, `ng build` (existing CSS budget warning), Playwright 19/19 twice. Live OCR server check with auto-extract off; nothing written to the cloud.
 - **2026-09-27 `judge0-integration` checkpoint (after the Save-label follow-ups and the OCR export):** web 309/309, OCR 250/250, `evaluate_cer` unchanged (clean_ws CER 0.099, WER 0.328, token accuracy 0.716), Playwright e2e 9/9 on the local machine (fake backend), `ng build` passes with the existing `submissions-list.list.css` budget warning. Only `judge0-integration` should be run against the cloud; older branches are kept for diffs.

@@ -4,9 +4,11 @@ import {
   Output,
   EventEmitter,
   OnChanges,
+  OnDestroy,
   SimpleChanges,
   ChangeDetectorRef,
 } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { CodeEditorComponent } from '../code-editor/code-editor';
 import { CommonModule } from '@angular/common';
 import { Judge0Service } from '../../services/judge0.service';
@@ -28,7 +30,7 @@ export interface TestCaseResult {
   templateUrl: './judge0.html',
   styleUrl: './judge0.css',
 })
-export class Judge0 implements OnChanges {
+export class Judge0 implements OnChanges, OnDestroy {
   @Input() initialCode = ''; // comes from parent
   @Input() runCode = '';
   @Input() stdin = '';
@@ -42,6 +44,9 @@ export class Judge0 implements OnChanges {
   // Show the code without letting it be edited, e.g. when grading must run on
   // the saved code and edits belong in an earlier step.
   @Input() codeReadOnly = false;
+  // Offer "Edit in Review code" next to read-only code. The parent opts in
+  // and handles editCode by opening that step.
+  @Input() canEditCode = false;
   codeToRun = ''; // editable copy
   stdout = '';
   stderr = '';
@@ -59,6 +64,11 @@ export class Judge0 implements OnChanges {
   resultMode: 'run' | 'submit' = 'run';
   @Output() submitCode = new EventEmitter<void>();
   @Output() codeChange = new EventEmitter<string>();
+  @Output() editCode = new EventEmitter<void>();
+  // True when a sample run starts, false when it ends, so the parent can keep
+  // the teacher from switching away (which would drop the run).
+  @Output() runningChange = new EventEmitter<boolean>();
+  private runSubscription?: Subscription;
 
   constructor(
     private judge0: Judge0Service,
@@ -126,9 +136,10 @@ export class Judge0 implements OnChanges {
     this.statusDescription = '';
     this.statusId = null;
     this.firstRunTestCasePassed = null;
+    this.runningChange.emit(true);
 
     this.cdr.detectChanges();
-    this.judge0
+    this.runSubscription = this.judge0
       .runCCode(this.runCode || this.codeToRun, this.stdin)
       .subscribe({
         next: (result) => {
@@ -139,6 +150,7 @@ export class Judge0 implements OnChanges {
           this.statusId = result.status?.id ?? null;
           this.firstRunTestCasePassed = this.evaluateFirstRunTestCase();
           this.isRunning = false;
+          this.runningChange.emit(false);
 
           this.cdr.detectChanges();
         },
@@ -147,11 +159,18 @@ export class Judge0 implements OnChanges {
           this.statusDescription = 'Execution failed';
           this.firstRunTestCasePassed = null;
           this.isRunning = false;
+          this.runningChange.emit(false);
 
           console.error(error);
           this.cdr.detectChanges();
         },
       });
+  }
+
+  // A grader closed mid-run ignores the late answer instead of updating a
+  // view that is gone.
+  ngOnDestroy(): void {
+    this.runSubscription?.unsubscribe();
   }
 
   updateCode(value: string) {
@@ -164,6 +183,12 @@ export class Judge0 implements OnChanges {
 
     this.resultMode = 'submit';
     this.submitCode.emit();
+  }
+
+  // Leaving mid-run would hide the results of a run or grade still in flight.
+  requestEditCode() {
+    if (this.isExecutionBusy) return;
+    this.editCode.emit();
   }
 
   get displayedOutput(): string {

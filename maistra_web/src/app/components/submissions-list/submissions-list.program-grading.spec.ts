@@ -145,14 +145,33 @@ describe('SubmissionsListComponent grading several programs', () => {
 
     expect(component.getSubmissionStatus(component.submissions[0])).toBe('verified');
     expect(component.getSubmissionGradeSummary(component.submissions[0])).toBe(
-      'Q1 1/1 · Q2 not graded',
+      'P1 1/1 · P2 not graded',
     );
 
     component.selectGradingProgram(selected, 'program-2');
     await component.checkSubmission(component.selectedSubmission);
 
     expect(component.getSubmissionStatus(component.submissions[0])).toBe('graded');
-    expect(component.getSubmissionGradeSummary(component.submissions[0])).toBe('Q1 1/1 · Q2 0/1');
+    expect(component.getSubmissionGradeSummary(component.submissions[0])).toBe('P1 1/1 · P2 0/1');
+  });
+
+  it('numbers each program by its place on the paper, whatever its section', async () => {
+    const ctx = setup();
+    const { component } = ctx;
+    await open(ctx, [
+      programRow(1, 'q-sum', 'sum code', { graded_at: '2026-09-26T10:00:00Z', passed_test_cases: 0, total_test_cases: 3 }),
+      programRow(2, 'q-max', 'max code'),
+      programRow(3, 'q-loose', 'loose code'),
+    ]);
+    // Basic · Q1 and E2E TEST · Q1 are both "Q1"; the third has no section.
+    component.questionPlaces = new Map([
+      ['q-sum', { sectionId: 's', sectionName: 'Basic', sectionPosition: 0, number: 1 }],
+      ['q-max', { sectionId: 'e2e', sectionName: 'E2E TEST', sectionPosition: 1, number: 1 }],
+    ]);
+
+    expect(component.getSubmissionGradeSummary(component.submissions[0])).toBe(
+      'P1 0/3 · P2 not graded · P3 not graded',
+    );
   });
 
   it('keeps the one-program summary teachers already know', async () => {
@@ -303,5 +322,161 @@ describe('SubmissionsListComponent grading several programs', () => {
       'sum code, saved',
       expect.any(Array),
     );
+  });
+});
+
+// A program that passed 0 of 3 used to show a green "✓ 0/3" on its Step 3
+// chip, which reads as a pass. The chip now says "0/3 passed" in red.
+describe('SubmissionsListComponent grade on the Step 3 program chips', () => {
+  const graded = (passed: number | null, total: number | null) =>
+    programRow(1, 'q-sum', 'sum code', {
+      graded_at: '2026-09-26T10:00:00Z',
+      passed_test_cases: passed,
+      total_test_cases: total,
+    });
+  const readSource = async (file: string) =>
+    (await import('fs')).readFileSync(`src/app/components/submissions-list/${file}`, 'utf8');
+
+  it('picks the tone from how many test cases passed', () => {
+    const { component } = setup();
+
+    expect(component.programGradeTone(graded(3, 3))).toBe('full');
+    expect(component.programGradeTone(graded(1, 3))).toBe('partial');
+    expect(component.programGradeTone(graded(0, 3))).toBe('none');
+    // The paper summary on the list card still uses the bare count.
+    expect(component.programGradeLabel(graded(0, 3))).toBe('0/3');
+  });
+
+  it('treats a program with no usable counts as not graded', () => {
+    const { component } = setup();
+
+    expect(component.programGradeTone(programRow(1, 'q-sum', 'sum code'))).toBe('pending');
+    // Counts left over without a grade time are not a grade.
+    expect(
+      component.programGradeTone(
+        programRow(1, 'q-sum', 'sum code', { passed_test_cases: 3, total_test_cases: 3 }),
+      ),
+    ).toBe('pending');
+    expect(component.programGradeTone(graded(null, 3))).toBe('pending');
+    expect(component.programGradeTone(graded(0, null))).toBe('pending');
+    expect(component.programGradeTone(graded(0, 0))).toBe('pending');
+  });
+
+  it('shows the grade in words as well as colour on each chip', async () => {
+    const template = await readSource('submissions-list.html');
+    const chip = new DOMParser()
+      .parseFromString(template, 'text/html')
+      .querySelector('.grading-program');
+
+    expect(chip?.getAttribute('[attr.data-grade]')).toBe('programGradeTone(program)');
+    // The old class painted every graded chip green, 0/3 included.
+    expect(chip?.hasAttribute('[class.graded]')).toBe(false);
+    expect(chip?.querySelector('small')?.textContent?.trim()).toBe(
+      "{{ programGradeTone(program) === 'pending' ? 'Not graded' : programGradeLabel(program) + ' passed' }}",
+    );
+  });
+
+  it('colours each tone with a readable colour and leaves Not graded gray', async () => {
+    const css = await readSource('program-grading.css');
+    const colours = Object.fromEntries(
+      [...css.matchAll(/\[data-grade='(\w+)'\] small \{[^}]*?color: (#[0-9a-f]{6});/g)].map(
+        ([, tone, colour]) => [tone, colour],
+      ),
+    );
+
+    // Each is at least 4.5:1 on the white chip; program-tabs.css uses the same.
+    expect(colours).toEqual({ full: '#15803d', partial: '#b45309', none: '#991b1b' });
+    expect(css).toMatch(/\.grading-program small \{[^}]*color: #64748b;/);
+    expect(css).not.toContain('.graded');
+  });
+});
+
+// Switching programs rebuilds the grader, so switching during a sample run
+// used to drop the run without a word. The chips now wait for it, as they
+// already did for grading.
+describe('SubmissionsListComponent program chips during a sample run', () => {
+  const programs = () => [programRow(1, 'q-sum', 'sum code'), programRow(2, 'q-max', 'max code')];
+
+  it('keeps the teacher on the program whose sample run is going', async () => {
+    const ctx = setup();
+    const { component } = ctx;
+    const selected = await open(ctx, programs());
+    const key = component.gradingKey(selected);
+
+    component.onSampleRunChange(key, true);
+    component.selectGradingProgram(selected, 'program-2');
+
+    expect(component.isSampleRunning(selected)).toBe(true);
+    expect(component.selectedGradingProgram(selected)?.id).toBe('program-1');
+    expect(component.gradingLockReason(selected)).toBe('Wait for the sample run to finish');
+  });
+
+  it('lets the teacher switch once the run has finished', async () => {
+    const ctx = setup();
+    const { component } = ctx;
+    const selected = await open(ctx, programs());
+    const key = component.gradingKey(selected);
+
+    component.onSampleRunChange(key, true);
+    component.onSampleRunChange(key, false);
+    component.selectGradingProgram(selected, 'program-2');
+
+    expect(component.isSampleRunning(selected)).toBe(false);
+    expect(component.gradingLockReason(selected)).toBeNull();
+    expect(component.selectedGradingProgram(selected)?.id).toBe('program-2');
+  });
+
+  it('says why the chips are locked while grading runs', async () => {
+    const ctx = setup();
+    const { component } = ctx;
+    const selected = await open(ctx, programs());
+
+    component.isChecking = true;
+
+    expect(component.gradingLockReason(selected)).toBe('Wait for grading to finish');
+  });
+
+  it('unlocks when the teacher leaves Step 3 or closes the paper mid-run', async () => {
+    const ctx = setup();
+    const { component } = ctx;
+    const selected = await open(ctx, programs());
+    const key = component.gradingKey(selected);
+
+    component.onSampleRunChange(key, true);
+    component.setReviewStep(2);
+    component.reviewStep = 3;
+    expect(component.isSampleRunning(selected)).toBe(false);
+
+    component.onSampleRunChange(key, true);
+    component.closeModal();
+    component.openModal(component.submissions[0]);
+    component.reviewStep = 3;
+    expect(component.isSampleRunning(component.selectedSubmission)).toBe(false);
+  });
+
+  it('does not lock a program whose grader replaced the running one', async () => {
+    const ctx = setup();
+    const { component } = ctx;
+    const selected = await open(ctx, programs());
+
+    // A grader that is gone never reports its end, so only the program
+    // shown right now can be locked.
+    component.onSampleRunChange('program-gone', true);
+
+    expect(component.isSampleRunning(selected)).toBe(false);
+  });
+
+  it('wires the lock into the chips and the grader', async () => {
+    const template = (await import('fs')).readFileSync(
+      'src/app/components/submissions-list/submissions-list.html',
+      'utf8',
+    );
+    const doc = new DOMParser().parseFromString(template, 'text/html');
+    const chip = doc.querySelector('.grading-program');
+    const grader = doc.querySelector('app-judge0');
+
+    expect(chip?.getAttribute('[disabled]')).toBe('!!gradingLockReason(selectedSubmission)');
+    expect(chip?.getAttribute('[attr.title]')).toBe('gradingLockReason(selectedSubmission)');
+    expect(grader?.getAttribute('(runningchange)')).toBe('onSampleRunChange(key, $event)');
   });
 });
