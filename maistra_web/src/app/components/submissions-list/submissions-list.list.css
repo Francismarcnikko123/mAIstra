@@ -222,6 +222,8 @@ button:disabled {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Code starts at the top of the page, so crop from there, not the middle. */
+  object-position: top;
 }
 
 .status-badge {
