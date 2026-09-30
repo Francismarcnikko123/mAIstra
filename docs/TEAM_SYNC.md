@@ -342,6 +342,38 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 When you finish an item: tick it, add the date and commit, and note anything that affects others under **Changed (affects others)**.
 
 ### Status
+- (2026-10-01) **Detection fix re-run on the fixed photo set** (`feature/nikko-detection-and-autocapture`, `b701dd5`). Set 2 = the same 3 pages and 5 conditions as set 1, shot 2026-09-30 with corners never adjusted: 20 photos, originals kept. "Before" = the app's own crops at `aceef9f` (old detection). "After" = the same 20 originals cropped at full resolution by a Python copy of `PaperProcessor.kt` at `b701dd5` (channel choice + edge snap) and the app's tilt-compensated warp, then the Dart gate. CER = "grayscale + denoise (shipped default)", clean, ws; `ground truth: yes` on all 40 runs. All material in `~/gate_test/set2`, `set2_fullres` (not committed).
+
+  | Photo | Gate before → after | CER before → after |
+  |---|---|---|
+  | yellow_goodlight | FIXABLE → PASS | 0.131 → 0.125 |
+  | yellow_tilted2 | FIXABLE → PASS | 0.163 → 0.119 |
+  | yellow_tilted | RETAKE | 0.231 → 0.206 |
+  | yellow_dim | RETAKE | 0.150 → 0.131 |
+  | yellow_dim2 | RETAKE | 0.138 → 0.131 |
+  | yellow_shadow | RETAKE | 0.125 → 0.156 |
+  | yellow_blur | RETAKE | 0.719 → 0.700 |
+  | bond_goodlight | FIXABLE | 0.108 → 0.108 |
+  | bond_tilted | FIXABLE | 0.100 → 0.108 |
+  | bond_dim2 | FIXABLE | 0.108 → 0.108 |
+  | bond_dim | RETAKE | 0.167 → 0.175 |
+  | bond_shadow | RETAKE | 0.108 → 0.108 |
+  | bond_blur | RETAKE | 0.500 → 0.475 |
+  | green_goodlight | PASS | 0.008 → 0.025 |
+  | green_goodlight2 | PASS | 0.008 → 0.025 |
+  | green_tilted | FIXABLE → PASS | 0.107 → 0.016 |
+  | green_dim2 | FIXABLE | 0.025 → 0.164 |
+  | green_dim | RETAKE | 0.090 → 0.123 |
+  | green_shadow | RETAKE | 0.008 → 0.008 |
+  | green_blur | RETAKE | 0.238 → 0.295 |
+
+  - **Accepted pages (PASS/FIXABLE, 9 each):** mean CER 0.095 → 0.089. No page moved between accepted and RETAKE; three FIXABLE pages became PASS.
+  - **Yellow, the page the fix was for:** 6 of 7 better or equal; the "include" cut-off is gone. yellow_shadow is worse: the box now reaches the bottom edge and the OCR reads the edge as junk ("NU)").
+  - **Bond:** unchanged (within 0.008).
+  - **Green is worse on 4 of 7.** goodlight ±2 characters (an extra `;` and space). green_dim2 0.025 → 0.164: every character is read, but the lines in the new crop slope slightly more, so `sum = a + b;` and the `printf` line were merged into the wrong rows. The new box also includes a thin strip of the green cover at the right edge.
+  - **Caveat:** "after" crops come from the Python copy on the laptop, "before" from the phone; small differences (±0.02, 1–2 characters) are within that noise.
+  - **Live camera** (phone, `b701dd5`, corners never adjusted): yellow good light PASS with "include" complete; dim yellow and green 5/5 boxes on the page (all RETAKE for blur, as expected in dim light); a landscape page found with a second sheet in frame ignored; a normal bond scan FIXABLE (contrast 9.9 → 11.7).
+  - **Test pages submitted:** JC's 11 white bond pages, submitted 2026-10-01 as one batch to *E2E TEST · Q1*, all FIXABLE (low contrast, thin ink). They were cropped by the new detection (`b701dd5`). Left in the cloud for JC's end-to-end test.
 - (2026-09-29) **Gate test: real photos vs OCR error rate** (Nombrado's rules). App and `compare_config.py` at `e2d1ca1`, phone M2101K6G. 3 hand-written pages (white bond, yellow ruled, green ruled), each shot in good light, dim light, with a shadow, with motion blur and tilted: 17 photos. Photos pulled from the app cache (nothing submitted), answer files typed by me from the paper, all kept in `~/gate_test/` (not committed). CER = "grayscale + denoise (shipped default)", clean, ws; every run's `ground truth:` line named the photo's own `.txt`.
 
   | Photo | Condition | Gate | Reason (value) | CER |
@@ -377,6 +409,7 @@ When you finish an item: tick it, add the date and commit, and note anything tha
 - (2026-09-24, *resolved 2026-09-26*) **Live DB check** (read-only, with the app's publishable key): `question_sections`, `questions.can_publish`, `submissions.gate_result` and `submissions.answers` are all **missing** in the cloud project. So Nombrado's `answers` migration is also still unapplied.
 
 ### Changed (affects others)
+- (2026-10-01) **Page detection puts the box on the paper edge and finds the page in dim light** (`b701dd5`, `PaperProcessor.kt` only). Each side of the box is moved (±14 px on the 540 px copy) to the strongest line of edge pixels, so text written close to the edge is no longer cut. For a captured photo, detection tries the combined, grayscale and saturation edge maps, drops boxes over 88 % of the image, and keeps the one whose sides lie most on real edges; the live preview is unchanged. **JC:** crops now reach the paper edge, so a thin strip of desk or booklet cover can appear at a border; on one green page a slight slope made two code lines merge (see Status). Gate thresholds unchanged.
 - (2026-09-28) **Scanner crop fix:** Adjust Crop sometimes showed a default 10-90 % box instead of the paper, although the live preview had found it. The detector re-ran on the full ~2306 px photo with blur/close sizes tuned for ~540 px preview frames, so the paper outline never closed. `processPicture()` now detects on a 540 px copy and scales the corners back (the crop still uses the full photo). Also covers gallery import and recrop. Checked on 9 real captures (4 failed before, 9/9 after) and on the phone (8 captures, 0 default boxes). Side effect: those pages no longer get a false "Too dark" / "Extreme shadow" verdict from the dark desk inside the default box.
 - (2026-09-27) **Mobile tidy-up, no behaviour change:** removed the unused `flutter_dotenv` package (nothing imported it; run `flutter pub get` after pulling), `Supabase.initialize` uses `publishableKey` instead of the deprecated `anonKey` (same key), and the photo check no longer computes an unused value per pixel. `flutter test` 60/60.
 - (2026-09-27) **Review fixes #2, #6, #8 (rest) and #9** (`d139ef2`): a question save made from an outdated copy is refused instead of overwriting another teacher's edit (message: "Someone else changed this question after you opened it…"); live photo badges survive a reload; `countGradedPapers()` is one parallel round trip. **Jayrald:** no `questions.revision` column needed. Checks: `npx ng test` 338/338, `npx playwright test` 19/19, `npx ng build`.
