@@ -5,9 +5,11 @@ import android.util.Log
 import org.opencv.android.Utils
 import org.opencv.core.*
 import org.opencv.imgproc.Imgproc
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 const val TAG: String = "PaperProcessor"
@@ -24,8 +26,8 @@ fun processPicture(previewFrame: Mat): Corners? {
     // the corners back; the crop itself still uses the full photo.
     val scale = DETECT_WIDTH / previewFrame.width()
     if (scale >= 1.0) {
-        val contours = findContours(previewFrame)
-        return getCorners(contours, previewFrame.size())
+        // Live preview: one attempt per frame keeps the frame rate.
+        return detect(previewFrame, tryEachChannel = false)
     }
     val small = Mat()
     Imgproc.resize(
@@ -33,7 +35,7 @@ fun processPicture(previewFrame: Mat): Corners? {
         Size(DETECT_WIDTH, previewFrame.height() * scale),
         0.0, 0.0, Imgproc.INTER_AREA
     )
-    val found = getCorners(findContours(small), small.size())
+    val found = detect(small, tryEachChannel = true)
     small.release()
     return found?.let { c ->
         Corners(c.corners.map { p -> p?.let { Point(it.x / scale, it.y / scale) } }, previewFrame.size())
@@ -104,13 +106,85 @@ fun enhancePicture(src: Bitmap?): Bitmap {
     return result
 }
 
-private fun findContours(src: Mat): List<MatOfPoint> {
-    val size = Size(src.size().width, src.size().height)
-    val grayImage = Mat(size, CvType.CV_8UC1)
-    val cannedImage = Mat(size, CvType.CV_8UC1)
-    val dilate = Mat(size, CvType.CV_8UC1)
+// Finds the page on a detection-sized image (~540 px wide) from the combined
+// grayscale + saturation edges. In dim light the saturation channel picks up
+// noise from a dark desk that can break the page outline or bend it into a
+// wrong shape, and which one happens flips on tiny image differences. So for a
+// captured photo the grayscale and saturation edges are also tried on their
+// own, and the box whose sides lie best on real edges is kept; the combined
+// box stays unless another is clearly better supported.
+private fun detect(src: Mat, tryEachChannel: Boolean): Corners? {
+    val (grayEdges, satEdges) = cannyEdges(src)
+    val bothEdges = Mat()
+    Core.bitwise_or(grayEdges, satEdges, bothEdges)
+
+    val attempts = if (tryEachChannel) listOf(bothEdges, grayEdges, satEdges) else listOf(bothEdges)
+    val boxes = attempts.map { edges ->
+        getCorners(findContours(edges, src.size()), src.size())
+            ?.takeUnless { coversWholeImage(it, src.size()) }
+            ?.let { snapToEdges(it, bothEdges) }
+    }
+
+    val chosen = if (!tryEachChannel) boxes[0] else {
+        val nearEdges = Mat()
+        Imgproc.dilate(bothEdges, nearEdges, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(3.0, 3.0)))
+        val scored = boxes.filterNotNull().map { it to edgeSupport(it, nearEdges) }
+        nearEdges.release()
+        val combined = scored.firstOrNull { it.first === boxes[0] }
+        val best = scored.maxByOrNull { it.second }
+        if (combined != null && best != null && best.second - combined.second < MIN_SUPPORT_GAIN) combined.first
+        else best?.first
+    }
+
+    grayEdges.release()
+    satEdges.release()
+    bothEdges.release()
+    return chosen
+}
+
+// Another channel's box replaces the combined one only when this much more
+// of its outline lies on edges.
+private const val MIN_SUPPORT_GAIN = 0.05
+
+// Share of points along the box's sides (corners excluded) that lie on an edge.
+// A box following the page scores ~0.9-1.0; one bent onto desk noise or the
+// photo border scores far lower (0.3-0.7 on the test photos).
+private fun edgeSupport(c: Corners, nearEdges: Mat): Double {
+    val pts = c.corners.map { it ?: return 0.0 }
+    var hit = 0
+    var total = 0
+    for (i in 0..3) {
+        val p = pts[i]
+        val r = pts[(i + 1) % 4]
+        val len = sqrt((r.x - p.x).pow(2) + (r.y - p.y).pow(2))
+        val n = max(2, (len / 2).toInt())
+        for (k in 0 until n) {
+            val t = 0.1 + 0.8 * k / (n - 1)
+            val x = (p.x + t * (r.x - p.x)).roundToInt()
+            val y = (p.y + t * (r.y - p.y)).roundToInt()
+            total++
+            if (x in 0 until nearEdges.cols() && y in 0 until nearEdges.rows() && nearEdges.get(y, x)[0] > 0) hit++
+        }
+    }
+    return if (total == 0) 0.0 else hit.toDouble() / total
+}
+
+// A box spanning nearly the whole image traced desk noise, not the page (the
+// same 88 % rule BatchProcessor applies); treating it as not found lets the
+// next channel try.
+private fun coversWholeImage(c: Corners, size: Size): Boolean {
+    val pts = c.corners.filterNotNull()
+    if (pts.size < 4) return false
+    val box = (pts.maxOf { it.x } - pts.minOf { it.x }) * (pts.maxOf { it.y } - pts.minOf { it.y })
+    return box > 0.88 * size.width * size.height
+}
+
+// Thin Canny edges of the grayscale and saturation channels.
+private fun cannyEdges(src: Mat): Pair<Mat, Mat> {
+    val grayImage = Mat()
+    val cannedImage = Mat()
     val hsvImage = Mat()
-    val satCanny = Mat(size, CvType.CV_8UC1)
+    val satCanny = Mat()
 
     // Grayscale path — strong contrast on white paper vs. background.
     // 15x15 blur suppresses printed/ruled lines before edge detection.
@@ -127,14 +201,88 @@ private fun findContours(src: Mat): List<MatOfPoint> {
     Imgproc.GaussianBlur(channels[1], channels[1], Size(15.0, 15.0), 0.0)
     Imgproc.Canny(channels[1], satCanny, 15.0, 45.0)
 
-    // Merge: grayscale covers white paper, saturation covers coloured paper
-    Core.bitwise_or(cannedImage, satCanny, cannedImage)
+    grayImage.release()
+    hsvImage.release()
+    channels.forEach { it.release() }
+    return Pair(cannedImage, satCanny)
+}
+
+// Width of the band searched on each side of a detected edge, in pixels at
+// DETECT_WIDTH. The dilate + close below make the outline ~11-15 px thick.
+private const val SNAP_BAND = 14
+
+// The contour runs along the outer or inner border of the thickened outline,
+// so the box sits half a band outside the page (desk strip) or inside it (cutting
+// text written near the edge). Moves each side to the offset within
+// ±SNAP_BAND where the thin edges line up most, keeping its angle, and
+// intersects the four sides again.
+private fun snapToEdges(found: Corners, edges: Mat): Corners {
+    val pts = found.corners.map { it ?: return found }
+    val nonZero = MatOfPoint()
+    Core.findNonZero(edges, nonZero)
+    val edgePoints = nonZero.toArray()
+    nonZero.release()
+
+    val cx = pts.sumOf { it.x } / 4
+    val cy = pts.sumOf { it.y } / 4
+    val sides = ArrayList<DoubleArray>(4) // x, y, dx, dy of each side's line
+    for (i in 0..3) {
+        val p = pts[i]
+        val r = pts[(i + 1) % 4]
+        val len = sqrt((r.x - p.x).pow(2) + (r.y - p.y).pow(2))
+        if (len < 1.0) return found
+        val dx = (r.x - p.x) / len
+        val dy = (r.y - p.y) / len
+        var nx = -dy
+        var ny = dx
+        if ((cx - p.x) * nx + (cy - p.y) * ny > 0) { nx = -nx; ny = -ny } // point outward
+
+        // Count edge pixels by their distance from the side, ignoring the
+        // corners where two sides meet.
+        val counts = IntArray(2 * SNAP_BAND + 1)
+        var inBand = 0
+        for (q in edgePoints) {
+            val rx = q.x - p.x
+            val ry = q.y - p.y
+            val along = rx * dx + ry * dy
+            if (along < 0.1 * len || along > 0.9 * len) continue
+            val off = rx * nx + ry * ny
+            if (abs(off) > SNAP_BAND) continue
+            counts[(off + SNAP_BAND).roundToInt()]++
+            inBand++
+        }
+        var shift = 0.0
+        if (inBand > 0.3 * len) {
+            var best = -1
+            var bestCount = 0
+            for (k in counts.indices) {
+                val c = counts[k] + (if (k > 0) counts[k - 1] else 0) + (if (k < counts.size - 1) counts[k + 1] else 0)
+                if (c > bestCount) { bestCount = c; best = k }
+            }
+            if (bestCount > 0.25 * len) shift = (best - SNAP_BAND).toDouble()
+        }
+        sides.add(doubleArrayOf(p.x + shift * nx, p.y + shift * ny, dx, dy))
+    }
+
+    val snapped = (0..3).map { i -> intersect(sides[(i + 3) % 4], sides[i]) ?: pts[i] }
+    return Corners(snapped, found.size)
+}
+
+private fun intersect(a: DoubleArray, b: DoubleArray): Point? {
+    val cross = a[2] * b[3] - a[3] * b[2]
+    if (abs(cross) < 1e-6) return null
+    val t = ((b[0] - a[0]) * b[3] - (b[1] - a[1]) * b[2]) / cross
+    return Point(a[0] + t * a[2], a[1] + t * a[3])
+}
+
+private fun findContours(edges: Mat, size: Size): List<MatOfPoint> {
+    val dilate = Mat()
 
     // Dilate edges, then morphological close to seal the full paper outline.
     // Closing fills gaps left by faint corners or torn edges.
     val dilateKernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(11.0, 11.0))
     val closeKernel  = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(15.0, 15.0))
-    Imgproc.dilate(cannedImage, dilate, dilateKernel)
+    Imgproc.dilate(edges, dilate, dilateKernel)
     Imgproc.morphologyEx(dilate, dilate, Imgproc.MORPH_CLOSE, closeKernel)
 
     val contours = ArrayList<MatOfPoint>()
@@ -160,14 +308,9 @@ private fun findContours(src: Mat): List<MatOfPoint> {
         .take(5)
 
     hierarchy.release()
-    grayImage.release()
-    cannedImage.release()
     dilate.release()
     dilateKernel.release()
     closeKernel.release()
-    hsvImage.release()
-    satCanny.release()
-    channels.forEach { it.release() }
 
     return filteredContours
 }
